@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { AdminShell } from "../_components/admin/admin-shell";
+import { AdminRouteShell } from "../_components/admin/admin-route-shell";
 
 export const metadata: Metadata = {
   title: "건강창고 관리자",
@@ -12,5 +12,5 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <AdminShell>{children}</AdminShell>;
+  return <AdminRouteShell>{children}</AdminRouteShell>;
 }

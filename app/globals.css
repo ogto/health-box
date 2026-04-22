@@ -2031,16 +2031,36 @@ button {
   text-overflow: ellipsis;
 }
 
+.admin-sidebar-footer-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .admin-sidebar-home-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: 38px;
-  margin-top: 12px;
   padding: 0 12px;
   border-radius: 12px;
   background: white;
   color: var(--primary);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.admin-sidebar-logout-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(216, 228, 239, 0.92);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #36506a;
   font-size: 13px;
   font-weight: 800;
   white-space: nowrap;
@@ -2059,6 +2079,124 @@ button {
 
 .admin-mobile-bar {
   display: none;
+}
+
+.admin-login-screen {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 32px 16px;
+  background:
+    radial-gradient(circle at top left, rgba(171, 208, 255, 0.26) 0%, rgba(171, 208, 255, 0) 34%),
+    linear-gradient(180deg, #f8fbff 0%, #f2f7fd 46%, #eef4fb 100%);
+}
+
+.admin-login-card {
+  width: min(100%, 460px);
+  padding: 30px;
+  border: 1px solid rgba(216, 228, 239, 0.96);
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 24px 60px rgba(20, 39, 61, 0.08);
+}
+
+.admin-login-brand {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+}
+
+.admin-login-brand-mark {
+  width: 64px;
+  height: 64px;
+  padding: 13px;
+  border-radius: 22px;
+}
+
+.admin-login-brand-copy {
+  min-width: 0;
+}
+
+.admin-login-brand-copy p {
+  margin: 0 0 6px;
+  color: #6a8098;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.admin-login-brand-copy h1 {
+  margin: 0;
+  color: #13263d;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.06em;
+}
+
+.admin-login-brand-copy span {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.admin-login-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.admin-login-input {
+  min-height: 52px;
+}
+
+.admin-login-error {
+  padding: 14px 16px;
+  border: 1px solid rgba(221, 95, 95, 0.18);
+  border-radius: 16px;
+  background: rgba(255, 242, 242, 0.92);
+  color: #c14242;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.admin-login-button {
+  width: 100%;
+}
+
+.admin-login-note {
+  padding: 16px;
+  border: 1px solid rgba(216, 228, 239, 0.92);
+  border-radius: 18px;
+  background: #f8fbff;
+}
+
+.admin-login-note strong {
+  display: block;
+  color: #17304b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-login-note p {
+  margin: 8px 0 0;
+  color: #66809a;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.admin-login-note code {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(31, 111, 209, 0.09);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .admin-page {
@@ -4180,6 +4318,19 @@ a.admin-list-row:hover {
   .admin-storefront-mini-search strong {
     justify-content: flex-start;
     padding: 0 14px;
+  }
+
+  .admin-login-card {
+    padding: 24px 20px;
+    border-radius: 26px;
+  }
+
+  .admin-login-brand {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-login-brand-copy h1 {
+    font-size: 30px;
   }
 
   .admin-product-table-title,

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { SVGProps } from "react";
 
+import { AdminLogoutButton } from "./admin-logout-button";
+
 const navItems = [
   { href: "/admin/dashboard", label: "대시보드", icon: DashboardIcon },
   { href: "/admin/storefront", label: "홈페이지관리", icon: StorefrontIcon },
@@ -61,9 +63,12 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       <div className="admin-sidebar-footer">
         <p className="admin-sidebar-footer-copy">쇼핑몰과 분리된 관리자 운영 영역입니다.</p>
-        <Link className="admin-sidebar-home-link" href="/" onClick={onNavigate}>
-          쇼핑몰 보기
-        </Link>
+        <div className="admin-sidebar-footer-actions">
+          <Link className="admin-sidebar-home-link" href="/" onClick={onNavigate}>
+            쇼핑몰 보기
+          </Link>
+          <AdminLogoutButton onDone={onNavigate} />
+        </div>
       </div>
     </div>
   );
