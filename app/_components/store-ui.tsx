@@ -35,7 +35,7 @@ export function StoreShell({
         <header className="site-header">
           <div className="header-promo">
             <Link className="header-promo-link" href="/notice/membership-price-policy">
-              첫 쇼핑을 지원하는 3,000원 할인 회원가입 쿠폰
+              3,000원 회원가입 쿠폰
             </Link>
             <div aria-hidden="true" className="header-promo-meta">
               <span>오늘 하루 보지 않기</span>
