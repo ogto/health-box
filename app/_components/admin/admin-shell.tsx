@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
+import { BrandLogo } from "../brand-logo";
 import { AdminMobileSidebar, AdminSidebar } from "./admin-sidebar";
 
 export function AdminShell({ children }: { children: ReactNode }) {
@@ -25,8 +26,15 @@ export function AdminShell({ children }: { children: ReactNode }) {
               메뉴
             </button>
             <div className="admin-mobile-brand">
-              <p>HEALTH-BOX ADMIN</p>
-              <strong>건강창고 관리자</strong>
+              <BrandLogo
+                alt="건강창고 관리자 로고"
+                className="admin-sidebar-brand-mark"
+                variant="square"
+              />
+              <div>
+                <p>HEALTH-BOX ADMIN</p>
+                <strong>건강창고 관리자</strong>
+              </div>
             </div>
             <Link className="admin-mobile-home-link" href="/">
               쇼핑몰

@@ -4,19 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { SVGProps } from "react";
 
+import { BrandLogo } from "../brand-logo";
 import { AdminLogoutButton } from "./admin-logout-button";
 
 const navItems = [
   { href: "/admin/dashboard", label: "대시보드", icon: DashboardIcon },
-  { href: "/admin/storefront", label: "홈페이지관리", icon: StorefrontIcon },
-  { href: "/admin/products", label: "상품관리", icon: ProductIcon },
-  { href: "/admin/orders", label: "주문관리", icon: OrderIcon },
-  { href: "/admin/sales", label: "매출관리", icon: SalesIcon },
-  { href: "/admin/members", label: "회원관리", icon: MemberIcon },
-  { href: "/admin/notices", label: "공지관리", icon: NoticeIcon },
+  { href: "/admin/storefront", label: "홈페이지", icon: StorefrontIcon },
+  { href: "/admin/products", label: "상품", icon: ProductIcon },
+  { href: "/admin/orders", label: "주문", icon: OrderIcon },
+  { href: "/admin/sales", label: "매출/정산", icon: SalesIcon },
+  { href: "/admin/members", label: "회원", icon: MemberIcon },
+  { href: "/admin/notices", label: "공지", icon: NoticeIcon },
   { href: "/admin/dealers", label: "딜러/조직", icon: DealerIcon },
-  { href: "/admin/settlements", label: "정산관리", icon: SettlementIcon },
-  { href: "/admin/operation-settings", label: "운영설정", icon: SettingsIcon },
 ] as const;
 
 function isActive(pathname: string, href: string) {
@@ -29,16 +28,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="admin-sidebar-inner">
       <Link className="admin-sidebar-brand" href="/admin/dashboard" onClick={onNavigate}>
-        <div className="admin-sidebar-brand-mark" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-          <span />
-        </div>
+        <BrandLogo alt="건강창고 관리자 로고" className="admin-sidebar-brand-mark" variant="square" />
         <div className="admin-sidebar-brand-copy">
-          <p className="admin-sidebar-brand-kicker">HEALTH-BOX ADMIN</p>
+          <p className="admin-sidebar-brand-kicker">HEALTH-BOX</p>
           <strong className="admin-sidebar-brand-title">건강창고 관리자</strong>
-          <span className="admin-sidebar-brand-summary">상품 · 주문 · 회원 · 조직 통합 관리</span>
         </div>
       </Link>
 
@@ -62,10 +55,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       <div className="admin-sidebar-footer">
-        <p className="admin-sidebar-footer-copy">쇼핑몰과 분리된 관리자 운영 영역입니다.</p>
         <div className="admin-sidebar-footer-actions">
           <Link className="admin-sidebar-home-link" href="/" onClick={onNavigate}>
-            쇼핑몰 보기
+            쇼핑몰
           </Link>
           <AdminLogoutButton onDone={onNavigate} />
         </div>
@@ -226,34 +218,6 @@ function DealerIcon(props: SVGProps<SVGSVGElement>) {
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth="1.7"
-      />
-    </svg>
-  );
-}
-
-function SettlementIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg fill="none" viewBox="0 0 24 24" {...props}>
-      <path
-        d="M12 4v16m4-12h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.7"
-      />
-    </svg>
-  );
-}
-
-function SettingsIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg fill="none" viewBox="0 0 24 24" {...props}>
-      <path
-        d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm7.5-3.5a7.7 7.7 0 0 0-.08-1l2.08-1.62-2-3.46-2.5 1a8.1 8.1 0 0 0-1.74-1l-.38-2.66H9.12L8.74 5.9c-.62.24-1.2.57-1.74.98l-2.5-1-2 3.46L4.58 11a7.7 7.7 0 0 0 0 2l-2.08 1.62 2 3.46 2.5-1c.54.41 1.12.74 1.74.98l.38 2.66h5.76l.38-2.66c.62-.24 1.2-.57 1.74-.98l2.5 1 2-3.46L19.42 13c.05-.33.08-.66.08-1Z"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.5"
       />
     </svg>
   );

@@ -72,8 +72,8 @@ export default function MyPage() {
               ))}
             </div>
 
-            <div className="dashboard-grid">
-              <section className="content-panel">
+            <div className="dashboard-grid account-dashboard-grid">
+              <section className="content-panel account-orders-panel">
                 <p className="section-kicker">최근 주문</p>
                 <h3 className="section-panel-title">주문 / 배송 현황</h3>
                 <div className="line-list">
@@ -91,28 +91,19 @@ export default function MyPage() {
                 </div>
               </section>
 
-              <section className="content-panel">
-                <p className="section-kicker">회원 정보</p>
-                <h3 className="section-panel-title">등급 및 혜택</h3>
-                <div className="info-panel compact">
-                  <div className="info-row">
-                    <strong>회원 상태</strong>
-                    <span>승인 완료</span>
-                  </div>
-                  <div className="info-row">
-                    <strong>회원 전용가</strong>
-                    <span>전 상품 열람 가능</span>
-                  </div>
-                  <div className="info-row">
-                    <strong>정기배송</strong>
-                    <span>일부 상품군 이용 가능</span>
+              <section className="content-panel account-address-panel">
+                <p className="section-kicker">기본 배송지</p>
+                <div className="panel-head">
+                  <h3 className="section-panel-title">배송지 정보</h3>
+                  <div className="address-actions">
+                    <button className="button-secondary address-action-button" type="button">
+                      배송지 추가
+                    </button>
+                    <button className="button-secondary address-action-button" type="button">
+                      배송지 수정
+                    </button>
                   </div>
                 </div>
-              </section>
-
-              <section className="content-panel span-two">
-                <p className="section-kicker">기본 배송지</p>
-                <h3 className="section-panel-title">배송 / 정산 정보</h3>
                 <div className="info-panel compact">
                   <div className="info-row">
                     <strong>수령인</strong>

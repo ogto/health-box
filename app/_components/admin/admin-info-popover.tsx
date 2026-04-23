@@ -4,7 +4,7 @@ import { useEffect, useId, useState, type ReactNode, type SVGProps } from "react
 import { createPortal } from "react-dom";
 
 export function AdminInfoPopover({
-  label = "상품관리 도움말",
+  label = "운영 참고",
   children,
 }: {
   label?: string;
@@ -58,7 +58,6 @@ export function AdminInfoPopover({
                 <div className="admin-info-dialog-head">
                   <div className="admin-info-dialog-copy">
                     <strong id={titleId}>{label}</strong>
-                    <p>운영 중 필요한 참고사항만 한 번에 볼 수 있게 정리했습니다.</p>
                   </div>
 
                   <button

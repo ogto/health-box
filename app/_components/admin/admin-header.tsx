@@ -6,15 +6,14 @@ export function AdminHeader({
   actions,
 }: {
   title: string;
-  description: string;
+  description?: string;
   actions?: ReactNode;
 }) {
   return (
     <header className="admin-page-header">
       <div className="admin-header-copy">
-        <p className="admin-page-kicker">Admin Console</p>
         <h1>{title}</h1>
-        <p>{description}</p>
+        {description ? <p>{description}</p> : null}
       </div>
       {actions ? <div className="admin-header-actions">{actions}</div> : null}
     </header>

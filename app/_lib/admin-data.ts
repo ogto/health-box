@@ -100,24 +100,28 @@ export const recentOrders = [
 
 export const approvalQueue = [
   {
-    name: "서울 강남 웰니스몰",
+    name: "서울 강남 웰니스몰 운영자",
     type: "딜러 신청",
     submittedAt: "2026.04.22 09:20",
-    note: "본사 승인 후 하위 회원 관리 권한 요청",
+    note: "소속 조직: 웰니스강남 딜러몰 · 하위 회원 148명 관리 권한 요청",
   },
   {
     name: "이서현",
     type: "일반 회원",
     submittedAt: "2026.04.22 08:54",
-    note: "장 건강 정기배송 상품군 이용 희망",
+    note: "소속 조직: 웰니스강남 딜러몰 · 일반 회원 승인 요청",
   },
   {
     name: "라이프케어 파트너스",
     type: "딜러 신청",
     submittedAt: "2026.04.21 16:03",
-    note: "지역 딜러몰 시험 운영 문의",
+    note: "소속 조직: 라이프케어 파트너몰 · 지역 딜러몰 운영 신청",
   },
 ] as const;
+
+export const memberApprovalQueue = approvalQueue.filter((item) => item.type !== "딜러 신청");
+
+export const dealerApprovalQueue = approvalQueue.filter((item) => item.type === "딜러 신청");
 
 export const inventoryAlerts = [
   {
@@ -128,7 +132,7 @@ export const inventoryAlerts = [
   },
   {
     title: "유산균 밸런스 박스",
-    detail: "정기배송 전환율 상위",
+    detail: "재구매 비중 상위",
     level: "입고 예정 2026.04.24",
     tone: "cyan" as const,
   },
@@ -167,7 +171,7 @@ export const managedProducts = products.map((product, index) => ({
     index === 0
       ? "대표 상품"
       : index === 1
-        ? "정기배송 운영"
+        ? "재구매 관리"
         : index === 2
           ? "묶음 구성"
           : "추천 세트",
@@ -211,7 +215,7 @@ export const managedProducts = products.map((product, index) => ({
     index === 0
       ? ["메인 비주얼", "베스트상품"]
       : index === 1
-        ? ["베스트상품", "정기배송"]
+        ? ["베스트상품", "운영 관리"]
         : index === 2
           ? ["추천상품", "묶음 제안"]
           : ["추천상품", "기획전"],
@@ -219,7 +223,7 @@ export const managedProducts = products.map((product, index) => ({
     index === 0
       ? "메인 히어로 카피와 함께 유지"
       : index === 1
-        ? "정기배송 문구 및 재고 메모 우선 점검"
+        ? "재구매 안내 문구와 재고 메모 우선 점검"
         : index === 2
           ? "대용량/묶음 구성 강조 필요"
           : "추천 세트 배너와 연결중",
@@ -241,14 +245,14 @@ export function getManagedProductBySlug(slug: string) {
 export const productCategoryFilters = [
   { label: "전체 상품", count: `${managedProducts.length}` },
   { label: "메인 노출", count: "4" },
-  { label: "정기배송", count: "1" },
+  { label: "재구매 관리", count: "1" },
   { label: "추천 세트", count: "2" },
   { label: "상세 점검", count: "2" },
 ] as const;
 
 export const productOperatorNotes = [
   "대표 상품은 메인 비주얼 카피와 썸네일 톤을 함께 관리합니다.",
-  "정기배송 상품은 월간 재구매율과 배송 주기 문구를 우선 확인합니다.",
+  "재구매 비중이 높은 상품은 안내 문구와 재고 메모를 우선 확인합니다.",
   "묶음 구성 상품은 재고 수량과 세트 노출 위치를 함께 점검합니다.",
   "추천 세트 상품은 기획전 배너와 동일한 혜택 문구를 유지합니다.",
 ] as const;
@@ -289,7 +293,7 @@ export const productUploadFlow = [
   },
   {
     title: "재고 / 배송 정책 검수",
-    description: "출고 가능 여부와 묶음/정기배송 운영 여부를 점검합니다.",
+    description: "출고 가능 여부와 묶음 구성, 배송 문구를 점검합니다.",
   },
 ] as const;
 
@@ -399,7 +403,7 @@ export const orderCompanySummary = [
     type: "제휴 회원사",
     orders: "7건",
     amount: formatWon(2140000),
-    note: "정기배송 상품 비중 높음",
+    note: "반복 구매 상품 비중 높음",
     tone: "green" as const,
   },
   {
@@ -413,44 +417,93 @@ export const orderCompanySummary = [
 ] as const;
 
 export const memberMetrics: AdminMetric[] = [
-  { label: "전체 회원", value: "1,284명", hint: "승인 완료 기준", tone: "blue" },
-  { label: "승인 대기", value: "12명", hint: "딜러 신청 포함", tone: "cyan" },
-  { label: "딜러 관리자", value: "7명", hint: "하위 몰 운영 권한 보유", tone: "green" },
-  { label: "휴면 예정", value: "24명", hint: "90일 이상 미구매", tone: "gold" },
+  { label: "전체 회원", value: "1,277명", hint: "활성 회원 기준", tone: "blue" },
+  { label: "활성 딜러몰", value: "3개", hint: "운영중 기준", tone: "cyan" },
+  { label: "이번 달 주문", value: "1,842건", hint: "회원 주문 합계", tone: "green" },
+  { label: "승인 대기", value: "9명", hint: "가입 승인 요청", tone: "gold" },
 ];
 
 export const memberRows = [
   {
-    name: "서울 강남 웰니스몰",
-    segment: "딜러 관리자",
-    joinedAt: "2026.04.22",
-    purchases: formatWon(2400000),
-    status: "승인 대기",
-    tone: "gold" as const,
-  },
-  {
     name: "이서현",
     segment: "일반 회원",
+    dealer: "웰니스강남",
+    organization: "서울 강남 딜러몰",
+    dealerManager: "서울 강남 웰니스몰 운영자",
     joinedAt: "2026.04.19",
+    orders: "3건",
     purchases: formatWon(189000),
-    status: "승인 완료",
+    status: "활성 회원",
     tone: "green" as const,
   },
   {
-    name: "라이프케어몰",
-    segment: "딜러 관리자",
-    joinedAt: "2026.04.17",
-    purchases: formatWon(4100000),
-    status: "권한 검토",
-    tone: "blue" as const,
+    name: "김현우",
+    segment: "일반 회원",
+    dealer: "웰니스강남",
+    organization: "서울 강남 딜러몰",
+    dealerManager: "서울 강남 웰니스몰 운영자",
+    joinedAt: "2026.04.18",
+    orders: "6건",
+    purchases: formatWon(438000),
+    status: "활성 회원",
+    tone: "cyan" as const,
   },
   {
     name: "김지현",
     segment: "일반 회원",
+    dealer: "라이프케어 파트너몰",
+    organization: "라이프 밸런스 딜러몰",
+    dealerManager: "라이프케어몰 운영자",
     joinedAt: "2026.04.13",
+    orders: "4건",
     purchases: formatWon(312000),
     status: "활성 회원",
     tone: "cyan" as const,
+  },
+  {
+    name: "최수민",
+    segment: "일반 회원",
+    dealer: "라이프케어 파트너몰",
+    organization: "제휴 딜러몰",
+    dealerManager: "라이프케어몰 운영자",
+    joinedAt: "2026.04.12",
+    orders: "5건",
+    purchases: formatWon(124000),
+    tone: "blue" as const,
+    status: "활성 회원",
+  },
+  {
+    name: "박수진",
+    segment: "일반 회원",
+    dealer: "바이오파트너",
+    organization: "바이오파트너 딜러몰",
+    dealerManager: "정민수",
+    joinedAt: "2026.04.11",
+    orders: "9건",
+    purchases: formatWon(960000),
+    status: "활성 회원",
+    tone: "gold" as const,
+  },
+] as const;
+
+export const memberAffiliationSummary = [
+  {
+    label: "웰니스강남 딜러몰",
+    count: "438명",
+    note: "딜러 관리자 서울 강남 웰니스몰 운영자",
+    tone: "blue" as const,
+  },
+  {
+    label: "라이프케어 파트너몰",
+    count: "421명",
+    note: "딜러 관리자 라이프케어몰 운영자",
+    tone: "cyan" as const,
+  },
+  {
+    label: "바이오파트너 딜러몰",
+    count: "418명",
+    note: "딜러 관리자 정민수",
+    tone: "gold" as const,
   },
 ] as const;
 
@@ -466,48 +519,118 @@ export const managedNotices = notices.map((notice, index) => ({
   status: index === 0 ? "상단 고정" : "게시중",
   tone: index === 0 ? ("blue" as const) : ("green" as const),
   updatedAt: index === 0 ? "2026.04.22 09:10" : "2026.04.22 08:40",
+  editor: index === 0 ? "운영팀" : index === 1 ? "콘텐츠팀" : index === 2 ? "상품팀" : "전략팀",
+  visibility: index === 0 ? "전체 공개" : "회원 공개",
+  adminHref: `/admin/notices/${notice.slug}`,
   previewHref: `/notice/${notice.slug}`,
 }));
 
+export function getManagedNoticeBySlug(slug: string) {
+  return managedNotices.find((notice) => notice.slug === slug);
+}
+
 export const dealerMetrics: AdminMetric[] = [
-  { label: "운영중 조직", value: "2개", hint: "본사 · 건강창고 본몰", tone: "blue" },
-  { label: "준비중 딜러몰", value: "3개", hint: "지역 확장 후보 기준", tone: "cyan" },
-  { label: "조직 관리자", value: "7명", hint: "하위 몰 접근 권한 대상", tone: "green" },
-  { label: "정산 검토 조직", value: "2개", hint: "월 정산 구조 설계 필요", tone: "gold" },
+  { label: "전체 딜러몰", value: "3개", hint: "활성 기준", tone: "blue" },
+  { label: "전체 회원", value: "1,277명", hint: "딜러몰 소속 회원", tone: "cyan" },
+  { label: "누적 주문", value: "4,381건", hint: "딜러몰 합산", tone: "green" },
+  { label: "승인 대기", value: "3건", hint: "신규 딜러 신청", tone: "gold" },
 ];
 
 export const dealerRows = [
   {
-    name: "노타이틀 본사",
-    type: "상위 조직",
-    manager: "본사 운영팀",
-    members: "통합 관리",
-    status: "운영중",
-    tone: "blue" as const,
-  },
-  {
-    name: "건강창고 본몰",
-    type: "직영 몰",
-    manager: "건강창고 관리자",
-    members: "1,284명",
-    status: "운영중",
-    tone: "green" as const,
-  },
-  {
-    name: "서울 강남 딜러몰",
+    name: "웰니스강남",
     type: "딜러몰",
-    manager: "승인 대기",
-    members: "준비중",
-    status: "도입 준비",
-    tone: "gold" as const,
+    joinedAt: "2026.03.02",
+    orderCount: "1,582건",
+    totalSales: formatWon(18420000),
+    status: "검수중",
+    tone: "blue" as const,
   },
   {
     name: "라이프케어 파트너몰",
     type: "딜러몰",
-    manager: "검토중",
-    members: "준비중",
-    status: "권한 설계",
+    joinedAt: "2026.03.08",
+    orderCount: "1,447건",
+    totalSales: formatWon(16280000),
+    status: "운영중",
     tone: "cyan" as const,
+  },
+  {
+    name: "바이오파트너",
+    type: "딜러몰",
+    joinedAt: "2026.03.14",
+    orderCount: "1,352건",
+    totalSales: formatWon(14970000),
+    status: "차감 반영",
+    tone: "gold" as const,
+  },
+] as const;
+
+export const organizationRows = [
+  {
+    name: "노타이틀 본사",
+    type: "본사",
+    manager: "본사 운영팀 3명",
+    scope: "딜러몰 3개 · 전체 회원 1,277명 총괄",
+    tone: "blue" as const,
+  },
+  {
+    name: "건강창고 운영본부",
+    type: "브랜드 운영",
+    manager: "건강창고 관리자 2명",
+    scope: "상품 · 공지 · 회원 운영 정책 관리",
+    tone: "green" as const,
+  },
+] as const;
+
+export const dealerAdminRows = [
+  {
+    name: "서울 강남 웰니스몰 운영자",
+    dealer: "웰니스강남",
+    role: "딜러 관리자",
+    members: "438명",
+    orders: "74건",
+    status: "승인 대기",
+    tone: "gold" as const,
+  },
+  {
+    name: "라이프케어몰 운영자",
+    dealer: "라이프케어 파트너몰",
+    role: "딜러 관리자",
+    members: "421명",
+    orders: "51건",
+    status: "운영중",
+    tone: "cyan" as const,
+  },
+  {
+    name: "정민수",
+    dealer: "바이오파트너",
+    role: "딜러 관리자",
+    members: "418명",
+    orders: "33건",
+    status: "운영중",
+    tone: "blue" as const,
+  },
+] as const;
+
+export const dealerMemberSummary = [
+  {
+    dealer: "웰니스강남",
+    parent: "노타이틀 본사",
+    members: "이서현, 김현우 외 436명",
+    tone: "blue" as const,
+  },
+  {
+    dealer: "라이프케어 파트너몰",
+    parent: "노타이틀 본사",
+    members: "김지현, 최수민 외 419명",
+    tone: "cyan" as const,
+  },
+  {
+    dealer: "바이오파트너",
+    parent: "노타이틀 본사",
+    members: "박수진 외 417명",
+    tone: "gold" as const,
   },
 ] as const;
 
@@ -584,7 +707,7 @@ export const settlementCompanySummary = [
     company: "라이프케어몰",
     type: "제휴 회원사",
     amount: formatWon(2247500),
-    note: "정기배송 상품 비중 높아 재검토 중",
+    note: "반복 구매 상품 비중 높아 재검토 중",
     tone: "cyan" as const,
   },
   {
@@ -597,71 +720,79 @@ export const settlementCompanySummary = [
 ] as const;
 
 export const salesMetrics: AdminMetric[] = [
-  { label: "오늘 매출", value: formatWon(5420000), hint: "결제 완료 기준 실시간 집계", tone: "blue" },
-  { label: "이번 달 누적", value: formatWon(42800000), hint: "회원사 전체 주문 기준", tone: "cyan" },
-  { label: "활성 회원사", value: "4곳", hint: "이번 달 매출 발생 회원사", tone: "green" },
-  { label: "객단가", value: formatWon(169000), hint: "오늘 주문 기준 평균 결제금액", tone: "gold" },
+  { label: "이번 달 매출", value: formatWon(42800000), hint: "회원사 전체 주문 기준", tone: "blue" },
+  { label: "예상 정산액", value: formatWon(10400000), hint: "고정비율 25% 기준", tone: "cyan" },
+  { label: "차감 검수", value: formatWon(1200000), hint: "반품 · 취소 예상분", tone: "rose" },
+  { label: "활성 회원사", value: "4곳", hint: "매출 발생 회원사", tone: "green" },
 ];
 
 export const salesCompanyRows = [
   {
     company: "웰니스강남",
     type: "딜러 회원사",
+    parent: "건강창고 본몰",
     sales: formatWon(12800000),
     orders: "74건",
-    share: "29.9%",
-    trend: "전월 대비 +8.2%",
+    deduction: formatWon(320000),
+    estimated: formatWon(3120000),
+    trend: "검수중",
     tone: "blue" as const,
   },
   {
     company: "건강창고 직영 회원",
     type: "직영 회원사",
+    parent: "건강창고 본몰",
     sales: formatWon(15400000),
     orders: "96건",
-    share: "36.0%",
-    trend: "전월 대비 +5.4%",
+    deduction: formatWon(410000),
+    estimated: formatWon(3747500),
+    trend: "확정",
     tone: "green" as const,
   },
   {
-    company: "라이프케어몰",
+    company: "라이프케어 파트너몰",
     type: "제휴 회원사",
+    parent: "건강창고 본몰",
     sales: formatWon(9200000),
     orders: "51건",
-    share: "21.5%",
-    trend: "전월 대비 +11.1%",
+    deduction: formatWon(210000),
+    estimated: formatWon(2247500),
+    trend: "검수중",
     tone: "cyan" as const,
   },
   {
     company: "바이오파트너",
     type: "딜러 회원사",
+    parent: "건강창고 본몰",
     sales: formatWon(5400000),
     orders: "33건",
-    share: "12.6%",
-    trend: "전월 대비 -2.7%",
+    deduction: formatWon(260000),
+    estimated: formatWon(1285000),
+    trend: "차감 반영",
     tone: "gold" as const,
   },
 ] as const;
 
 export const salesChannelRows = [
   {
-    label: "직영 회원 주문",
+    label: "직영 회원사",
     sales: formatWon(15400000),
-    ratio: "36.0%",
-    note: "일반 회원과 직영 관리 회원 포함",
+    ratio: formatWon(3747500),
+    note: "건강창고 본몰 직영 회원 기준",
     tone: "green" as const,
   },
   {
     label: "딜러 회원사 주문",
     sales: formatWon(18200000),
-    ratio: "42.5%",
+    ratio: formatWon(4405000),
     note: "웰니스강남, 바이오파트너 등",
     tone: "blue" as const,
   },
   {
     label: "제휴 회원사 주문",
     sales: formatWon(9200000),
-    ratio: "21.5%",
-    note: "라이프케어몰 중심",
+    ratio: formatWon(2247500),
+    note: "라이프케어 파트너몰 기준",
     tone: "cyan" as const,
   },
 ] as const;

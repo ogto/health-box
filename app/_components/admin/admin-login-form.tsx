@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { BrandLogo } from "../brand-logo";
+
 function resolveNextPath(nextPath?: string) {
   if (!nextPath || !nextPath.startsWith("/admin")) {
     return "/admin/dashboard";
@@ -52,12 +54,11 @@ export function AdminLoginForm({ nextPath }: { nextPath?: string }) {
     <div className="admin-login-screen">
       <div className="admin-login-card">
         <div className="admin-login-brand">
-          <div className="admin-sidebar-brand-mark admin-login-brand-mark" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-            <span />
-          </div>
+          <BrandLogo
+            alt="건강창고 관리자 로고"
+            className="admin-sidebar-brand-mark admin-login-brand-mark"
+            variant="square"
+          />
 
           <div className="admin-login-brand-copy">
             <p>HEALTH-BOX ADMIN</p>
@@ -101,4 +102,3 @@ export function AdminLoginForm({ nextPath }: { nextPath?: string }) {
     </div>
   );
 }
-

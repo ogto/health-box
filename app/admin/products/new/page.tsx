@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { AdminHeader } from "../../../_components/admin/admin-header";
 import { AdminBadge, AdminPanel } from "../../../_components/admin/admin-ui";
 import { productExposureSlots, productUploadFlow, uploadMediaGuide } from "../../../_lib/admin-data";
@@ -24,12 +22,8 @@ export default function AdminProductNewPage() {
     <div className="admin-page">
       <AdminHeader
         title="신규 상품 등록"
-        description="상품 기본 정보부터 이미지 구성, 회원가 문구, 노출 슬롯 설정까지 한 번에 정리하는 등록 화면입니다."
         actions={
           <>
-            <Link className="admin-button secondary" href="/admin/products">
-              상품 목록으로
-            </Link>
             <button className="admin-button" type="button">
               임시 저장
             </button>
@@ -39,11 +33,7 @@ export default function AdminProductNewPage() {
 
       <div className="admin-form-layout">
         <div className="admin-form-main">
-          <AdminPanel
-            kicker="Basic Information"
-            title="기본 정보"
-            description="노출 제목과 검색에 필요한 핵심 필드를 먼저 입력합니다."
-          >
+          <AdminPanel title="기본 정보">
             <div className="admin-field-grid two">
               <label className="admin-field">
                 <span>브랜드명</span>
@@ -92,11 +82,7 @@ export default function AdminProductNewPage() {
             </div>
           </AdminPanel>
 
-          <AdminPanel
-            kicker="Pricing & Exposure"
-            title="가격 / 노출 설정"
-            description="회원 전용가 정책과 메인 노출 위치를 함께 결정합니다."
-          >
+          <AdminPanel title="가격 / 노출 설정">
             <div className="admin-field-grid three">
               <label className="admin-field">
                 <span>소비자 노출 문구</span>
@@ -106,7 +92,7 @@ export default function AdminProductNewPage() {
                 <span>출고 상태</span>
                 <select className="admin-input">
                   <option>오늘 출고 가능</option>
-                  <option>정기배송 가능</option>
+                  <option>재구매 추천</option>
                   <option>묶음 구성 가능</option>
                   <option>추천 세트 운영</option>
                 </select>
@@ -153,11 +139,7 @@ export default function AdminProductNewPage() {
             </div>
           </AdminPanel>
 
-          <AdminPanel
-            kicker="Media Upload"
-            title="썸네일 / 상세 이미지"
-            description="목록용 썸네일과 상세 본문용 이미지를 역할별로 구분해 등록합니다."
-          >
+          <AdminPanel title="썸네일 / 상세 이미지">
             <div className="admin-upload-grid">
               <div className="admin-upload-slot featured">
                 <span className="admin-upload-label">대표 썸네일</span>
@@ -182,11 +164,7 @@ export default function AdminProductNewPage() {
             </div>
           </AdminPanel>
 
-          <AdminPanel
-            kicker="Detail Composition"
-            title="상세 본문 구성"
-            description="실제 상품상세에 보여줄 정보 블록을 미리 설계합니다."
-          >
+          <AdminPanel title="상세 본문 구성">
             <div className="admin-stack">
               {detailBlocks.map((block, index) => (
                 <div className="admin-detail-block" key={block.title}>
@@ -217,11 +195,7 @@ export default function AdminProductNewPage() {
         </div>
 
         <div className="admin-form-side">
-          <AdminPanel
-            kicker="Save Status"
-            title="등록 상태"
-            description="현재 입력중인 상품의 노출 준비 상태입니다."
-          >
+          <AdminPanel title="등록 상태">
             <div className="admin-status-stack">
               <div className="admin-status-row">
                 <span>작성 상태</span>
@@ -238,11 +212,7 @@ export default function AdminProductNewPage() {
             </div>
           </AdminPanel>
 
-          <AdminPanel
-            kicker="Upload Checklist"
-            title="등록 체크리스트"
-            description="업로드 전에 반드시 확인할 항목입니다."
-          >
+          <AdminPanel title="등록 체크리스트">
             <div className="admin-step-list compact">
               {productUploadFlow.map((step, index) => (
                 <div className="admin-step-row" key={step.title}>
@@ -256,11 +226,7 @@ export default function AdminProductNewPage() {
             </div>
           </AdminPanel>
 
-          <AdminPanel
-            kicker="Media Guide"
-            title="이미지 가이드"
-            description="등록 화면에서 자주 확인하는 이미지 기준입니다."
-          >
+          <AdminPanel title="이미지 가이드">
             <ul className="admin-bullet-list">
               {uploadMediaGuide.map((guide) => (
                 <li key={guide}>{guide}</li>
@@ -268,11 +234,7 @@ export default function AdminProductNewPage() {
             </ul>
           </AdminPanel>
 
-          <AdminPanel
-            kicker="Exposure Slots"
-            title="노출 위치"
-            description="상품 등록 직후 연결 가능한 노출 영역입니다."
-          >
+          <AdminPanel title="노출 위치">
             <div className="admin-slot-grid compact">
               {productExposureSlots.map((slot) => (
                 <div className="admin-slot-card" key={slot.title}>

@@ -27,8 +27,7 @@ export default async function NoticeDetailPage({
         <Breadcrumbs
           items={[
             { label: "홈", href: "/" },
-            { label: "공지상세" },
-            { label: notice.title },
+            { label: "공지사항" },
           ]}
         />
 
@@ -40,7 +39,6 @@ export default async function NoticeDetailPage({
                 <span className="detail-chip">{notice.date}</span>
               </div>
               <h2 className="detail-title">{notice.title}</h2>
-              <p className="detail-copy">{notice.summary}</p>
             </div>
 
             <div className="stack-paragraphs">
@@ -48,21 +46,11 @@ export default async function NoticeDetailPage({
                 <p key={paragraph}>{paragraph}</p>
               ))}
             </div>
-
-            <div className="content-panel panel-inner">
-              <p className="section-kicker">확인 사항</p>
-              <ul className="bullet-list">
-                {notice.checklist.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </div>
           </article>
 
           <aside className="side-stack">
             <div className="content-panel">
-              <p className="section-kicker">고객센터</p>
-              <h3 className="section-panel-title">운영 안내</h3>
+              <h3 className="section-panel-title">문의 안내</h3>
               <div className="info-panel compact">
                 <div className="info-row">
                   <strong>상담 시간</strong>
@@ -73,15 +61,14 @@ export default async function NoticeDetailPage({
                   <span>회원 승인 이후 가격 및 주문 기능 제공</span>
                 </div>
                 <div className="info-row">
-                  <strong>정기배송</strong>
-                  <span>일부 상품군부터 순차 확대 예정</span>
+                  <strong>문의 메일</strong>
+                  <span>1everybuy@naver.com</span>
                 </div>
               </div>
             </div>
 
             <div className="content-panel">
-              <p className="section-kicker">최근 공지</p>
-              <h3 className="section-panel-title">함께 확인하세요</h3>
+              <h3 className="section-panel-title">다른 공지 보기</h3>
               <div className="notice-list compact-list">
                 {latestNotices.map((entry) => (
                   <NoticeRow key={entry.slug} notice={entry} />

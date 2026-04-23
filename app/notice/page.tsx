@@ -19,10 +19,9 @@ export default function NoticeListPage() {
 
         <div className="notice-index-layout">
           <article className="content-panel notice-index-panel">
-            <p className="section-kicker">Notice</p>
             <h2 className="detail-title">공지사항</h2>
             <p className="detail-copy">
-              운영 안내, 배송 공지, 상품 운영 소식 등을 한 번에 확인할 수 있습니다.
+              운영 일정, 배송 안내, 상품 관련 공지를 한 곳에서 확인하실 수 있습니다.
             </p>
 
             <div className="notice-table notice-table-standalone">
@@ -43,7 +42,6 @@ export default function NoticeListPage() {
 
           <aside className="side-stack">
             <div className="content-panel">
-              <p className="section-kicker">고객센터</p>
               <h3 className="section-panel-title">문의 안내</h3>
               <div className="info-panel compact">
                 <div className="info-row">
@@ -55,10 +53,8 @@ export default function NoticeListPage() {
                   <span>{brand.policyMessage}</span>
                 </div>
                 <div className="info-row">
-                  <strong>바로가기</strong>
-                  <span>
-                    <Link href="/mypage">마이페이지</Link> · <Link href="/cart">장바구니</Link>
-                  </span>
+                  <strong>문의 메일</strong>
+                  <span>1everybuy@naver.com</span>
                 </div>
               </div>
             </div>

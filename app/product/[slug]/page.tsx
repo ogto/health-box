@@ -131,7 +131,7 @@ export default async function ProductDetailPage({
                   <li key={item}>{item}</li>
                 ))}
                 <li>기본 루틴 상품과 함께 세트 제안이 가능합니다.</li>
-                <li>정기배송 또는 묶음 구성 여부는 상품별로 달라질 수 있습니다.</li>
+                <li>묶음 구성 여부는 상품별 운영 기준에 따라 달라질 수 있습니다.</li>
               </ul>
             </article>
 

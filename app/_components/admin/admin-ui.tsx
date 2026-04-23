@@ -18,7 +18,7 @@ export function AdminMetrics({ items }: { items: AdminMetric[] }) {
         <article className={`admin-metric-card ${toneClassMap[item.tone]}`} key={item.label}>
           <span className="admin-metric-label">{item.label}</span>
           <strong className="admin-metric-value">{item.value}</strong>
-          <p className="admin-metric-hint">{item.hint}</p>
+          {item.hint ? <p className="admin-metric-hint">{item.hint}</p> : null}
         </article>
       ))}
     </section>

@@ -13,11 +13,14 @@ export const storefrontConfig = {
     memberLabel: "건강창고 회원",
   },
   assets: {
-    heroImage: "/demo/hero-main.png",
-    heroAlt: "건강식품 메인 비주얼 더미 이미지",
-    bannerImage: "/demo/banner-main.png",
-    bannerAlt: "건강식품 기획전 더미 이미지",
-    shareImage: "/demo/hero-main.png",
+    heroImage:
+      "https://ecimg.cafe24img.com/pg2194b47504004074/everybuy01/web/upload/NNEditor/20250902/6dea5f1a6c55e1b8a6845eb0fafb8b38.jpg",
+    heroAlt: "건강창고 메인 비주얼",
+    bannerImage:
+      "https://ecimg.cafe24img.com/pg2194b47504004074/everybuy01/web/upload/NNEditor/20250902/231ac7c6d80e659932cc96d529937e76.jpg",
+    bannerAlt: "건강창고 중간 배너",
+    shareImage:
+      "https://ecimg.cafe24img.com/pg2194b47504004074/everybuy01/web/upload/NNEditor/20250902/6dea5f1a6c55e1b8a6845eb0fafb8b38.jpg",
     faviconPath: "/favicon.ico",
     logoType: "심볼 마크",
   },
@@ -51,8 +54,8 @@ export const storefrontConfig = {
         value: "회원 승인 이후 가격 및 구매 기능 노출",
       },
       {
-        title: "바로가기",
-        value: "장바구니 · 마이페이지",
+        title: "배송 안내",
+        value: "평일 주문 건 기준 순차 출고",
       },
     ],
   },
@@ -62,4 +65,3 @@ export const storefrontConfig = {
     "기본 메타 타이틀, 설명, 공유용 썸네일",
   ],
 } as const;
-

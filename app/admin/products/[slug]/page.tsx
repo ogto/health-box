@@ -26,12 +26,8 @@ export default async function AdminProductDetailPage({
     <div className="admin-page">
       <AdminHeader
         title={product.title}
-        description="상품 기본 정보, 노출 상태, 상세 본문 구성과 운영 메모를 함께 관리하는 개별 상품 화면입니다."
         actions={
           <>
-            <Link className="admin-button secondary" href="/admin/products">
-              상품 목록으로
-            </Link>
             <Link className="admin-button" href={product.previewHref}>
               공개 페이지 보기
             </Link>
@@ -112,11 +108,7 @@ export default async function AdminProductDetailPage({
 
       <div className="admin-grid-side">
         <div className="admin-stack">
-          <AdminPanel
-            kicker="Product Summary"
-            title="기본 정보"
-            description="상세 화면과 목록에 같이 쓰이는 요약 정보입니다."
-          >
+          <AdminPanel title="기본 정보">
             <div className="admin-field-grid two read-only">
               <div className="admin-field read-only">
                 <span>브랜드명</span>
@@ -137,11 +129,7 @@ export default async function AdminProductDetailPage({
             </div>
           </AdminPanel>
 
-          <AdminPanel
-            kicker="Detail Sections"
-            title="상세 본문 구성"
-            description="현재 상세페이지에 연결된 섹션과 이미지 순서입니다."
-          >
+          <AdminPanel title="상세 본문 구성">
             <div className="admin-section-card-list">
               {product.detailSections.map((section, index) => (
                 <div className="admin-section-card" key={section.title}>
@@ -158,11 +146,7 @@ export default async function AdminProductDetailPage({
             </div>
           </AdminPanel>
 
-          <AdminPanel
-            kicker="Spec Summary"
-            title="스펙 / 배송 안내"
-            description="구매 판단에 필요한 요약 정보를 유지합니다."
-          >
+          <AdminPanel title="스펙 / 배송 안내">
             <div className="admin-spec-list">
               {product.specs.map((spec) => (
                 <div className="admin-spec-row" key={spec.label}>
@@ -175,11 +159,7 @@ export default async function AdminProductDetailPage({
         </div>
 
         <div className="admin-stack">
-          <AdminPanel
-            kicker="Visibility"
-            title="노출 / 판매 상태"
-            description="운영팀이 먼저 확인하는 핵심 상태입니다."
-          >
+          <AdminPanel title="노출 / 판매 상태">
             <div className="admin-status-stack">
               <div className="admin-status-row">
                 <span>공개 상태</span>
@@ -196,11 +176,7 @@ export default async function AdminProductDetailPage({
             </div>
           </AdminPanel>
 
-          <AdminPanel
-            kicker="Quick Links"
-            title="바로가기"
-            description="운영 화면과 공개 화면을 빠르게 오갈 수 있습니다."
-          >
+          <AdminPanel title="바로가기">
             <div className="admin-action-stack">
               <Link className="admin-button" href={product.previewHref}>
                 공개 상세 보기
@@ -214,11 +190,7 @@ export default async function AdminProductDetailPage({
             </div>
           </AdminPanel>
 
-          <AdminPanel
-            kicker="Operator Note"
-            title="운영 메모"
-            description="상품 단위로 남기는 실무 메모입니다."
-          >
+          <AdminPanel title="운영 메모">
             <ul className="admin-bullet-list">
               <li>{product.editorNote}</li>
               <li>상품 상세 이미지 {product.detailImageCount}개가 공개 화면에 연결되어 있습니다.</li>

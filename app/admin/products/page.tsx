@@ -104,14 +104,10 @@ export default async function AdminProductsPage({
     <div className="admin-page">
       <AdminHeader
         title="상품관리"
-        description="상품 목록을 더 압축된 테이블형으로 정리하고, 페이지 단위로 빠르게 훑을 수 있도록 구성한 상품 운영 화면입니다."
         actions={
           <>
-            <Link className="admin-button secondary" href="/products/best">
-              공개 상품 보기
-            </Link>
             <Link className="admin-button" href="/admin/products/new">
-              신규 상품 등록
+              상품 등록
             </Link>
           </>
         }
@@ -120,10 +116,9 @@ export default async function AdminProductsPage({
       <AdminMetrics items={productMetrics} />
 
       <AdminPanel
-        kicker="Product Workspace"
-        title="상품 운영 보드"
+        title="검색 / 필터"
         action={
-          <AdminInfoPopover>
+          <AdminInfoPopover label="상품 운영 참고">
             <div className="admin-info-popover-sections">
               <section className="admin-info-popover-section">
                 <strong>상품 등록 흐름</strong>
@@ -135,7 +130,7 @@ export default async function AdminProductsPage({
               </section>
 
               <section className="admin-info-popover-section">
-                <strong>노출 슬롯 현황</strong>
+                <strong>노출 슬롯</strong>
                 <div className="admin-info-popover-chip-row">
                   {productExposureSlots.map((slot) => (
                     <span className="admin-info-popover-chip" key={slot.title}>
@@ -146,7 +141,7 @@ export default async function AdminProductsPage({
               </section>
 
               <section className="admin-info-popover-section">
-                <strong>운영 체크포인트</strong>
+                <strong>체크포인트</strong>
                 <ul className="admin-info-popover-list">
                   {productChecklist.map((item) => (
                     <li key={item.title}>{item.title}</li>
@@ -155,7 +150,7 @@ export default async function AdminProductsPage({
               </section>
 
               <section className="admin-info-popover-section">
-                <strong>상품 운영 메모</strong>
+                <strong>운영 메모</strong>
                 <ul className="admin-info-popover-list">
                   {productOperatorNotes.map((item) => (
                     <li key={item}>{item}</li>
@@ -168,7 +163,7 @@ export default async function AdminProductsPage({
       >
         <form className="admin-product-filter-bar" method="get">
           <label className="admin-field admin-product-filter-search">
-            <span>상품 검색</span>
+            <span>검색</span>
             <input
               className="admin-input"
               defaultValue={keyword}
@@ -191,7 +186,7 @@ export default async function AdminProductsPage({
           </label>
 
           <label className="admin-field">
-            <span>노출 상태</span>
+            <span>상태</span>
             <select className="admin-select" defaultValue={status} name="status">
               <option value="">전체 상태</option>
               {statusOptions.map((option) => (
@@ -204,23 +199,17 @@ export default async function AdminProductsPage({
 
           <div className="admin-product-filter-actions">
             <button className="admin-button small" type="submit">
-              검색 적용
+              조회
             </button>
-            <Link
-              className="admin-button secondary small"
-              href="/admin/products"
-            >
+            <Link className="admin-button secondary small" href="/admin/products">
               초기화
             </Link>
           </div>
         </form>
-
       </AdminPanel>
 
       <AdminPanel
-        kicker="Catalog"
-        title="운영 상품 목록"
-        description="한 페이지에 10개씩 표시되며, 썸네일·노출상태·재고·매출·수정일을 한 줄에서 확인할 수 있습니다."
+        title="상품 목록"
         action={
           <div className="admin-table-toolbar-meta">
             <span>총 {filteredProducts.length}개</span>
@@ -288,11 +277,11 @@ export default async function AdminProductsPage({
           </AdminTable>
         ) : (
           <div className="admin-empty-state">
-            <strong>조건에 맞는 상품이 없습니다.</strong>
-            <p>검색어 또는 필터를 조정해서 다시 확인해보세요.</p>
+            <strong>일치하는 상품이 없습니다.</strong>
+            <p>검색어나 필터를 다시 확인해 주세요.</p>
             {hasFilters ? (
               <Link className="admin-button secondary small" href="/admin/products">
-                전체 상품 다시 보기
+                전체 상품
               </Link>
             ) : null}
           </div>

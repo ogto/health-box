@@ -2,19 +2,21 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode, SVGProps } from "react";
 
+import { BrandLogo } from "./brand-logo";
 import type { Notice, Product } from "../_lib/store-data";
 import { storefrontConfig } from "../_lib/storefront-config";
 
-type ActiveKey = "best" | "promotion" | "recommend" | "notice" | "mypage" | "cart" | null;
+type ActiveKey = "best" | "promotion" | "recommend" | "etc" | "notice" | "mypage" | "cart" | null;
 
 const mainNavItems: Array<{
   key: Exclude<ActiveKey, "mypage" | "cart" | null>;
   label: string;
   href: string;
 }> = [
-  { key: "best", label: "베스트상품", href: "/products/best" },
-  { key: "promotion", label: "기획전", href: "/promotion" },
-  { key: "recommend", label: "추천상품", href: "/products/recommend" },
+  { key: "best", label: "식품/간식", href: "/products/best" },
+  { key: "recommend", label: "영양제/보조제", href: "/products/recommend" },
+  { key: "promotion", label: "드링크", href: "/promotion" },
+  { key: "etc", label: "기타", href: "/promotion" },
   { key: "notice", label: "공지사항", href: "/notice" },
 ];
 
@@ -31,48 +33,48 @@ export function StoreShell({
     <main className="mall-shell">
       <div className="page-wrap">
         <header className="site-header">
-          <div className="header-main">
-            <Link className="brand-area" href="/">
-              <BrandMark />
-              <div className="brand-copy">
-                <p>{brand.kicker}</p>
-                <h1>{brand.name}</h1>
-              </div>
+          <div className="header-promo">
+            <Link className="header-promo-link" href="/notice/membership-price-policy">
+              첫 쇼핑을 지원하는 3,000원 할인 회원가입 쿠폰
             </Link>
+            <div aria-hidden="true" className="header-promo-meta">
+              <span>오늘 하루 보지 않기</span>
+              <i>×</i>
+            </div>
+          </div>
 
-            <form className="search-bar" role="search">
-              <button className="search-category" type="button">
-                {brand.searchScopeLabel}
-                <ChevronDownIcon className="h-4 w-4" />
-              </button>
-              <div className="search-field">
-                <SearchIcon className="h-5 w-5 text-[#7c8277]" />
-                <input
-                  aria-label="상품 검색"
-                  placeholder={brand.searchPlaceholder}
-                  type="search"
-                />
-              </div>
-              <button className="search-button" type="button">
-                검색
-              </button>
-            </form>
-
-            <div className="header-icons">
+          <div className="header-main">
+            <div className="header-quick-icons">
               <Link
-                aria-label="회원 메뉴"
-                className={`icon-button${activeKey === "mypage" ? " is-active" : ""}`}
+                aria-label="마이페이지"
+                className={`icon-button is-plain${activeKey === "mypage" ? " is-active" : ""}`}
                 href="/mypage"
               >
-                <UserIcon className="h-5 w-5" />
+                <UserIcon className="h-6 w-6" />
               </Link>
               <Link
                 aria-label="장바구니"
-                className={`icon-button${activeKey === "cart" ? " is-active" : ""}`}
+                className={`icon-button is-plain${activeKey === "cart" ? " is-active" : ""}`}
                 href="/cart"
               >
-                <CartIcon className="h-5 w-5" />
+                <CartIcon className="h-6 w-6" />
               </Link>
+            </div>
+
+            <Link aria-label={`${brand.name} 홈`} className="brand-area is-centered is-logo-only" href="/">
+              <BrandLogo alt="건강창고 쇼핑몰 로고" className="brand-mark" variant="circle" />
+            </Link>
+
+            <div className="header-search-row" role="search">
+              <div className="search-bar">
+                <label className="search-field">
+                  <SearchIcon className="h-5 w-5" />
+                  <input name="keyword" placeholder={brand.searchPlaceholder} type="text" />
+                </label>
+                <button className="search-button" type="button">
+                  검색
+                </button>
+              </div>
             </div>
           </div>
 
@@ -88,7 +90,6 @@ export function StoreShell({
                 </Link>
               ))}
             </nav>
-            <p className="header-state">{brand.policyMessage}</p>
           </div>
         </header>
 
@@ -168,36 +169,11 @@ export function Breadcrumbs({
   );
 }
 
-function BrandMark() {
-  return (
-    <div className="brand-mark" aria-hidden="true">
-      <span />
-      <span />
-      <span />
-      <span />
-    </div>
-  );
-}
-
 function SearchIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg fill="none" viewBox="0 0 24 24" {...props}>
       <path
         d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
-function ChevronDownIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg fill="none" viewBox="0 0 24 24" {...props}>
-      <path
-        d="m6 9 6 6 6-6"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"

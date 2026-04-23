@@ -5,7 +5,6 @@ import { AdminBadge, AdminMetrics, AdminPanel, AdminTable } from "../../_compone
 import {
   approvalQueue,
   dashboardMetrics,
-  dashboardShortcuts,
   inventoryAlerts,
   latestAdminNotices,
   recentOrders,
@@ -14,34 +13,12 @@ import {
 export default function AdminDashboardPage() {
   return (
     <div className="admin-page">
-      <AdminHeader
-        title="대시보드"
-        description="주문, 회원 승인, 재고 알림, 최근 공지를 한 화면에서 확인하는 건강창고 관리자 메인입니다."
-        actions={
-          <>
-            <Link className="admin-button secondary" href="/">
-              쇼핑몰 보기
-            </Link>
-            <Link className="admin-button" href="/admin/orders">
-              오늘 주문 확인
-            </Link>
-          </>
-        }
-      />
+      <AdminHeader title="대시보드" />
 
       <AdminMetrics items={dashboardMetrics} />
 
       <div className="admin-grid-main">
-        <AdminPanel
-          kicker="Realtime Orders"
-          title="최근 주문"
-          description="주문관리 화면으로 이어지는 최근 주문 요약입니다."
-          action={
-            <Link className="admin-inline-link" href="/admin/orders">
-              전체 주문 보기
-            </Link>
-          }
-        >
+        <AdminPanel title="최근 주문">
           <AdminTable
             columns="minmax(150px, 1fr) minmax(0, 1.5fr) minmax(110px, 0.8fr) 110px"
             headers={["주문번호", "회원 / 상품", "결제금액", "상태"]}
@@ -64,27 +41,7 @@ export default function AdminDashboardPage() {
         </AdminPanel>
 
         <div className="admin-stack">
-          <AdminPanel kicker="Quick Actions" title="바로가기">
-            <div className="admin-shortcut-grid">
-              {dashboardShortcuts.map((shortcut) => (
-                <Link className="admin-shortcut-card" href={shortcut.href} key={shortcut.href}>
-                  <strong>{shortcut.title}</strong>
-                  <p>{shortcut.description}</p>
-                </Link>
-              ))}
-            </div>
-          </AdminPanel>
-
-          <AdminPanel
-            kicker="Approval Queue"
-            title="승인 대기"
-            description="회원 승인과 딜러 신청 검토가 필요한 항목입니다."
-            action={
-              <Link className="admin-inline-link" href="/admin/members">
-                회원관리 이동
-              </Link>
-            }
-          >
+          <AdminPanel title="승인 대기">
             <div className="admin-list">
               {approvalQueue.map((item) => (
                 <div className="admin-list-row" key={`${item.name}-${item.submittedAt}`}>
@@ -106,11 +63,7 @@ export default function AdminDashboardPage() {
       </div>
 
       <div className="admin-grid-halves">
-        <AdminPanel
-          kicker="Inventory Signals"
-          title="재고 및 노출 알림"
-          description="메인 노출 상품과 입고 예정 상품 위주로 빠르게 보는 운영 메모입니다."
-        >
+        <AdminPanel title="재고 알림">
           <div className="admin-list">
             {inventoryAlerts.map((item) => (
               <div className="admin-list-row" key={item.title}>
@@ -126,16 +79,7 @@ export default function AdminDashboardPage() {
           </div>
         </AdminPanel>
 
-        <AdminPanel
-          kicker="Latest Notices"
-          title="최근 공지"
-          description="쇼핑몰 공지 노출 상태와 최근 업데이트 흐름입니다."
-          action={
-            <Link className="admin-inline-link" href="/admin/notices">
-              공지관리 이동
-            </Link>
-          }
-        >
+        <AdminPanel title="최근 공지">
           <div className="admin-list">
             {latestAdminNotices.map((notice) => (
               <Link className="admin-list-row" href={notice.previewHref} key={notice.slug}>
