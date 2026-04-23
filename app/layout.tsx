@@ -5,6 +5,11 @@ import { storefrontConfig } from "./_lib/storefront-config";
 export const metadata: Metadata = {
   title: storefrontConfig.metadata.title,
   description: storefrontConfig.metadata.description,
+  icons: {
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/apple-icon.png",
+  },
   openGraph: {
     title: storefrontConfig.metadata.title,
     description: storefrontConfig.metadata.description,

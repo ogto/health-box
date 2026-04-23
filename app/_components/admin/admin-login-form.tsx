@@ -89,14 +89,6 @@ export function AdminLoginForm({ nextPath }: { nextPath?: string }) {
           <button className="admin-button admin-login-button" disabled={loading} onClick={() => void handleSubmit()} type="button">
             {loading ? "확인 중..." : "로그인"}
           </button>
-
-          <div className="admin-login-note">
-            <strong>환경변수 기준</strong>
-            <p>
-              Vercel에서는 <code>ADMIN_PASSWORD</code> 와 <code>ADMIN_SESSION_TOKEN</code> 값을
-              등록하면 바로 같은 방식으로 동작합니다.
-            </p>
-          </div>
         </div>
       </div>
     </div>
