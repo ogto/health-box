@@ -4485,14 +4485,16 @@ a.admin-list-row:hover {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 18px;
-    padding: 14px 0 12px;
+    margin: 14px 16px 18px;
+    padding: 12px 14px;
     position: sticky;
     top: 0;
     z-index: 30;
-    background: rgba(246, 249, 253, 0.94);
+    background: rgba(255, 255, 255, 0.96);
     backdrop-filter: blur(14px);
-    border-bottom: 1px solid rgba(216, 228, 239, 0.9);
+    border: 1px solid rgba(216, 228, 239, 0.92);
+    border-radius: 18px;
+    box-shadow: 0 14px 34px rgba(20, 39, 61, 0.08);
   }
 
   .admin-mobile-sidebar-wrap {
@@ -4562,11 +4564,13 @@ a.admin-list-row:hover {
 
 @media (max-width: 860px) {
   .admin-content {
-    padding: 16px 14px 42px;
+    padding: 0 16px 42px;
   }
 
   .admin-page-header {
     flex-direction: column;
+    gap: 14px;
+    padding-inline: 2px;
   }
 
   .admin-header-copy h1 {
@@ -4807,7 +4811,8 @@ a.admin-list-row:hover {
 
 @media (max-width: 560px) {
   .admin-mobile-bar {
-    padding: 12px 0 10px;
+    margin: 12px 12px 16px;
+    padding: 11px 12px;
   }
 
   .admin-mobile-brand p {
