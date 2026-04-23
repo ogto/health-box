@@ -2,31 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { NoticeRow, ProductCard, StoreShell } from "./_components/store-ui";
+import { getStorefrontRuntime } from "./_lib/storefront-runtime";
 import { bestProducts, notices, products } from "./_lib/store-data";
-
-const heroBanners = [
-  {
-    title: "건강한 일상을 위한 메인 셀렉션",
-    subtitle: "매일 찾게 되는 건강창고 대표 상품",
-    href: "/products/best",
-    image:
-      "https://ecimg.cafe24img.com/pg2194b47504004074/everybuy01/web/upload/NNEditor/20250902/6dea5f1a6c55e1b8a6845eb0fafb8b38.jpg",
-  },
-  {
-    title: "가볍게 챙기는 데일리 건강 루틴",
-    subtitle: "회원 전용가로 확인하는 시즌 추천",
-    href: "/products/recommend",
-    image:
-      "https://ecimg.cafe24img.com/pg2194b47504004074/everybuy01/web/upload/NNEditor/20250902/0ce9d3a711c79687b1441bbde01a58af.jpg",
-  },
-  {
-    title: "하루를 정리하는 건강 습관",
-    subtitle: "건강 갤러리에서 먼저 만나는 인기 셀렉션",
-    href: "/promotion",
-    image:
-      "https://ecimg.cafe24img.com/pg2194b47504004074/everybuy01/web/upload/NNEditor/20250902/4e7afb376812f13557c351beb5138c99.jpg",
-  },
-] as const;
 
 const galleryItems = [
   {
@@ -51,9 +28,34 @@ const galleryItems = [
 
 const tabLabels = ["베스트", "균형있는", "건강하게", "체중조절"] as const;
 
-export default function Home() {
+export default async function Home() {
+  const runtime = await getStorefrontRuntime();
   const featuredProducts = bestProducts.slice(0, 4);
   const routineProducts = products.slice(0, 4);
+  const heroBanners = [
+    {
+      title: runtime.home.hero.titleLines.join(" "),
+      subtitle: runtime.home.hero.description,
+      href: runtime.home.hero.primaryHref,
+      image: runtime.assets.heroImage,
+    },
+    {
+      title: runtime.home.banner.title,
+      subtitle: runtime.home.banner.description,
+      href: runtime.home.banner.ctaHref,
+      image:
+        "https://ecimg.cafe24img.com/pg2194b47504004074/everybuy01/web/upload/NNEditor/20250902/0ce9d3a711c79687b1441bbde01a58af.jpg",
+    },
+    {
+      title: runtime.dealer ? `${runtime.dealer.displayName} 회원 전용 셀렉션` : "하루를 정리하는 건강 습관",
+      subtitle: runtime.dealer
+        ? `${runtime.dealer.mallName}에서 자주 찾는 건강식품을 한 곳에서 둘러보세요.`
+        : "건강 갤러리에서 먼저 만나는 인기 셀렉션",
+      href: "/promotion",
+      image:
+        "https://ecimg.cafe24img.com/pg2194b47504004074/everybuy01/web/upload/NNEditor/20250902/4e7afb376812f13557c351beb5138c99.jpg",
+    },
+  ] as const;
 
   return (
     <StoreShell>
@@ -95,8 +97,12 @@ export default function Home() {
 
       <section className="section-block">
         <div className="section-title-centered">
-          <p>건강 갤러리</p>
-          <h2>건강한 삶을 위한 다양한 셀렉션</h2>
+          <p>{runtime.home.hero.kicker}</p>
+          <h2>
+            {runtime.dealer
+              ? `${runtime.dealer.displayName} 회원을 위한 건강 셀렉션`
+              : "건강한 삶을 위한 다양한 셀렉션"}
+          </h2>
         </div>
 
         <div className="feature-gallery-grid">
@@ -123,23 +129,27 @@ export default function Home() {
       <section className="section-block">
         <Link className="wide-promo-banner" href="/promotion">
           <Image
-            alt="건강창고 기획전 배너"
+            alt={runtime.assets.bannerAlt}
             className="object-cover"
             fill
             sizes="100vw"
-            src="https://ecimg.cafe24img.com/pg2194b47504004074/everybuy01/web/upload/NNEditor/20250902/231ac7c6d80e659932cc96d529937e76.jpg"
+            src={runtime.assets.bannerImage}
           />
           <div className="wide-promo-copy">
-            <span>EVENT</span>
-            <strong>건강 루틴 기획전</strong>
+            <span>{runtime.home.banner.kicker}</span>
+            <strong>{runtime.home.banner.title}</strong>
           </div>
         </Link>
       </section>
 
       <section className="section-block" id="best">
         <div className="section-title-centered">
-          <p>건강식품 추천</p>
-          <h2>엄선된 건강식품으로 활력 넘치는 하루를 시작하세요</h2>
+          <p>{runtime.dealer ? `${runtime.dealer.displayName} 추천 상품` : "건강식품 추천"}</p>
+          <h2>
+            {runtime.dealer
+              ? `${runtime.dealer.displayName} 회원이 많이 찾는 건강식품`
+              : "엄선된 건강식품으로 활력 넘치는 하루를 시작하세요"}
+          </h2>
         </div>
 
         <div className="home-tab-row">
@@ -164,7 +174,11 @@ export default function Home() {
       <section className="section-block" id="recommend">
         <div className="section-title-centered">
           <p>다이어트 식품</p>
-          <h2>맛있고 건강하게, 몸매 관리를 시작하세요</h2>
+          <h2>
+            {runtime.dealer
+              ? `${runtime.dealer.displayName} 회원을 위한 시즌 추천`
+              : "맛있고 건강하게, 몸매 관리를 시작하세요"}
+          </h2>
         </div>
 
         <div className="product-grid product-grid-five">
@@ -195,8 +209,12 @@ export default function Home() {
 
       <section className="section-block">
         <div className="home-text-banner">
-          <p>건강한 선택</p>
-          <strong>균형 잡힌 영양과 꾸준한 관리로 건강한 삶을 유지하세요.</strong>
+          <p>{runtime.dealer ? runtime.dealer.mallName : "건강한 선택"}</p>
+          <strong>
+            {runtime.dealer
+              ? `${runtime.dealer.displayName} 회원 전용 건강 루틴을 지금 바로 확인해보세요.`
+              : "균형 잡힌 영양과 꾸준한 관리로 건강한 삶을 유지하세요."}
+          </strong>
           <Link href="/promotion">자세히 보기</Link>
         </div>
       </section>
@@ -220,18 +238,12 @@ export default function Home() {
           </div>
 
           <aside className="support-panel">
-            <div className="support-item">
-              <strong>고객센터</strong>
-              <span>평일 09:00 - 18:00</span>
-            </div>
-            <div className="support-item">
-              <strong>상담 이메일</strong>
-              <span>1everybuy@naver.com</span>
-            </div>
-            <div className="support-item">
-              <strong>배송 안내</strong>
-              <span>건강창고 본사에서 순차 출고됩니다.</span>
-            </div>
+            {runtime.home.supportItems.map((item) => (
+              <div className="support-item" key={item.title}>
+                <strong>{item.title}</strong>
+                <span>{item.value}</span>
+              </div>
+            ))}
           </aside>
         </div>
       </section>

@@ -1,21 +1,26 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { storefrontConfig } from "./_lib/storefront-config";
+import { getStorefrontRuntime } from "./_lib/storefront-runtime";
 
-export const metadata: Metadata = {
-  title: storefrontConfig.metadata.title,
-  description: storefrontConfig.metadata.description,
-  icons: {
-    icon: "/favicon.png",
-    shortcut: "/favicon.png",
-    apple: "/apple-icon.png",
-  },
-  openGraph: {
-    title: storefrontConfig.metadata.title,
-    description: storefrontConfig.metadata.description,
-    images: [storefrontConfig.assets.shareImage],
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const runtime = await getStorefrontRuntime();
+
+  return {
+    metadataBase: new URL(`https://${runtime.host.rootDomain}`),
+    title: runtime.metadata.title,
+    description: runtime.metadata.description,
+    icons: {
+      icon: "/favicon.png",
+      shortcut: "/favicon.png",
+      apple: "/apple-icon.png",
+    },
+    openGraph: {
+      title: runtime.metadata.title,
+      description: runtime.metadata.description,
+      images: [runtime.assets.shareImage],
+    },
+  };
+}
 
 export default function RootLayout({
   children,

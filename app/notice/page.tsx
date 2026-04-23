@@ -1,11 +1,11 @@
 import Link from "next/link";
 
 import { Breadcrumbs, StoreShell } from "../_components/store-ui";
+import { getStorefrontRuntime } from "../_lib/storefront-runtime";
 import { notices } from "../_lib/store-data";
-import { storefrontConfig } from "../_lib/storefront-config";
 
-export default function NoticeListPage() {
-  const { brand } = storefrontConfig;
+export default async function NoticeListPage() {
+  const { brand, dealer } = await getStorefrontRuntime();
 
   return (
     <StoreShell activeKey="notice">
@@ -21,7 +21,9 @@ export default function NoticeListPage() {
           <article className="content-panel notice-index-panel">
             <h2 className="detail-title">공지사항</h2>
             <p className="detail-copy">
-              운영 일정, 배송 안내, 상품 관련 공지를 한 곳에서 확인하실 수 있습니다.
+              {dealer
+                ? `${dealer.mallName} 운영 일정, 배송 안내, 상품 관련 공지를 한 곳에서 확인하실 수 있습니다.`
+                : "운영 일정, 배송 안내, 상품 관련 공지를 한 곳에서 확인하실 수 있습니다."}
             </p>
 
             <div className="notice-table notice-table-standalone">
@@ -54,7 +56,7 @@ export default function NoticeListPage() {
                 </div>
                 <div className="info-row">
                   <strong>문의 메일</strong>
-                  <span>1everybuy@naver.com</span>
+                  <span>{dealer?.supportEmail || "1everybuy@naver.com"}</span>
                 </div>
               </div>
             </div>

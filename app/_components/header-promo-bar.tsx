@@ -16,7 +16,7 @@ function getTodayKey() {
   return formatter.format(new Date());
 }
 
-export function HeaderPromoBar() {
+export function HeaderPromoBar({ label = "3,000원 회원가입 쿠폰" }: { label?: string }) {
   const [hidden, setHidden] = useState(() => {
     if (typeof window === "undefined") {
       return false;
@@ -51,7 +51,7 @@ export function HeaderPromoBar() {
   return (
     <div className="header-promo">
       <Link className="header-promo-link" href="/notice/membership-price-policy">
-        3,000원 회원가입 쿠폰
+        {label}
       </Link>
 
       <div className="header-promo-meta">

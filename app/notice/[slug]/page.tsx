@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { Breadcrumbs, NoticeRow, StoreShell } from "../../_components/store-ui";
+import { getStorefrontRuntime } from "../../_lib/storefront-runtime";
 import { getNoticeBySlug, notices } from "../../_lib/store-data";
 
 export function generateStaticParams() {
@@ -12,6 +13,7 @@ export default async function NoticeDetailPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  const { dealer } = await getStorefrontRuntime();
   const { slug } = await params;
   const notice = getNoticeBySlug(slug);
 
@@ -58,11 +60,15 @@ export default async function NoticeDetailPage({
                 </div>
                 <div className="info-row">
                   <strong>회원 정책</strong>
-                  <span>회원 승인 이후 가격 및 주문 기능 제공</span>
+                  <span>
+                    {dealer
+                      ? `${dealer.displayName} 회원 승인 이후 가격 및 주문 기능 제공`
+                      : "회원 승인 이후 가격 및 주문 기능 제공"}
+                  </span>
                 </div>
                 <div className="info-row">
                   <strong>문의 메일</strong>
-                  <span>1everybuy@naver.com</span>
+                  <span>{dealer?.supportEmail || "1everybuy@naver.com"}</span>
                 </div>
               </div>
             </div>

@@ -10,6 +10,10 @@ function getAdminHostname() {
   return process.env.ADMIN_HOSTNAME?.trim() || DEFAULT_ADMIN_HOSTNAME;
 }
 
+function isLocalHostname(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".localhost");
+}
+
 function isBypassPath(pathname: string) {
   return pathname.startsWith("/_next") || pathname.startsWith("/api") || PUBLIC_FILE_PATTERN.test(pathname);
 }
@@ -28,6 +32,12 @@ export function proxy(request: NextRequest) {
 
   if (isAdminHost && !pathname.startsWith("/admin") && !isBypassPath(pathname)) {
     return NextResponse.redirect(new URL(`/admin${pathname}`, request.url));
+  }
+
+  if (pathname.startsWith("/admin") && !isAdminHost && !isLocalHostname(hostname)) {
+    const adminUrl = new URL(request.url);
+    adminUrl.hostname = getAdminHostname();
+    return NextResponse.redirect(adminUrl);
   }
 
   if (!pathname.startsWith("/admin")) {

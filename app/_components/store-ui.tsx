@@ -5,7 +5,7 @@ import type { ReactNode, SVGProps } from "react";
 import { BrandLogo } from "./brand-logo";
 import { HeaderPromoBar } from "./header-promo-bar";
 import type { Notice, Product } from "../_lib/store-data";
-import { storefrontConfig } from "../_lib/storefront-config";
+import { getStorefrontRuntime } from "../_lib/storefront-runtime";
 
 type ActiveKey = "best" | "promotion" | "recommend" | "etc" | "notice" | "mypage" | "cart" | null;
 
@@ -21,20 +21,21 @@ const mainNavItems: Array<{
   { key: "notice", label: "공지사항", href: "/notice" },
 ];
 
-export function StoreShell({
+export async function StoreShell({
   children,
   activeKey = null,
 }: {
   children: ReactNode;
   activeKey?: ActiveKey;
 }) {
-  const { brand } = storefrontConfig;
+  const { brand, dealer } = await getStorefrontRuntime();
+  const promoLabel = dealer ? `${dealer.displayName} 회원가입 쿠폰` : "3,000원 회원가입 쿠폰";
 
   return (
     <main className="mall-shell">
       <div className="page-wrap">
         <header className="site-header">
-          <HeaderPromoBar />
+          <HeaderPromoBar label={promoLabel} />
 
           <div className="header-main">
             <div className="header-quick-icons">
@@ -54,7 +55,11 @@ export function StoreShell({
               </Link>
             </div>
 
-            <Link aria-label={`${brand.name} 홈`} className="brand-area is-centered is-logo-only" href="/">
+            <Link
+              aria-label={dealer ? `${dealer.mallName} 홈` : `${brand.name} 홈`}
+              className="brand-area is-centered is-logo-only"
+              href="/"
+            >
               <BrandLogo alt="건강창고 쇼핑몰 로고" className="brand-mark" variant="circle" />
             </Link>
 

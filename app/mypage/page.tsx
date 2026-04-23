@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Breadcrumbs, StoreShell } from "../_components/store-ui";
-import { storefrontConfig } from "../_lib/storefront-config";
+import { getStorefrontRuntime } from "../_lib/storefront-runtime";
 
 const orderItems = [
   {
@@ -31,8 +31,8 @@ const stats = [
   { label: "적립 예정", value: "12,400P" },
 ] as const;
 
-export default function MyPage() {
-  const { brand } = storefrontConfig;
+export default async function MyPage() {
+  const { brand, dealer } = await getStorefrontRuntime();
 
   return (
     <StoreShell activeKey="mypage">
@@ -49,7 +49,11 @@ export default function MyPage() {
             <div className="account-profile">
               <p className="section-kicker">Member</p>
               <h2>{brand.memberLabel}님</h2>
-              <p>회원 승인 완료 · 회원 전용가 이용 가능</p>
+              <p>
+                {dealer
+                  ? `${dealer.mallName} 회원 승인 완료 · 회원 전용가 이용 가능`
+                  : "회원 승인 완료 · 회원 전용가 이용 가능"}
+              </p>
             </div>
 
             <nav className="account-menu">
