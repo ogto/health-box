@@ -93,9 +93,16 @@ export function AdminMobileSidebar({
       />
       <aside className="admin-mobile-sidebar">
         <div className="admin-mobile-sidebar-head">
-          <strong>관리자 메뉴</strong>
-          <button className="admin-mobile-close" onClick={onClose} type="button">
-            닫기
+          <div className="admin-mobile-sidebar-title">
+            <BrandLogo alt="건강창고 관리자 로고" className="admin-sidebar-brand-mark" variant="square" />
+            <div>
+              <p>HEALTH-BOX ADMIN</p>
+              <strong>건강창고 관리자</strong>
+            </div>
+          </div>
+
+          <button aria-label="관리자 메뉴 닫기" className="admin-mobile-close" onClick={onClose} type="button">
+            <CloseIcon />
           </button>
         </div>
         <SidebarContent onNavigate={onClose} />
@@ -218,6 +225,20 @@ function DealerIcon(props: SVGProps<SVGSVGElement>) {
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth="1.7"
+      />
+    </svg>
+  );
+}
+
+function CloseIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg fill="none" viewBox="0 0 24 24" {...props}>
+      <path
+        d="M6 6l12 12M18 6 6 18"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
       />
     </svg>
   );
