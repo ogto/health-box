@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode, SVGProps } from "react";
 
 import { BrandLogo } from "./brand-logo";
+import { HeaderPromoBar } from "./header-promo-bar";
 import type { Notice, Product } from "../_lib/store-data";
 import { storefrontConfig } from "../_lib/storefront-config";
 
@@ -33,15 +34,7 @@ export function StoreShell({
     <main className="mall-shell">
       <div className="page-wrap">
         <header className="site-header">
-          <div className="header-promo">
-            <Link className="header-promo-link" href="/notice/membership-price-policy">
-              3,000원 회원가입 쿠폰
-            </Link>
-            <div aria-hidden="true" className="header-promo-meta">
-              <span>오늘 하루 보지 않기</span>
-              <i>×</i>
-            </div>
-          </div>
+          <HeaderPromoBar />
 
           <div className="header-main">
             <div className="header-quick-icons">
