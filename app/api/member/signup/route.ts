@@ -30,6 +30,14 @@ function buildSignupSlug(name: string, dealerSlug?: string) {
   return `${dealerSlug || "member"}-${base || "signup"}-${Date.now()}`;
 }
 
+function extractErrorMessage(error: unknown) {
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  return rawMessage
+    .replace(/^HealthBox API \d+:\s*/, "")
+    .replace(/^Error:\s*/, "")
+    .trim();
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -38,6 +46,7 @@ export async function POST(request: NextRequest) {
     const name = String(body.name || "").trim();
     const email = String(body.email || "").trim();
     const phone = normalizePhone(body.phone);
+    const password = String(body.password || "");
     const resolvedDealerMallId =
       requestedDealerMallId ||
       Number((await fetchDealerPublicBySlug(dealerSlug || ""))?.dealerMallId || 0) ||
@@ -53,6 +62,13 @@ export async function POST(request: NextRequest) {
     if (!name || !phone) {
       return NextResponse.json(
         { ok: false, message: "이름과 휴대폰 번호를 입력해주세요." },
+        { status: 400 },
+      );
+    }
+
+    if (!password || password.length < 8) {
+      return NextResponse.json(
+        { ok: false, message: "비밀번호는 8자 이상 입력해주세요." },
         { status: 400 },
       );
     }
@@ -105,6 +121,7 @@ export async function POST(request: NextRequest) {
         name,
         phone,
         email: email || undefined,
+        password,
         inboundChannel: dealerSlug ? `${dealerSlug}-public` : "public-web",
         slug: buildSignupSlug(name, dealerSlug),
       },
@@ -112,10 +129,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, message: "가입 신청이 접수되었습니다." });
   } catch (error) {
+    const message = extractErrorMessage(error);
     return NextResponse.json(
       {
         ok: false,
-        message: "회원가입 신청 중 오류가 발생했습니다.",
+        message: message || "회원가입 신청 중 오류가 발생했습니다.",
         detail: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },

@@ -43,11 +43,24 @@ export function MemberSignupForm({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit() {
     setError("");
+
+    if (!password || password.length < 8) {
+      setError("비밀번호는 8자 이상 입력해주세요.");
+      return;
+    }
+
+    if (password !== passwordConfirm) {
+      setError("비밀번호 확인이 일치하지 않습니다.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -61,6 +74,7 @@ export function MemberSignupForm({
           name,
           phone,
           email,
+          password,
         }),
       });
 
@@ -127,6 +141,33 @@ export function MemberSignupForm({
             placeholder="선택 입력"
             type="email"
             value={email}
+          />
+        </label>
+
+        <label className="member-auth-field">
+          <span>비밀번호</span>
+          <input
+            className="member-auth-input"
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="8자 이상 입력"
+            type="password"
+            value={password}
+          />
+        </label>
+
+        <label className="member-auth-field">
+          <span>비밀번호 확인</span>
+          <input
+            className="member-auth-input"
+            onChange={(event) => setPasswordConfirm(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                void handleSubmit();
+              }
+            }}
+            placeholder="비밀번호 다시 입력"
+            type="password"
+            value={passwordConfirm}
           />
         </label>
 
