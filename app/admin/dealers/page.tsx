@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { createDealerMallAction, saveDealerMallPublicConfigAction } from "../../_actions/health-box-admin";
+import { AdminDealerCreateDialog } from "../../_components/admin/admin-dealer-create-dialog";
 import { AdminHeader } from "../../_components/admin/admin-header";
 import { AdminSubmitButton } from "../../_components/admin/admin-submit-button";
 import { AdminBadge, AdminMetrics, AdminPanel, AdminTable } from "../../_components/admin/admin-ui";
@@ -41,7 +42,7 @@ export default async function AdminDealersPage({
       ])
     : [null, null, null];
 
-  const dealerRows = mapDealerRows(dealers);
+  const dealerRows = mapDealerRows(dealers, members);
   const metrics = buildDealerMetrics(dealers, members, dealerApplications);
   const selectedDealerId =
     Number(params.dealerMallId) || dealerRows[0]?.id || null;
@@ -63,7 +64,10 @@ export default async function AdminDealersPage({
 
   return (
     <div className="admin-page">
-      <AdminHeader title="딜러몰관리" />
+      <AdminHeader
+        actions={<AdminDealerCreateDialog action={createDealerMallAction} hasApi={hasHealthBoxApi()} />}
+        title="딜러몰관리"
+      />
 
       <AdminMetrics items={metrics} />
 
@@ -72,23 +76,47 @@ export default async function AdminDealersPage({
       ) : null}
       {createError ? <div className="admin-feedback is-error">{createError}</div> : null}
 
-      <div className="admin-grid-side">
+      <div className="admin-stack">
         <AdminPanel title="딜러몰">
           <AdminTable
-            columns="minmax(0, 1.1fr) 96px 110px 120px 90px 84px"
+            alignments={["left", "left", "left", "left", "left", "left", "center", "center", "center", "center", "right", "center", "center"]}
+            columns="minmax(0, 1.08fr) minmax(0, 0.64fr) minmax(0, 0.56fr) minmax(0, 0.82fr) minmax(0, 0.82fr) minmax(0, 0.68fr) minmax(68px, 0.56fr) minmax(58px, 0.46fr) minmax(42px, 0.3fr) minmax(42px, 0.3fr) minmax(62px, 0.46fr) minmax(58px, 0.44fr) 58px"
             emptyDescription="조회 가능한 딜러몰 데이터가 없습니다."
-            headers={["딜러몰", "가입일", "누적 주문건수", "누적 판매", "상태", "상세"]}
+            headers={[
+              "딜러몰",
+              "표시명",
+              "slug",
+              "도메인",
+              "문의 메일",
+              "문의 전화",
+              "가입일",
+              "코드",
+              "회원",
+              "주문",
+              "누적판매",
+              "상태",
+              "상세",
+            ]}
             isEmpty={!dealerRows.length}
           >
             {dealerRows.map((dealer) => (
-              <div className="admin-table-row" key={`${dealer.name}-${dealer.id}`}>
-                <strong>{dealer.name}</strong>
-                <span className="admin-row-muted">{dealer.joinedAt}</span>
-                <span className="admin-row-muted">{dealer.orderCount}</span>
-                <strong className="admin-row-price">{dealer.totalSales}</strong>
-                <AdminBadge tone={dealer.tone}>{dealer.status}</AdminBadge>
+              <div className="admin-table-row" key={dealer.id}>
+                <strong className="admin-cell-left" title={dealer.name}>{dealer.name}</strong>
+                <span className="admin-row-muted admin-cell-left" title={dealer.displayName || dealer.name}>{dealer.displayName || dealer.name}</span>
+                <span className="admin-row-muted admin-cell-left" title={dealer.slug}>{dealer.slug}</span>
+                <span className="admin-row-muted admin-cell-left" title={dealer.domain}>{dealer.domain}</span>
+                <span className="admin-row-muted admin-cell-left" title={dealer.supportEmail || "-"}>{dealer.supportEmail || "-"}</span>
+                <span className="admin-row-muted admin-cell-left" title={dealer.supportPhone || "-"}>{dealer.supportPhone || "-"}</span>
+                <span className="admin-row-muted admin-cell-center" title={dealer.joinedAt}>{dealer.joinedAt}</span>
+                <span className="admin-row-muted admin-cell-center" title={dealer.dealerCode}>{dealer.dealerCode}</span>
+                <strong className="admin-row-price admin-cell-center" title={dealer.memberCount}>{dealer.memberCount}</strong>
+                <span className="admin-row-muted admin-cell-center" title={dealer.orderCount}>{dealer.orderCount}</span>
+                <strong className="admin-row-price admin-cell-right" title={dealer.totalSales}>{dealer.totalSales}</strong>
+                <AdminBadge className="admin-cell-center" tone={dealer.tone}>
+                  {dealer.status}
+                </AdminBadge>
                 <Link
-                  className="admin-button secondary small"
+                  className="admin-button secondary small admin-cell-center"
                   href={`/admin/dealers?dealerMallId=${dealer.id}`}
                 >
                   보기
@@ -98,57 +126,7 @@ export default async function AdminDealersPage({
           </AdminTable>
         </AdminPanel>
 
-        <div className="admin-stack">
-          <AdminPanel title="딜러 추가">
-            <form action={createDealerMallAction} className="admin-status-stack">
-              <input name="redirectTo" type="hidden" value="/admin/dealers" />
-              <div className="admin-field-grid two">
-                <label className="admin-field">
-                  <span>딜러몰 이름</span>
-                  <input className="admin-input" name="mallName" placeholder="예: 강남웰니스몰" type="text" />
-                </label>
-                <label className="admin-field">
-                  <span>표시명</span>
-                  <input className="admin-input" name="displayName" placeholder="예: 강남웰니스" type="text" />
-                </label>
-              </div>
-              <div className="admin-field-grid two">
-                <label className="admin-field">
-                  <span>slug</span>
-                  <input className="admin-input" name="slug" placeholder="예: gangnam-wellness" type="text" />
-                </label>
-                <label className="admin-field">
-                  <span>담당자 이름</span>
-                  <input className="admin-input" name="applicantName" placeholder="담당자명 입력" type="text" />
-                </label>
-              </div>
-              <div className="admin-field-grid two">
-                <label className="admin-field">
-                  <span>로그인 이메일</span>
-                  <input className="admin-input" name="email" placeholder="login@example.com" type="email" />
-                </label>
-                <label className="admin-field">
-                  <span>휴대폰 번호</span>
-                  <input className="admin-input" name="phone" placeholder="010-0000-0000" type="text" />
-                </label>
-              </div>
-              <label className="admin-field">
-                <span>메모</span>
-                <textarea className="admin-textarea" name="reviewMemo" placeholder="필요 시 메모 입력" />
-              </label>
-              {hasHealthBoxApi() ? (
-                <>
-                  <AdminSubmitButton className="admin-button" pendingLabel="추가중...">
-                    딜러 추가
-                  </AdminSubmitButton>
-                  <p className="admin-row-muted">관리자 수동 등록 API 기준으로 바로 생성합니다.</p>
-                </>
-              ) : (
-                <div className="admin-row-muted">API 미연결 상태입니다.</div>
-              )}
-            </form>
-          </AdminPanel>
-
+        <div className="admin-grid-main">
           <AdminPanel title="딜러몰 공개 설정">
             {selectedDealer ? (
               <form action={saveDealerMallPublicConfigAction} className="admin-status-stack">
@@ -163,11 +141,12 @@ export default async function AdminDealersPage({
                   />
                 </label>
                 <label className="admin-field">
-                  <span>표시명</span>
+                  <span>공개 표시명 (선택)</span>
                   <input
                     className="admin-input"
-                    defaultValue={stringValue(publicConfig, "displayName") || selectedDealer.name}
+                    defaultValue={stringValue(publicConfig, "displayName") || selectedDealer.displayName || selectedDealer.name}
                     name="displayName"
+                    placeholder="비우면 몰 이름과 같게 노출"
                     type="text"
                   />
                 </label>
@@ -209,40 +188,42 @@ export default async function AdminDealersPage({
             )}
           </AdminPanel>
 
-          <AdminPanel title="소속 회원">
-            <div className="admin-list">
-              {memberRows.map((member) => (
-                <div className="admin-list-row" key={`${member.name}-${member.joinedAt}`}>
-                  <div className="admin-row-stack">
-                    <strong>{member.name}</strong>
-                    <p>{member.organization}</p>
+          <div className="admin-stack">
+            <AdminPanel title="소속 회원">
+              <div className="admin-list">
+                {memberRows.map((member) => (
+                  <div className="admin-list-row" key={`${member.name}-${member.joinedAt}`}>
+                    <div className="admin-row-stack">
+                      <strong>{member.name}</strong>
+                      <p>{member.organization}</p>
+                    </div>
+                    <div className="admin-list-meta">
+                      <AdminBadge tone={member.tone}>{member.status}</AdminBadge>
+                    </div>
                   </div>
-                  <div className="admin-list-meta">
-                    <AdminBadge tone={member.tone}>{member.status}</AdminBadge>
-                  </div>
-                </div>
-              ))}
-              {!memberRows.length ? <p className="admin-row-muted">소속 회원 데이터가 없습니다.</p> : null}
-            </div>
-          </AdminPanel>
+                ))}
+                {!memberRows.length ? <p className="admin-row-muted">소속 회원 데이터가 없습니다.</p> : null}
+              </div>
+            </AdminPanel>
 
-          <AdminPanel title="최근 주문">
-            <div className="admin-list">
-              {orderRows.map((order) => (
-                <div className="admin-list-row" key={order.number}>
-                  <div className="admin-row-stack">
-                    <strong>{order.number}</strong>
-                    <p>{order.items}</p>
+            <AdminPanel title="최근 주문">
+              <div className="admin-list">
+                {orderRows.map((order) => (
+                  <div className="admin-list-row" key={order.number}>
+                    <div className="admin-row-stack">
+                      <strong>{order.number}</strong>
+                      <p>{order.items}</p>
+                    </div>
+                    <div className="admin-list-meta">
+                      <AdminBadge tone={order.tone}>{order.status}</AdminBadge>
+                      <span>{order.amount}</span>
+                    </div>
                   </div>
-                  <div className="admin-list-meta">
-                    <AdminBadge tone={order.tone}>{order.status}</AdminBadge>
-                    <span>{order.amount}</span>
-                  </div>
-                </div>
-              ))}
-              {!orderRows.length ? <p className="admin-row-muted">최근 주문 데이터가 없습니다.</p> : null}
-            </div>
-          </AdminPanel>
+                ))}
+                {!orderRows.length ? <p className="admin-row-muted">최근 주문 데이터가 없습니다.</p> : null}
+              </div>
+            </AdminPanel>
+          </div>
         </div>
       </div>
     </div>

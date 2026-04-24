@@ -2979,6 +2979,16 @@ button {
 
 .admin-table {
   --admin-table-columns: minmax(0, 1fr);
+}
+
+.admin-table-scroller {
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
+
+.admin-table-surface {
+  width: 100%;
+  min-width: 100%;
   border-top: 1px solid var(--line);
 }
 
@@ -2988,6 +2998,28 @@ button {
   grid-template-columns: var(--admin-table-columns);
   gap: 12px;
   align-items: center;
+  width: 100%;
+  min-width: 100%;
+}
+
+.admin-table-head > *,
+.admin-table-row > * {
+  min-width: 0;
+  position: relative;
+}
+
+.admin-table-head > *:not(:last-child) {
+  padding-right: 8px;
+}
+
+.admin-table-head > *:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  right: 2px;
+  width: 1px;
+  background: rgba(210, 222, 235, 0.4);
 }
 
 .admin-table-head {
@@ -2997,10 +3029,36 @@ button {
   font-weight: 800;
 }
 
-.admin-table-head span {
+.admin-table-head-cell {
+  position: relative;
+  min-width: 0;
+}
+
+.admin-table-head-cell span {
+  display: block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.admin-cell-left {
+  justify-self: stretch;
+  text-align: left;
+}
+
+.admin-cell-center {
+  justify-self: stretch;
+  text-align: center;
+}
+
+.admin-cell-right {
+  justify-self: stretch;
+  text-align: right;
+}
+
+.admin-badge.admin-cell-center,
+.admin-button.admin-cell-center {
+  justify-self: center;
 }
 
 .admin-table-row {
@@ -3218,6 +3276,10 @@ a.admin-table-row:hover {
   box-shadow: 0 20px 60px rgba(13, 31, 53, 0.18);
 }
 
+.admin-dealer-dialog {
+  width: min(760px, calc(100vw - 48px));
+}
+
 .admin-info-dialog-head {
   display: flex;
   align-items: flex-start;
@@ -3265,6 +3327,12 @@ a.admin-table-row:hover {
 .admin-info-dialog-body {
   overflow: auto;
   padding-right: 4px;
+}
+
+.admin-dealer-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .admin-info-popover-sections {
@@ -5261,21 +5329,23 @@ a.admin-list-row:hover {
   }
 
   .admin-table {
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-gutter: stable;
-    padding-bottom: 4px;
+    min-width: 0;
   }
 
-  .admin-table-head,
-  .admin-table-row {
-    width: max-content;
-    min-width: 100%;
+  .admin-table-scroller {
+    overflow-x: auto;
+    scrollbar-gutter: stable;
+    padding-bottom: 4px;
   }
 
   .admin-table-head {
     min-height: 34px;
     padding-bottom: 6px;
+  }
+
+  .admin-table-head,
+  .admin-table-row {
+    width: max-content;
   }
 
   .admin-table-row {

@@ -62,6 +62,55 @@ function productCategoryLabel(product: HealthBoxRecord) {
   return categoryId === null ? "" : `카테고리 ID ${categoryId}`;
 }
 
+function dealerStatusLabel(status: string) {
+  if (!status) {
+    return "-";
+  }
+
+  if (/^ACTIVE$/i.test(status)) {
+    return "운영중";
+  }
+
+  if (/^APPROVED$/i.test(status)) {
+    return "승인완료";
+  }
+
+  if (/^PENDING$/i.test(status)) {
+    return "승인대기";
+  }
+
+  if (/^REJECTED$/i.test(status)) {
+    return "반려";
+  }
+
+  return status;
+}
+
+function countDealerMembers(
+  members: HealthBoxRecord[] | null,
+  dealerMallId: number,
+  mallName: string,
+  displayName: string,
+) {
+  if (!members?.length) {
+    return 0;
+  }
+
+  return members.filter((member) => {
+    const memberDealerId = idValue(member, "dealerMallId");
+    if (memberDealerId !== null) {
+      return memberDealerId === dealerMallId;
+    }
+
+    const memberDealerName = stringValue(member, "dealerMallName", "mallName", "dealer", "organization");
+    if (!memberDealerName) {
+      return false;
+    }
+
+    return memberDealerName === mallName || memberDealerName === displayName;
+  }).length;
+}
+
 function zeroMetric(label: string, hint: string, toneValue: AdminTone) {
   return {
     label,
@@ -208,26 +257,37 @@ export function buildDealerMetrics(dealers: HealthBoxRecord[] | null, members: H
   ];
 }
 
-export function mapDealerRows(dealers: HealthBoxRecord[] | null) {
+export function mapDealerRows(dealers: HealthBoxRecord[] | null, members: HealthBoxRecord[] | null = null) {
   if (!dealers?.length) {
     return [];
   }
 
   return dealers.map((dealer, index) => {
-    const status = textOrDash(stringValue(dealer, "status"));
+    const rawStatus = textOrDash(stringValue(dealer, "status"));
     const fallbackId = idValue(dealer, "id", "dealerMallId") ?? index + 1;
+    const mallName = textOrDash(stringValue(dealer, "mallName", "name"), `딜러몰 ${fallbackId}`);
+    const displayName = stringValue(dealer, "displayName");
+    const slug = textOrDash(stringValue(dealer, "slug"), `dealer-${fallbackId}`);
+    const explicitMemberCount = numberValue(dealer, "memberCount", "buyerMemberCount", "buyerCount");
+    const memberCount = explicitMemberCount ?? countDealerMembers(members, fallbackId, mallName, displayName || "");
+    const contactEmail = stringValue(dealer, "supportEmail");
+    const contactPhone = stringValue(dealer, "supportPhone", "representativePhone");
 
     return {
       id: fallbackId,
-      slug: textOrDash(stringValue(dealer, "slug"), `dealer-${fallbackId}`),
-      name: textOrDash(stringValue(dealer, "mallName", "displayName", "name"), `딜러몰 ${fallbackId}`),
+      slug,
+      domain: `${slug}.everybuy.co.kr`,
+      name: mallName,
+      displayName: displayName || "",
+      dealerCode: textOrDash(stringValue(dealer, "dealerCode"), `ID ${fallbackId}`),
       joinedAt: textOrDash(dateTimeValue(dealer, "joinedAt", "approvedAt", "createdAt")),
-      orderCount: textOrDash(stringValue(dealer, "orderCount", "totalOrderCount"), "0건"),
+      orderCount: `${numberValue(dealer, "orderCount", "totalOrderCount") ?? 0}건`,
+      memberCount: `${memberCount}명`,
       totalSales: formatWon(numberValue(dealer, "totalSales", "grossSales", "salesAmount") ?? 0),
-      status,
-      tone: tone(status),
-      supportEmail: stringValue(dealer, "supportEmail"),
-      supportPhone: stringValue(dealer, "supportPhone"),
+      status: dealerStatusLabel(rawStatus),
+      tone: tone(rawStatus),
+      supportEmail: contactEmail,
+      supportPhone: contactPhone,
     };
   });
 }

@@ -58,6 +58,7 @@ export function AdminPanel({
 export function AdminTable({
   headers,
   columns,
+  alignments,
   children,
   isEmpty = false,
   emptyTitle = "데이터가 없습니다.",
@@ -66,6 +67,7 @@ export function AdminTable({
 }: {
   headers: string[];
   columns: string;
+  alignments?: Array<"left" | "center" | "right">;
   children: ReactNode;
   isEmpty?: boolean;
   emptyTitle?: string;
@@ -78,20 +80,29 @@ export function AdminTable({
 
   return (
     <div className="admin-table" style={style}>
-      <div className="admin-table-head">
-        {headers.map((header) => (
-          <span key={header}>{header}</span>
-        ))}
-      </div>
-      {isEmpty ? (
-        <div className="admin-empty-state admin-table-empty">
-          <strong>{emptyTitle}</strong>
-          {emptyDescription ? <p>{emptyDescription}</p> : null}
-          {emptyAction ? <div className="admin-table-empty-action">{emptyAction}</div> : null}
+      <div className="admin-table-scroller">
+        <div className="admin-table-surface">
+          <div className="admin-table-head">
+            {headers.map((header, index) => (
+              <div
+                className={`admin-table-head-cell admin-cell-${alignments?.[index] || "left"}`}
+                key={header}
+              >
+                <span>{header}</span>
+              </div>
+            ))}
+          </div>
+          {isEmpty ? (
+            <div className="admin-empty-state admin-table-empty">
+              <strong>{emptyTitle}</strong>
+              {emptyDescription ? <p>{emptyDescription}</p> : null}
+              {emptyAction ? <div className="admin-table-empty-action">{emptyAction}</div> : null}
+            </div>
+          ) : (
+            children
+          )}
         </div>
-      ) : (
-        children
-      )}
+      </div>
     </div>
   );
 }
@@ -99,9 +110,11 @@ export function AdminTable({
 export function AdminBadge({
   children,
   tone = "blue",
+  className,
 }: {
   children: ReactNode;
   tone?: AdminTone;
+  className?: string;
 }) {
-  return <span className={`admin-badge ${toneClassMap[tone]}`}>{children}</span>;
+  return <span className={`admin-badge ${toneClassMap[tone]}${className ? ` ${className}` : ""}`}>{children}</span>;
 }
