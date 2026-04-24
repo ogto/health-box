@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { saveDealerMallPublicConfigAction } from "../../_actions/health-box-admin";
+import { createDealerMallAction, saveDealerMallPublicConfigAction } from "../../_actions/health-box-admin";
 import { AdminHeader } from "../../_components/admin/admin-header";
 import { AdminSubmitButton } from "../../_components/admin/admin-submit-button";
 import { AdminBadge, AdminMetrics, AdminPanel, AdminTable } from "../../_components/admin/admin-ui";
@@ -23,6 +23,8 @@ import {
 
 type DealerSearchParams = {
   dealerMallId?: string;
+  createStatus?: string;
+  createError?: string;
 };
 
 export default async function AdminDealersPage({
@@ -56,12 +58,19 @@ export default async function AdminDealersPage({
 
   const memberRows = mapMemberRows(dealerMembers).slice(0, 5);
   const orderRows = mapOrderRows(dealerOrders).slice(0, 5);
+  const createSucceeded = params.createStatus === "success";
+  const createError = params.createError;
 
   return (
     <div className="admin-page">
       <AdminHeader title="딜러몰관리" />
 
       <AdminMetrics items={metrics} />
+
+      {createSucceeded ? (
+        <div className="admin-feedback is-success">딜러 추가 요청이 접수되었습니다.</div>
+      ) : null}
+      {createError ? <div className="admin-feedback is-error">{createError}</div> : null}
 
       <div className="admin-grid-side">
         <AdminPanel title="딜러몰">
@@ -90,6 +99,56 @@ export default async function AdminDealersPage({
         </AdminPanel>
 
         <div className="admin-stack">
+          <AdminPanel title="딜러 추가">
+            <form action={createDealerMallAction} className="admin-status-stack">
+              <input name="redirectTo" type="hidden" value="/admin/dealers" />
+              <div className="admin-field-grid two">
+                <label className="admin-field">
+                  <span>딜러몰 이름</span>
+                  <input className="admin-input" name="mallName" placeholder="예: 강남웰니스몰" type="text" />
+                </label>
+                <label className="admin-field">
+                  <span>표시명</span>
+                  <input className="admin-input" name="displayName" placeholder="예: 강남웰니스" type="text" />
+                </label>
+              </div>
+              <div className="admin-field-grid two">
+                <label className="admin-field">
+                  <span>slug</span>
+                  <input className="admin-input" name="slug" placeholder="예: gangnam-wellness" type="text" />
+                </label>
+                <label className="admin-field">
+                  <span>담당자 이름</span>
+                  <input className="admin-input" name="applicantName" placeholder="담당자명 입력" type="text" />
+                </label>
+              </div>
+              <div className="admin-field-grid two">
+                <label className="admin-field">
+                  <span>로그인 이메일</span>
+                  <input className="admin-input" name="email" placeholder="login@example.com" type="email" />
+                </label>
+                <label className="admin-field">
+                  <span>휴대폰 번호</span>
+                  <input className="admin-input" name="phone" placeholder="010-0000-0000" type="text" />
+                </label>
+              </div>
+              <label className="admin-field">
+                <span>메모</span>
+                <textarea className="admin-textarea" name="reviewMemo" placeholder="필요 시 메모 입력" />
+              </label>
+              {hasHealthBoxApi() ? (
+                <>
+                  <AdminSubmitButton className="admin-button" pendingLabel="추가중...">
+                    딜러 추가
+                  </AdminSubmitButton>
+                  <p className="admin-row-muted">관리자 수동 등록 API 기준으로 바로 생성합니다.</p>
+                </>
+              ) : (
+                <div className="admin-row-muted">API 미연결 상태입니다.</div>
+              )}
+            </form>
+          </AdminPanel>
+
           <AdminPanel title="딜러몰 공개 설정">
             {selectedDealer ? (
               <form action={saveDealerMallPublicConfigAction} className="admin-status-stack">

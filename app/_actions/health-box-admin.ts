@@ -85,6 +85,12 @@ function redirectIfRequested(formData: FormData) {
   }
 }
 
+function buildRedirectWithMessage(path: string, key: string, value: string) {
+  const params = new URLSearchParams();
+  params.set(key, value);
+  return `${path}${path.includes("?") ? "&" : "?"}${params.toString()}`;
+}
+
 function ensureApiConfigured() {
   if (!hasHealthBoxApi()) {
     throw new Error("HEALTH_BOX_API_BASE_URL is not configured");
@@ -138,6 +144,61 @@ export async function saveDealerMallPublicConfigAction(formData: FormData) {
 
   revalidatePath("/admin/dealers");
   redirectIfRequested(formData);
+}
+
+export async function createDealerMallAction(formData: FormData) {
+  ensureApiConfigured();
+
+  const redirectTo = optionalString(formData, "redirectTo") || "/admin/dealers";
+  const mallName = requiredString(formData, "mallName");
+  const slug = requiredString(formData, "slug");
+  const applicantName = requiredString(formData, "applicantName");
+  const email = requiredString(formData, "email");
+  const phone = requiredString(formData, "phone");
+
+  if (!mallName || !slug || !applicantName || !email || !phone) {
+    redirect(buildRedirectWithMessage(redirectTo, "createError", "필수 항목을 모두 입력해주세요."));
+  }
+
+  try {
+    await healthBoxFetch("/health-box/admin/dealer-malls/manual", {
+      method: "POST",
+      body: {
+        displayName: optionalString(formData, "displayName") || mallName,
+        applicantName,
+        email,
+        phone,
+        mallName,
+        slug,
+        reviewMemo: optionalString(formData, "reviewMemo"),
+      },
+    });
+
+    revalidatePath("/admin/dealers");
+    redirect(buildRedirectWithMessage(redirectTo, "createStatus", "success"));
+  } catch (error) {
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    const cleanedMessage = rawMessage
+      .replace(/^HealthBox API \d+:\s*/, "")
+      .replace(/^Error:\s*/, "")
+      .trim();
+
+    if (/404|Not Found/i.test(rawMessage)) {
+      redirect(buildRedirectWithMessage(redirectTo, "createError", "백엔드 수동 딜러 등록 API를 찾지 못했습니다."));
+    }
+
+    if (/405|Method Not Allowed/i.test(rawMessage)) {
+      redirect(buildRedirectWithMessage(redirectTo, "createError", "백엔드가 수동 딜러 등록을 아직 지원하지 않습니다."));
+    }
+
+    redirect(
+      buildRedirectWithMessage(
+        redirectTo,
+        "createError",
+        cleanedMessage || "딜러 추가 중 오류가 발생했습니다.",
+      ),
+    );
+  }
 }
 
 export async function approveDealerApplicationAction(formData: FormData) {

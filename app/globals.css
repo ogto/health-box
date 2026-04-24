@@ -2810,6 +2810,24 @@ button {
   font-size: 12px;
 }
 
+.admin-feedback {
+  padding: 14px 16px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.6;
+}
+
+.admin-feedback.is-success {
+  background: rgba(57, 161, 107, 0.12);
+  color: #22794e;
+}
+
+.admin-feedback.is-error {
+  background: rgba(214, 82, 74, 0.12);
+  color: #b33a33;
+}
+
 .admin-metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
