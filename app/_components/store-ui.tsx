@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import type { ReactNode, SVGProps } from "react";
 
 import { BrandLogo } from "./brand-logo";
@@ -28,7 +29,12 @@ export async function StoreShell({
   children: ReactNode;
   activeKey?: ActiveKey;
 }) {
-  const { assets, brand, dealer } = await getStorefrontRuntime();
+  const { assets, brand, dealer, host } = await getStorefrontRuntime();
+
+  if (host.requestedDealerSlug && !dealer) {
+    notFound();
+  }
+
   const promoLabel = dealer ? `${dealer.displayName} 회원가입 쿠폰` : "3,000원 회원가입 쿠폰";
 
   return (

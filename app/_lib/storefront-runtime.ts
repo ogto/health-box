@@ -80,6 +80,7 @@ export type StorefrontRuntime = StorefrontConfigShape & {
   host: {
     hostname: string;
     rootDomain: string;
+    requestedDealerSlug?: string;
   };
 };
 
@@ -165,7 +166,7 @@ export const getStorefrontRuntime = cache(async (): Promise<StorefrontRuntime> =
     headerStore.get("x-forwarded-host") || headerStore.get("host") || rootDomain,
   );
   const dealerSlug = resolveDealerSlug(hostname, rootDomain);
-  const dealer = dealerSlug ? buildDealerRuntime(dealerSlug, hostname) : null;
+  const dealer = !hasHealthBoxApi() && dealerSlug ? buildDealerRuntime(dealerSlug, hostname) : null;
   const publicSiteConfig = hasHealthBoxApi() ? await fetchPublicSiteConfig() : null;
   const dealerContext =
     hasHealthBoxApi() && hostname ? await fetchDealerContext(hostname) : null;
@@ -260,6 +261,7 @@ export const getStorefrontRuntime = cache(async (): Promise<StorefrontRuntime> =
       host: {
         hostname: hostname || rootDomain,
         rootDomain,
+        requestedDealerSlug: dealerSlug || undefined,
       },
       dealer: null,
     };
@@ -310,6 +312,7 @@ export const getStorefrontRuntime = cache(async (): Promise<StorefrontRuntime> =
     host: {
       hostname,
       rootDomain,
+      requestedDealerSlug: dealerSlug || undefined,
     },
     dealer: resolvedDealer,
   };

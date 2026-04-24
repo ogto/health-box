@@ -7,7 +7,7 @@ const DEFAULT_ADMIN_HOSTNAME = "admin.everybuy.co.kr";
 const PUBLIC_FILE_PATTERN = /\.[^/]+$/;
 
 function getAdminHostname() {
-  return process.env.ADMIN_HOSTNAME?.trim() || "";
+  return process.env.ADMIN_HOSTNAME?.trim() || DEFAULT_ADMIN_HOSTNAME;
 }
 
 function isLocalHostname(hostname: string) {
@@ -24,7 +24,7 @@ export function proxy(request: NextRequest) {
   const cookieToken = request.cookies.get(ADMIN_COOKIE_NAME)?.value ?? "";
   const authenticated = Boolean(expectedToken && cookieToken === expectedToken);
   const adminHostname = getAdminHostname();
-  const isAdminHost = Boolean(adminHostname) && hostname === adminHostname;
+  const isAdminHost = hostname === adminHostname;
 
   if (isAdminHost && pathname === "/") {
     const rootTarget = authenticated ? "/admin/dashboard" : "/admin/login";
