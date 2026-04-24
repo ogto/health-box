@@ -1136,6 +1136,11 @@ button {
   color: #22794e;
 }
 
+.member-auth-alert.is-muted {
+  background: #f4f8fc;
+  color: #64798f;
+}
+
 .member-auth-alert.is-error {
   background: rgba(214, 82, 74, 0.12);
   color: #b33a33;
@@ -3116,6 +3121,10 @@ a.admin-table-row:hover {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.admin-inline-actions.admin-cell-center {
+  justify-content: center;
 }
 
 .admin-inline-actions form {

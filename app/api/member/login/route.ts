@@ -24,6 +24,43 @@ function extractErrorMessage(payload: string) {
   }
 }
 
+function normalizeBuyerLoginError(message: string) {
+  const normalized = message.trim();
+
+  if (/invalid buyer login credentials/i.test(normalized)) {
+    return {
+      message: "계정 정보를 확인해주세요.",
+      status: 401,
+    };
+  }
+
+  if (/buyer member not found for dealer mall/i.test(normalized)) {
+    return {
+      message: "승인된 회원 정보를 찾을 수 없습니다.",
+      status: 403,
+    };
+  }
+
+  if (/dealer mall not found/i.test(normalized)) {
+    return {
+      message: "딜러몰 정보를 찾지 못했습니다. 다시 접속해주세요.",
+      status: 400,
+    };
+  }
+
+  if (/dealer mall public config is inactive|dealer mall is inactive/i.test(normalized)) {
+    return {
+      message: "현재 비활성화된 딜러몰입니다.",
+      status: 403,
+    };
+  }
+
+  return {
+    message: normalized || "로그인에 실패했습니다.",
+    status: 400,
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -71,9 +108,10 @@ export async function POST(request: NextRequest) {
     const rawText = await backendResponse.text();
 
     if (!backendResponse.ok) {
+      const normalizedError = normalizeBuyerLoginError(extractErrorMessage(rawText) || "");
       return NextResponse.json(
-        { ok: false, message: extractErrorMessage(rawText) || "로그인에 실패했습니다." },
-        { status: backendResponse.status || 500 },
+        { ok: false, message: normalizedError.message },
+        { status: normalizedError.status },
       );
     }
 

@@ -215,7 +215,7 @@ export default async function AdminDealersPage({
                   <div className="admin-list-row" key={`${member.name}-${member.joinedAt}`}>
                     <div className="admin-row-stack">
                       <strong>{member.name}</strong>
-                      <p>{member.organization}</p>
+                      <p>{member.organization !== "-" ? member.organization : member.contact}</p>
                     </div>
                     <div className="admin-list-meta">
                       <AdminBadge tone={member.tone}>{member.status}</AdminBadge>

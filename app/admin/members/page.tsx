@@ -52,7 +52,7 @@ export default async function AdminMembersPage({
       : allMembers;
 
   const metrics = buildMemberMetrics(scopedMembers, dealers, buyerApplications);
-  const memberRows = mapMemberRows(scopedMembers);
+  const rawMemberRows = mapMemberRows(scopedMembers);
   const pendingBuyerApplications = (buyerApplications ?? []).filter((application) => {
     const dealerMallId = idValue(application, "dealerMallId");
     const status = stringValue(application, "status");
@@ -68,6 +68,18 @@ export default async function AdminMembersPage({
     return true;
   });
   const dealerNameById = new Map(dealerRows.map((dealer) => [dealer.id, dealer.name]));
+  const memberRows = rawMemberRows.map((member) => {
+    const dealerName =
+      member.dealer !== "-"
+        ? member.dealer
+        : member.dealerId
+          ? dealerNameById.get(member.dealerId) || selectedDealer?.name || "-"
+          : selectedDealer?.name || "-";
+    return {
+      ...member,
+      dealer: dealerName,
+    };
+  });
 
   return (
     <div className="admin-page">
@@ -107,7 +119,8 @@ export default async function AdminMembersPage({
         action={<span className="admin-row-muted">총 {pendingBuyerApplications.length}명</span>}
       >
         <AdminTable
-          columns="minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1fr) 132px 90px 164px"
+          alignments={["left", "left", "left", "center", "center", "center"]}
+          columns="minmax(0, 0.84fr) minmax(0, 0.92fr) minmax(0, 1fr) 132px 90px 168px"
           emptyDescription={
             selectedDealer
               ? "선택한 딜러몰에 승인 대기 회원이 없습니다."
@@ -137,7 +150,7 @@ export default async function AdminMembersPage({
                 <span className="admin-row-muted">{submittedAt}</span>
                 <AdminBadge tone="gold">승인 대기</AdminBadge>
                 {hasHealthBoxApi() ? (
-                  <div className="admin-inline-actions">
+                  <div className="admin-inline-actions admin-cell-center">
                     <form action={approveBuyerSignupApplicationAction}>
                       <input name="applicationId" type="hidden" value={String(applicationId)} />
                       <AdminSubmitButton className="admin-button small" pendingLabel="승인중...">
@@ -165,26 +178,28 @@ export default async function AdminMembersPage({
         action={<span className="admin-row-muted">총 {memberRows.length}명</span>}
       >
         <AdminTable
-          columns="minmax(0, 1fr) minmax(0, 1fr) 96px 72px 110px 90px"
+          alignments={["left", "left", "left", "center", "center", "right", "center"]}
+          columns="minmax(0, 0.82fr) minmax(0, 1.08fr) minmax(0, 0.9fr) 132px 84px 118px 92px"
           emptyDescription={
             selectedDealer
               ? "선택한 딜러몰에 속한 회원이 없습니다."
               : "조회 가능한 회원 데이터가 없습니다."
           }
-          headers={["이름", "딜러몰", "가입일", "주문", "누적 구매", "상태"]}
+          headers={["이름", "연락처", "딜러몰", "가입일", "주문", "누적 구매", "상태"]}
           isEmpty={!memberRows.length}
         >
           {memberRows.map((member, index) => (
             <div className="admin-table-row" key={`${member.name}-${member.joinedAt}-${index}`}>
-              <strong>{member.name}</strong>
+              <strong title={member.name}>{member.name}</strong>
               <div className="admin-row-stack">
-                <strong>{member.dealer}</strong>
-                <p>{member.organization}</p>
+                <strong title={member.phone}>{member.phone}</strong>
+                <p title={member.email}>{member.email}</p>
               </div>
-              <span className="admin-row-muted">{member.joinedAt}</span>
-              <span className="admin-row-muted">{member.orders}</span>
-              <strong className="admin-row-price">{member.purchases}</strong>
-              <AdminBadge tone={member.tone}>{member.status}</AdminBadge>
+              <strong title={member.dealer}>{member.dealer}</strong>
+              <span className="admin-row-muted admin-cell-center">{member.joinedAt}</span>
+              <span className="admin-row-muted admin-cell-center">{member.orders}</span>
+              <strong className="admin-row-price admin-cell-right">{member.purchases}</strong>
+              <AdminBadge className="admin-cell-center" tone={member.tone}>{member.status}</AdminBadge>
             </div>
           ))}
         </AdminTable>

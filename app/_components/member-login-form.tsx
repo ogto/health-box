@@ -84,11 +84,11 @@ export function MemberLoginForm({
 
       <div className="member-auth-form">
         <label className="member-auth-field">
-          <span>아이디</span>
+          <span>이메일 또는 휴대폰 번호</span>
           <input
             className="member-auth-input"
             onChange={(event) => setLoginId(event.target.value)}
-            placeholder="아이디 입력"
+            placeholder="가입한 이메일 또는 휴대폰 번호"
             type="text"
             value={loginId}
           />

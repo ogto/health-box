@@ -120,6 +120,17 @@ function zeroMetric(label: string, hint: string, toneValue: AdminTone) {
   };
 }
 
+function countPendingApplications(records: HealthBoxRecord[] | null) {
+  if (!records?.length) {
+    return 0;
+  }
+
+  return records.filter((record) => {
+    const status = stringValue(record, "status");
+    return !status || /^PENDING$/i.test(status);
+  }).length;
+}
+
 export function buildDashboardMetrics(orders: HealthBoxRecord[] | null, dealerApps: HealthBoxRecord[] | null, buyerApps: HealthBoxRecord[] | null) {
   if (!orders && !dealerApps && !buyerApps) {
     return [
@@ -132,11 +143,13 @@ export function buildDashboardMetrics(orders: HealthBoxRecord[] | null, dealerAp
 
   const totalOrders = orders?.length ?? 0;
   const shippingReady = orders?.filter((order) => /배송 준비|송장/.test(stringValue(order, "status", "shipmentStatus"))).length ?? 0;
-  const approvalCount = (dealerApps?.length ?? 0) + (buyerApps?.length ?? 0);
+  const pendingDealerCount = countPendingApplications(dealerApps);
+  const pendingBuyerCount = countPendingApplications(buyerApps);
+  const approvalCount = pendingDealerCount + pendingBuyerCount;
 
   return [
     { label: "오늘 주문", value: `${totalOrders}건`, hint: `배송준비 ${shippingReady}건`, tone: "blue" as const },
-    { label: "승인 대기", value: `${approvalCount}건`, hint: `딜러 ${dealerApps?.length ?? 0} · 회원 ${buyerApps?.length ?? 0}`, tone: "cyan" as const },
+    { label: "승인 대기", value: `${approvalCount}건`, hint: `딜러 ${pendingDealerCount} · 회원 ${pendingBuyerCount}`, tone: "cyan" as const },
     { label: "주문 회원사", value: `${new Set((orders ?? []).map((item) => stringValue(item, "dealerMallName", "mallName", "company"))).size || 0}곳`, hint: "주문 기준 집계", tone: "green" as const },
     { label: "운영 상태", value: "API 연결", hint: "cloud-api 기준 실시간 조회", tone: "gold" as const },
   ];
@@ -240,12 +253,14 @@ export function mapApprovalQueue(
 }
 
 export function buildDealerMetrics(dealers: HealthBoxRecord[] | null, members: HealthBoxRecord[] | null, dealerApps: HealthBoxRecord[] | null) {
+  const pendingDealerCount = countPendingApplications(dealerApps);
+
   if (!dealers?.length) {
     return [
       { label: "전체 딜러몰", value: "0개", hint: "실데이터 없음", tone: "blue" as const },
       { label: "전체 회원", value: `${members?.length ?? 0}명`, hint: "구매 회원 기준", tone: "cyan" as const },
       { label: "활성 딜러", value: "0개", hint: "실데이터 없음", tone: "green" as const },
-      { label: "승인 대기", value: `${dealerApps?.length ?? 0}건`, hint: "신규 딜러 신청", tone: "gold" as const },
+      { label: "승인 대기", value: `${pendingDealerCount}건`, hint: "신규 딜러 신청", tone: "gold" as const },
     ];
   }
 
@@ -253,7 +268,7 @@ export function buildDealerMetrics(dealers: HealthBoxRecord[] | null, members: H
     { label: "전체 딜러몰", value: `${dealers.length}개`, hint: "API 기준", tone: "blue" as const },
     { label: "전체 회원", value: `${members?.length ?? 0}명`, hint: "구매 회원 기준", tone: "cyan" as const },
     { label: "활성 딜러", value: `${dealers.filter((item) => /ACTIVE|APPROVED|운영/.test(stringValue(item, "status"))).length}개`, hint: "운영 상태 기준", tone: "green" as const },
-    { label: "승인 대기", value: `${dealerApps?.length ?? 0}건`, hint: "신규 딜러 신청", tone: "gold" as const },
+    { label: "승인 대기", value: `${pendingDealerCount}건`, hint: "신규 딜러 신청", tone: "gold" as const },
   ];
 }
 
@@ -293,12 +308,14 @@ export function mapDealerRows(dealers: HealthBoxRecord[] | null, members: Health
 }
 
 export function buildMemberMetrics(members: HealthBoxRecord[] | null, dealers: HealthBoxRecord[] | null, buyerApps: HealthBoxRecord[] | null) {
+  const pendingBuyerCount = countPendingApplications(buyerApps);
+
   if (!members?.length) {
     return [
       { label: "전체 회원", value: "0명", hint: "실데이터 없음", tone: "blue" as const },
       { label: "활성 딜러몰", value: `${dealers?.length ?? 0}개`, hint: "회원 귀속 기준", tone: "cyan" as const },
       { label: "활성 회원", value: "0명", hint: "실데이터 없음", tone: "green" as const },
-      { label: "승인 대기", value: `${buyerApps?.length ?? 0}명`, hint: "가입 승인 요청", tone: "gold" as const },
+      { label: "승인 대기", value: `${pendingBuyerCount}명`, hint: "가입 승인 요청", tone: "gold" as const },
     ];
   }
 
@@ -306,7 +323,7 @@ export function buildMemberMetrics(members: HealthBoxRecord[] | null, dealers: H
     { label: "전체 회원", value: `${members.length}명`, hint: "구매 회원 기준", tone: "blue" as const },
     { label: "활성 딜러몰", value: `${dealers?.length ?? 0}개`, hint: "회원 귀속 기준", tone: "cyan" as const },
     { label: "활성 회원", value: `${members.filter((item) => /ACTIVE|활성/.test(stringValue(item, "status"))).length}명`, hint: "상태 기준", tone: "green" as const },
-    { label: "승인 대기", value: `${buyerApps?.length ?? 0}명`, hint: "가입 승인 요청", tone: "gold" as const },
+    { label: "승인 대기", value: `${pendingBuyerCount}명`, hint: "가입 승인 요청", tone: "gold" as const },
   ];
 }
 
@@ -317,13 +334,24 @@ export function mapMemberRows(members: HealthBoxRecord[] | null) {
 
   return members.map((member) => {
     const status = textOrDash(stringValue(member, "status"));
+    const phone = stringValue(member, "phone", "mobile", "tel");
+    const email = stringValue(member, "email");
+    const contact = [phone, email].filter(Boolean).join(" / ");
 
     return {
-      name: textOrDash(stringValue(member, "name"), "이름 없음"),
+      id: idValue(member, "id", "buyerMemberId"),
+      name: textOrDash(stringValue(member, "name", "buyerName", "memberName"), "이름 없음"),
+      phone: textOrDash(phone),
+      email: textOrDash(email),
+      dealerId: idValue(member, "dealerMallId"),
       dealer: textOrDash(stringValue(member, "dealerMallName", "mallName", "dealer")),
-      organization: textOrDash(stringValue(member, "organization", "dealerMallName")),
+      organization: textOrDash(stringValue(member, "organization")),
+      contact: textOrDash(contact),
       joinedAt: textOrDash(dateTimeValue(member, "joinedAt", "approvedAt", "createdAt")),
-      orders: textOrDash(stringValue(member, "orderCount", "orders"), "0건"),
+      orders: textOrDash(
+        stringValue(member, "orderCount", "orders"),
+        `${numberValue(member, "orderCount", "orders") ?? 0}건`,
+      ),
       purchases: formatWon(numberValue(member, "purchaseAmount", "purchases", "totalPurchaseAmount") ?? 0),
       status,
       tone: tone(status),

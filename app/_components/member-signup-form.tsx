@@ -134,7 +134,7 @@ export function MemberSignupForm({
         </label>
 
         <label className="member-auth-field">
-          <span>이메일</span>
+          <span>이메일 (선택)</span>
           <input
             className="member-auth-input"
             onChange={(event) => setEmail(event.target.value)}
@@ -143,6 +143,10 @@ export function MemberSignupForm({
             value={email}
           />
         </label>
+
+        <div className="member-auth-alert is-muted">
+          승인 후 로그인할 때는 가입한 이메일 또는 휴대폰 번호를 사용합니다.
+        </div>
 
         <label className="member-auth-field">
           <span>비밀번호</span>
