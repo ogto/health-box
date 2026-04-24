@@ -1,19 +1,17 @@
 import { Breadcrumbs, ProductCard, StoreShell } from "../../_components/store-ui";
-import { products, recommendedProducts } from "../../_lib/store-data";
+import { fetchStoreProducts } from "../../_lib/storefront-content";
 
-const recommendedList = recommendedProducts
-  .map((item) => {
-    const product = products.find((entry) => entry.slug === item.slug);
+const recommendationTags = ["루틴 추천", "면역 케어", "활력 보충", "시즌 픽"] as const;
 
-    if (!product) {
-      return null;
-    }
+export const dynamic = "force-dynamic";
 
-    return { product, tag: item.tag };
-  })
-  .filter((item): item is { product: (typeof products)[number]; tag: string } => item !== null);
+export default async function RecommendedProductsPage() {
+  const products = await fetchStoreProducts();
+  const recommendedList = products.slice(0, 4).map((product, index) => ({
+    product,
+    tag: recommendationTags[index] || product.category,
+  }));
 
-export default function RecommendedProductsPage() {
   return (
     <StoreShell activeKey="recommend">
       <section className="subpage-block">
@@ -50,6 +48,11 @@ export default function RecommendedProductsPage() {
             {recommendedList.map(({ product, tag }) => (
               <ProductCard key={product.slug} label={tag} light product={product} showMeta={false} />
             ))}
+            {!recommendedList.length ? (
+              <div className="content-panel">
+                <p className="detail-copy">추천할 상품이 아직 없습니다.</p>
+              </div>
+            ) : null}
           </div>
         </section>
       </section>

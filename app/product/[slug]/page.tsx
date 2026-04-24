@@ -4,11 +4,12 @@ import { notFound } from "next/navigation";
 
 import { ProductDetailGallery } from "../../_components/product-detail-gallery";
 import { Breadcrumbs, ProductCard, StoreShell } from "../../_components/store-ui";
-import { getProductBySlug, products } from "../../_lib/store-data";
+import {
+  fetchStoreProductBySlug,
+  fetchStoreProducts,
+} from "../../_lib/storefront-content";
 
-export function generateStaticParams() {
-  return products.map((product) => ({ slug: product.slug }));
-}
+export const dynamic = "force-dynamic";
 
 export default async function ProductDetailPage({
   params,
@@ -16,7 +17,10 @@ export default async function ProductDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const product = getProductBySlug(slug);
+  const [product, products] = await Promise.all([
+    fetchStoreProductBySlug(slug),
+    fetchStoreProducts(),
+  ]);
 
   if (!product) {
     notFound();

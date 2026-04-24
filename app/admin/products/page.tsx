@@ -1,17 +1,10 @@
-import Image from "next/image";
 import Link from "next/link";
 
 import { AdminHeader } from "../../_components/admin/admin-header";
-import { AdminInfoPopover } from "../../_components/admin/admin-info-popover";
+import { AdminProductThumbPreview } from "../../_components/admin/admin-product-thumb-preview";
 import { AdminBadge, AdminMetrics, AdminPanel, AdminTable } from "../../_components/admin/admin-ui";
-import {
-  managedProducts,
-  productChecklist,
-  productExposureSlots,
-  productMetrics,
-  productOperatorNotes,
-  productUploadFlow,
-} from "../../_lib/admin-data";
+import { fetchAdminProducts, hasHealthBoxApi } from "../../_lib/health-box-api";
+import { buildProductMetrics, mapProductRows } from "../../_lib/health-box-presenters";
 
 const PRODUCTS_PER_PAGE = 10;
 
@@ -61,106 +54,48 @@ export default async function AdminProductsPage({
   const keyword = (params.q ?? "").trim();
   const category = (params.category ?? "").trim();
   const status = (params.status ?? "").trim();
-  const normalizedKeyword = keyword.toLowerCase();
-
-  const categoryOptions = Array.from(new Set(managedProducts.map((product) => product.category)));
-  const statusOptions = Array.from(new Set(managedProducts.map((product) => product.publishStatus)));
-
-  const filteredProducts = managedProducts.filter((product) => {
-    if (keyword) {
-      const target = [product.title, product.subtitle, product.brand, product.id].join(" ").toLowerCase();
-      if (!target.includes(normalizedKeyword)) {
-        return false;
-      }
-    }
-
-    if (category && product.category !== category) {
-      return false;
-    }
-
-    if (status && product.publishStatus !== status) {
-      return false;
-    }
-
-    return true;
-  });
-
   const currentPage = Math.max(1, Number(params.page) || 1);
-  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE));
-  const safePage = Math.min(currentPage, totalPages);
+
+  const livePage = hasHealthBoxApi()
+    ? await fetchAdminProducts({
+        q: keyword || undefined,
+        category: category || undefined,
+        status: status || undefined,
+        page: currentPage,
+        size: PRODUCTS_PER_PAGE,
+      })
+    : null;
+
+  const liveRows = mapProductRows(livePage);
+  const categoryOptions = Array.from(
+    new Set(liveRows.items.map((product) => product.categoryQueryValue).filter(Boolean)),
+  );
+  const statusOptions = ["메인 노출중", "정상 판매", "재고 주의", "추천 운영"];
+  const hasLivePage = Boolean(livePage);
+  const totalPages = hasLivePage ? Math.max(liveRows.totalPages, 0) : 0;
+  const safePage = totalPages > 0 ? Math.min(currentPage, totalPages) : 1;
   const startIndex = (safePage - 1) * PRODUCTS_PER_PAGE;
-  const endIndex = startIndex + PRODUCTS_PER_PAGE;
-  const visibleProducts = filteredProducts.slice(startIndex, endIndex);
+  const visibleProducts = liveRows.items;
+  const totalElements = liveRows.totalElements;
   const pageNumbers = Array.from({ length: totalPages }, (_, index) => index + 1);
   const hasFilters = Boolean(keyword || category || status);
-
-  const filterState = {
-    keyword,
-    category,
-    status,
-  };
+  const filterState = { keyword, category, status };
+  const metrics = hasLivePage ? buildProductMetrics(livePage) : buildProductMetrics(null);
 
   return (
     <div className="admin-page">
       <AdminHeader
         title="상품관리"
         actions={
-          <>
-            <Link className="admin-button" href="/admin/products/new">
-              상품 등록
-            </Link>
-          </>
+          <Link className="admin-button" href="/admin/products/new">
+            상품 등록
+          </Link>
         }
       />
 
-      <AdminMetrics items={productMetrics} />
+      <AdminMetrics items={metrics} />
 
-      <AdminPanel
-        title="검색 / 필터"
-        action={
-          <AdminInfoPopover label="상품 운영 참고">
-            <div className="admin-info-popover-sections">
-              <section className="admin-info-popover-section">
-                <strong>상품 등록 흐름</strong>
-                <ul className="admin-info-popover-list">
-                  {productUploadFlow.map((step) => (
-                    <li key={step.title}>{step.title}</li>
-                  ))}
-                </ul>
-              </section>
-
-              <section className="admin-info-popover-section">
-                <strong>노출 슬롯</strong>
-                <div className="admin-info-popover-chip-row">
-                  {productExposureSlots.map((slot) => (
-                    <span className="admin-info-popover-chip" key={slot.title}>
-                      {slot.title}: {slot.value}
-                    </span>
-                  ))}
-                </div>
-              </section>
-
-              <section className="admin-info-popover-section">
-                <strong>체크포인트</strong>
-                <ul className="admin-info-popover-list">
-                  {productChecklist.map((item) => (
-                    <li key={item.title}>{item.title}</li>
-                  ))}
-                </ul>
-              </section>
-
-              <section className="admin-info-popover-section">
-                <strong>운영 메모</strong>
-                <ul className="admin-info-popover-list">
-                  {productOperatorNotes.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-              </section>
-            </div>
-          </AdminInfoPopover>
-        }
-      >
+      <AdminPanel title="검색 / 필터">
         <form className="admin-product-filter-bar" method="get">
           <label className="admin-field admin-product-filter-search">
             <span>검색</span>
@@ -212,31 +147,40 @@ export default async function AdminProductsPage({
         title="상품 목록"
         action={
           <div className="admin-table-toolbar-meta">
-            <span>총 {filteredProducts.length}개</span>
+            <span>총 {totalElements}개</span>
             <span>
-              {filteredProducts.length === 0 ? 0 : startIndex + 1}-
-              {Math.min(endIndex, filteredProducts.length)} / {filteredProducts.length}
+              {visibleProducts.length === 0 ? 0 : startIndex + 1}-
+              {Math.min(startIndex + visibleProducts.length, totalElements)} / {totalElements}
             </span>
           </div>
         }
       >
-        {visibleProducts.length > 0 ? (
+        <div className="admin-product-table-wrap">
           <AdminTable
-            columns="minmax(0, 1.9fr) 110px 170px 110px 120px 110px 120px"
+            columns="minmax(320px, 2.15fr) 108px 148px 112px 120px 108px 118px"
+            emptyAction={
+              hasFilters ? (
+                <Link className="admin-button secondary small" href="/admin/products">
+                  전체 상품
+                </Link>
+              ) : null
+            }
+            emptyDescription={
+              hasHealthBoxApi()
+                ? "등록된 상품이 없거나 검색 결과가 비었습니다."
+                : "API를 연결하면 상품 목록을 조회할 수 있습니다."
+            }
             headers={["상품", "카테고리", "노출상태", "재고", "월 매출", "수정일", "관리"]}
+            isEmpty={!visibleProducts.length}
           >
             {visibleProducts.map((product) => (
               <div className="admin-table-row admin-product-table-row" key={product.slug}>
                 <div className="admin-product-table-main">
-                  <Link className="admin-product-table-thumb" href={product.adminHref}>
-                    <Image
-                      alt={product.title}
-                      className="object-cover"
-                      fill
-                      sizes="56px"
-                      src={product.image}
-                    />
-                  </Link>
+                  <AdminProductThumbPreview
+                    alt={product.title}
+                    src={product.image}
+                    title={product.title}
+                  />
 
                   <div className="admin-product-table-copy">
                     <Link className="admin-product-table-title" href={product.adminHref}>
@@ -249,20 +193,20 @@ export default async function AdminProductsPage({
                   </div>
                 </div>
 
-                <span className="admin-row-muted">{product.category}</span>
+                <span className="admin-row-muted admin-product-table-category">{product.category}</span>
 
                 <div className="admin-product-table-badges">
                   <AdminBadge tone={product.publishTone}>{product.publishStatus}</AdminBadge>
-                  <AdminBadge tone={product.statusTone}>{product.badge}</AdminBadge>
+                  {product.badge ? <AdminBadge tone={product.statusTone}>{product.badge}</AdminBadge> : null}
                 </div>
 
-                <div className="admin-row-stack">
+                <div className="admin-row-stack admin-product-table-stock">
                   <strong>{product.inventoryCount}</strong>
                   <span>{product.stockNote}</span>
                 </div>
 
-                <strong className="admin-row-price">{product.monthlySales}</strong>
-                <span className="admin-row-muted">{product.updatedAt}</span>
+                <strong className="admin-row-price admin-product-table-price">{product.monthlySales}</strong>
+                <span className="admin-row-muted admin-product-table-updated">{product.updatedAt}</span>
 
                 <div className="admin-product-table-actions">
                   <Link className="admin-button secondary small" href={product.previewHref}>
@@ -275,17 +219,7 @@ export default async function AdminProductsPage({
               </div>
             ))}
           </AdminTable>
-        ) : (
-          <div className="admin-empty-state">
-            <strong>일치하는 상품이 없습니다.</strong>
-            <p>검색어나 필터를 다시 확인해 주세요.</p>
-            {hasFilters ? (
-              <Link className="admin-button secondary small" href="/admin/products">
-                전체 상품
-              </Link>
-            ) : null}
-          </div>
-        )}
+        </div>
 
         {visibleProducts.length > 0 ? (
           <div className="admin-pagination">

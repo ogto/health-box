@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation";
 
 import { Breadcrumbs, NoticeRow, StoreShell } from "../../_components/store-ui";
+import {
+  fetchStoreNoticeBySlug,
+  fetchStoreNotices,
+} from "../../_lib/storefront-content";
 import { getStorefrontRuntime } from "../../_lib/storefront-runtime";
-import { getNoticeBySlug, notices } from "../../_lib/store-data";
 
-export function generateStaticParams() {
-  return notices.map((notice) => ({ slug: notice.slug }));
-}
+export const dynamic = "force-dynamic";
 
 export default async function NoticeDetailPage({
   params,
@@ -15,7 +16,10 @@ export default async function NoticeDetailPage({
 }) {
   const { dealer } = await getStorefrontRuntime();
   const { slug } = await params;
-  const notice = getNoticeBySlug(slug);
+  const [notice, notices] = await Promise.all([
+    fetchStoreNoticeBySlug(slug),
+    fetchStoreNotices(),
+  ]);
 
   if (!notice) {
     notFound();

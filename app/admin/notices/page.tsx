@@ -2,9 +2,14 @@ import Link from "next/link";
 
 import { AdminHeader } from "../../_components/admin/admin-header";
 import { AdminBadge, AdminMetrics, AdminPanel, AdminTable } from "../../_components/admin/admin-ui";
-import { managedNotices, noticeMetrics } from "../../_lib/admin-data";
+import { fetchAdminNotices, hasHealthBoxApi } from "../../_lib/health-box-api";
+import { buildNoticeMetrics, mapNoticeRows } from "../../_lib/health-box-presenters";
 
-export default function AdminNoticesPage() {
+export default async function AdminNoticesPage() {
+  const notices = hasHealthBoxApi() ? await fetchAdminNotices() : null;
+  const metrics = buildNoticeMetrics(notices);
+  const rows = mapNoticeRows(notices);
+
   return (
     <div className="admin-page">
       <AdminHeader
@@ -16,22 +21,24 @@ export default function AdminNoticesPage() {
         }
       />
 
-      <AdminMetrics items={noticeMetrics} />
+      <AdminMetrics items={metrics} />
 
-      <AdminPanel title="공지 목록">
+      <AdminPanel
+        title="공지 목록"
+        action={<span className="admin-row-muted">총 {rows.length}건</span>}
+      >
         <AdminTable
           columns="minmax(110px, 0.7fr) minmax(0, 1.7fr) minmax(90px, 0.7fr) minmax(120px, 0.8fr) 110px"
-          headers={["분류", "제목", "작성자", "수정일", "상태"]}
+          emptyDescription="등록된 공지 데이터가 없습니다."
+          headers={["분류", "제목", "작성자", "등록일", "상태"]}
+          isEmpty={!rows.length}
         >
-          {managedNotices.map((notice) => (
+          {rows.map((notice) => (
             <Link className="admin-table-row" href={notice.adminHref} key={notice.slug}>
               <span className="admin-row-muted">{notice.category}</span>
-              <div className="admin-row-stack">
-                <strong>{notice.title}</strong>
-                <p>{notice.summary}</p>
-              </div>
+              <strong>{notice.title}</strong>
               <span className="admin-row-muted">{notice.editor}</span>
-              <span className="admin-row-muted">{notice.updatedAt}</span>
+              <span className="admin-row-muted">{notice.date}</span>
               <AdminBadge tone={notice.tone}>{notice.status}</AdminBadge>
             </Link>
           ))}

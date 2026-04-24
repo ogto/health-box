@@ -28,7 +28,7 @@ export async function StoreShell({
   children: ReactNode;
   activeKey?: ActiveKey;
 }) {
-  const { brand, dealer } = await getStorefrontRuntime();
+  const { assets, brand, dealer } = await getStorefrontRuntime();
   const promoLabel = dealer ? `${dealer.displayName} 회원가입 쿠폰` : "3,000원 회원가입 쿠폰";
 
   return (
@@ -60,7 +60,12 @@ export async function StoreShell({
               className="brand-area is-centered is-logo-only"
               href="/"
             >
-              <BrandLogo alt="건강창고 쇼핑몰 로고" className="brand-mark" variant="circle" />
+              <BrandLogo
+                alt="건강창고 쇼핑몰 로고"
+                className="brand-mark"
+                src={assets.logoUrl}
+                variant="circle"
+              />
             </Link>
 
             <div className="header-search-row" role="search">

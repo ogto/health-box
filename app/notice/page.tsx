@@ -1,11 +1,14 @@
 import Link from "next/link";
 
 import { Breadcrumbs, StoreShell } from "../_components/store-ui";
+import { fetchStoreNotices } from "../_lib/storefront-content";
 import { getStorefrontRuntime } from "../_lib/storefront-runtime";
-import { notices } from "../_lib/store-data";
+
+export const dynamic = "force-dynamic";
 
 export default async function NoticeListPage() {
   const { brand, dealer } = await getStorefrontRuntime();
+  const notices = await fetchStoreNotices();
 
   return (
     <StoreShell activeKey="notice">
@@ -39,6 +42,11 @@ export default async function NoticeListPage() {
                   <span className="notice-table-date">{notice.date}</span>
                 </Link>
               ))}
+              {!notices.length ? (
+                <div className="content-panel">
+                  <p className="detail-copy">등록된 공지가 아직 없습니다.</p>
+                </div>
+              ) : null}
             </div>
           </article>
 

@@ -13,50 +13,11 @@ export type AdminMetric = {
   tone: AdminTone;
 };
 
-export type AdminShortcut = {
-  href: string;
-  title: string;
-  description: string;
-};
-
 export const dashboardMetrics: AdminMetric[] = [
   { label: "오늘 주문", value: "48건", hint: "결제완료 32 · 배송준비 16", tone: "blue" },
   { label: "승인 대기 회원", value: "12명", hint: "딜러 신청 3 · 일반회원 9", tone: "cyan" },
   { label: "오늘 출고 예정", value: "27건", hint: "당일출고 기준 오전 집계", tone: "green" },
   { label: "이번 달 매출", value: formatWon(42800000), hint: "반품 차감 전 추정치", tone: "gold" },
-];
-
-export const dashboardShortcuts: AdminShortcut[] = [
-  {
-    href: "/admin/storefront",
-    title: "홈페이지 관리",
-    description: "로고, 메인 비주얼, 공통 배너, 메타 정보 관리",
-  },
-  {
-    href: "/admin/products",
-    title: "상품 관리",
-    description: "노출 상태, 추천 세트, 상세 구성 점검",
-  },
-  {
-    href: "/admin/orders",
-    title: "주문 관리",
-    description: "주문 상태, 출고 예정, 반품 요청 확인",
-  },
-  {
-    href: "/admin/sales",
-    title: "매출 관리",
-    description: "회원사별 매출, 채널별 흐름, 월간 실적 확인",
-  },
-  {
-    href: "/admin/members",
-    title: "회원 관리",
-    description: "승인 대기, 회원 등급, 딜러 관리자 검토",
-  },
-  {
-    href: "/admin/dealers",
-    title: "딜러 구조",
-    description: "본사-본몰-딜러몰 확장 구조 점검",
-  },
 ];
 
 export const recentOrders = [

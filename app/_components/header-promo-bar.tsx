@@ -50,7 +50,7 @@ export function HeaderPromoBar({ label = "3,000원 회원가입 쿠폰" }: { lab
 
   return (
     <div className="header-promo">
-      <Link className="header-promo-link" href="/notice/membership-price-policy">
+      <Link className="header-promo-link" href="/signup">
         {label}
       </Link>
 

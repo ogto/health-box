@@ -2,8 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { NoticeRow, ProductCard, StoreShell } from "./_components/store-ui";
+import { fetchStoreNotices, fetchStoreProducts } from "./_lib/storefront-content";
 import { getStorefrontRuntime } from "./_lib/storefront-runtime";
-import { bestProducts, notices, products } from "./_lib/store-data";
+
+export const dynamic = "force-dynamic";
 
 const galleryItems = [
   {
@@ -30,8 +32,15 @@ const tabLabels = ["베스트", "균형있는", "건강하게", "체중조절"] 
 
 export default async function Home() {
   const runtime = await getStorefrontRuntime();
-  const featuredProducts = bestProducts.slice(0, 4);
-  const routineProducts = products.slice(0, 4);
+  const [storeProducts, storeNotices] = await Promise.all([
+    fetchStoreProducts(),
+    fetchStoreNotices(),
+  ]);
+  const featuredProducts = storeProducts.slice(0, 4);
+  const routineProducts = storeProducts.slice(4, 8).length
+    ? storeProducts.slice(4, 8)
+    : storeProducts.slice(0, 4);
+  const habitProducts = storeProducts.slice(0, 8);
   const heroBanners = [
     {
       title: runtime.home.hero.titleLines.join(" "),
@@ -168,6 +177,11 @@ export default async function Home() {
           {featuredProducts.map((product) => (
             <ProductCard key={product.slug} label={product.badge} product={product} />
           ))}
+          {!featuredProducts.length ? (
+            <div className="content-panel">
+              <p className="detail-copy">등록된 대표 상품이 아직 없습니다.</p>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -185,6 +199,11 @@ export default async function Home() {
           {routineProducts.map((product) => (
             <ProductCard key={`routine-${product.slug}`} label={product.category} light product={product} />
           ))}
+          {!routineProducts.length ? (
+            <div className="content-panel">
+              <p className="detail-copy">추천 상품 데이터가 아직 없습니다.</p>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -195,7 +214,7 @@ export default async function Home() {
         </div>
 
         <div className="product-grid">
-          {products.map((product) => (
+          {habitProducts.map((product) => (
             <ProductCard
               key={`habit-${product.slug}`}
               label="NEW"
@@ -204,6 +223,11 @@ export default async function Home() {
               showMeta={false}
             />
           ))}
+          {!habitProducts.length ? (
+            <div className="content-panel">
+              <p className="detail-copy">노출 가능한 상품 데이터가 아직 없습니다.</p>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -232,9 +256,14 @@ export default async function Home() {
 
         <div className="notice-area">
           <div className="notice-list">
-            {notices.map((notice) => (
+            {storeNotices.map((notice) => (
               <NoticeRow key={notice.slug} notice={notice} />
             ))}
+            {!storeNotices.length ? (
+              <div className="content-panel">
+                <p className="detail-copy">등록된 공지가 아직 없습니다.</p>
+              </div>
+            ) : null}
           </div>
 
           <aside className="support-panel">

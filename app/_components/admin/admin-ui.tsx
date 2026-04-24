@@ -59,10 +59,18 @@ export function AdminTable({
   headers,
   columns,
   children,
+  isEmpty = false,
+  emptyTitle = "데이터가 없습니다.",
+  emptyDescription,
+  emptyAction,
 }: {
   headers: string[];
   columns: string;
   children: ReactNode;
+  isEmpty?: boolean;
+  emptyTitle?: string;
+  emptyDescription?: string;
+  emptyAction?: ReactNode;
 }) {
   const style = {
     "--admin-table-columns": columns,
@@ -75,7 +83,15 @@ export function AdminTable({
           <span key={header}>{header}</span>
         ))}
       </div>
-      {children}
+      {isEmpty ? (
+        <div className="admin-empty-state admin-table-empty">
+          <strong>{emptyTitle}</strong>
+          {emptyDescription ? <p>{emptyDescription}</p> : null}
+          {emptyAction ? <div className="admin-table-empty-action">{emptyAction}</div> : null}
+        </div>
+      ) : (
+        children
+      )}
     </div>
   );
 }

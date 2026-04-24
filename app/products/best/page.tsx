@@ -1,7 +1,11 @@
 import { Breadcrumbs, ProductCard, StoreShell } from "../../_components/store-ui";
-import { bestProducts } from "../../_lib/store-data";
+import { fetchStoreProducts } from "../../_lib/storefront-content";
 
-export default function BestProductsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function BestProductsPage() {
+  const bestProducts = await fetchStoreProducts();
+
   return (
     <StoreShell activeKey="best">
       <section className="subpage-block">
@@ -38,6 +42,11 @@ export default function BestProductsPage() {
             {bestProducts.map((product) => (
               <ProductCard key={product.slug} label={product.badge} product={product} />
             ))}
+            {!bestProducts.length ? (
+              <div className="content-panel">
+                <p className="detail-copy">베스트상품으로 노출할 상품이 아직 없습니다.</p>
+              </div>
+            ) : null}
           </div>
         </section>
       </section>

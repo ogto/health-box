@@ -4,6 +4,7 @@ type BrandLogoProps = {
   className: string;
   variant?: "circle" | "square" | "house";
   alt?: string;
+  src?: string;
 };
 
 const logoMap = {
@@ -16,6 +17,7 @@ export function BrandLogo({
   className,
   variant = "circle",
   alt = "건강창고 로고",
+  src,
 }: BrandLogoProps) {
   return (
     <div className={className}>
@@ -24,7 +26,7 @@ export function BrandLogo({
         className="brand-logo-image"
         fill
         sizes="96px"
-        src={logoMap[variant]}
+        src={src || logoMap[variant]}
       />
     </div>
   );
