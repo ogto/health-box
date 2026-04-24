@@ -28,8 +28,13 @@ export default async function LoginPage({
   const runtime = await getStorefrontRuntime();
   const session = await getMemberSession();
   const safeNextPath = resolveNextPath(params.next);
+  const currentDealer = runtime.dealer;
+  const isSameDealer =
+    !currentDealer ||
+    (Boolean(currentDealer.dealerMallId) && session?.dealerMallId === currentDealer.dealerMallId) ||
+    (Boolean(currentDealer.slug) && session?.dealerSlug === currentDealer.slug);
 
-  if (session && (!runtime.dealer?.dealerMallId || session.dealerMallId === runtime.dealer.dealerMallId)) {
+  if (session && isSameDealer) {
     redirect(safeNextPath);
   }
 
@@ -44,7 +49,7 @@ export default async function LoginPage({
         />
 
         <div className="member-auth-screen">
-          {runtime.dealer?.dealerMallId ? (
+          {runtime.dealer?.slug ? (
             <MemberLoginForm
               dealerMallId={runtime.dealer.dealerMallId}
               dealerName={runtime.dealer.displayName}

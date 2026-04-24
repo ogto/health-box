@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { createDealerMallAction, saveDealerMallPublicConfigAction } from "../../_actions/health-box-admin";
+import { createDealerMallDialogAction, saveDealerMallPublicConfigAction } from "../../_actions/health-box-admin";
 import { AdminDealerCreateDialog } from "../../_components/admin/admin-dealer-create-dialog";
 import { AdminHeader } from "../../_components/admin/admin-header";
 import { AdminSubmitButton } from "../../_components/admin/admin-submit-button";
@@ -24,8 +24,6 @@ import {
 
 type DealerSearchParams = {
   dealerMallId?: string;
-  createStatus?: string;
-  createError?: string;
 };
 
 export default async function AdminDealersPage({
@@ -59,38 +57,29 @@ export default async function AdminDealersPage({
 
   const memberRows = mapMemberRows(dealerMembers).slice(0, 5);
   const orderRows = mapOrderRows(dealerOrders).slice(0, 5);
-  const createSucceeded = params.createStatus === "success";
-  const createError = params.createError;
 
   return (
     <div className="admin-page">
       <AdminHeader
-        actions={<AdminDealerCreateDialog action={createDealerMallAction} hasApi={hasHealthBoxApi()} />}
+        actions={<AdminDealerCreateDialog action={createDealerMallDialogAction} hasApi={hasHealthBoxApi()} />}
         title="딜러몰관리"
       />
 
       <AdminMetrics items={metrics} />
 
-      {createSucceeded ? (
-        <div className="admin-feedback is-success">딜러 추가 요청이 접수되었습니다.</div>
-      ) : null}
-      {createError ? <div className="admin-feedback is-error">{createError}</div> : null}
-
       <div className="admin-stack">
         <AdminPanel title="딜러몰">
           <AdminTable
-            alignments={["left", "left", "left", "left", "left", "left", "center", "center", "center", "center", "right", "center", "center"]}
-            columns="minmax(0, 1.08fr) minmax(0, 0.64fr) minmax(0, 0.56fr) minmax(0, 0.82fr) minmax(0, 0.82fr) minmax(0, 0.68fr) minmax(68px, 0.56fr) minmax(58px, 0.46fr) minmax(42px, 0.3fr) minmax(42px, 0.3fr) minmax(62px, 0.46fr) minmax(58px, 0.44fr) 58px"
+            alignments={["left", "left", "left", "left", "left", "center", "center", "center", "right", "center", "center"]}
+            columns="minmax(0, 1.18fr) minmax(0, 0.72fr) minmax(0, 1fr) minmax(0, 0.92fr) minmax(0, 0.76fr) minmax(72px, 0.62fr) minmax(42px, 0.34fr) minmax(42px, 0.34fr) minmax(72px, 0.5fr) minmax(64px, 0.52fr) 58px"
             emptyDescription="조회 가능한 딜러몰 데이터가 없습니다."
             headers={[
               "딜러몰",
               "표시명",
-              "slug",
               "도메인",
-              "문의 메일",
-              "문의 전화",
+              "계정",
+              "전화",
               "가입일",
-              "코드",
               "회원",
               "주문",
               "누적판매",
@@ -103,12 +92,18 @@ export default async function AdminDealersPage({
               <div className="admin-table-row" key={dealer.id}>
                 <strong className="admin-cell-left" title={dealer.name}>{dealer.name}</strong>
                 <span className="admin-row-muted admin-cell-left" title={dealer.displayName || dealer.name}>{dealer.displayName || dealer.name}</span>
-                <span className="admin-row-muted admin-cell-left" title={dealer.slug}>{dealer.slug}</span>
-                <span className="admin-row-muted admin-cell-left" title={dealer.domain}>{dealer.domain}</span>
+                <a
+                  className="admin-inline-link admin-cell-left"
+                  href={`https://${dealer.domain}`}
+                  rel="noreferrer"
+                  target="_blank"
+                  title={dealer.domain}
+                >
+                  {dealer.domain}
+                </a>
                 <span className="admin-row-muted admin-cell-left" title={dealer.supportEmail || "-"}>{dealer.supportEmail || "-"}</span>
                 <span className="admin-row-muted admin-cell-left" title={dealer.supportPhone || "-"}>{dealer.supportPhone || "-"}</span>
                 <span className="admin-row-muted admin-cell-center" title={dealer.joinedAt}>{dealer.joinedAt}</span>
-                <span className="admin-row-muted admin-cell-center" title={dealer.dealerCode}>{dealer.dealerCode}</span>
                 <strong className="admin-row-price admin-cell-center" title={dealer.memberCount}>{dealer.memberCount}</strong>
                 <span className="admin-row-muted admin-cell-center" title={dealer.orderCount}>{dealer.orderCount}</span>
                 <strong className="admin-row-price admin-cell-right" title={dealer.totalSales}>{dealer.totalSales}</strong>
@@ -127,54 +122,79 @@ export default async function AdminDealersPage({
         </AdminPanel>
 
         <div className="admin-grid-main">
-          <AdminPanel title="딜러몰 공개 설정">
+          <AdminPanel title="딜러몰 상세">
             {selectedDealer ? (
               <form action={saveDealerMallPublicConfigAction} className="admin-status-stack">
                 <input name="dealerMallId" type="hidden" value={String(selectedDealer.id)} />
-                <label className="admin-field">
-                  <span>몰 이름</span>
-                  <input
-                    className="admin-input"
-                    defaultValue={stringValue(publicConfig, "mallName") || selectedDealer.name}
-                    name="mallName"
-                    type="text"
-                  />
-                </label>
-                <label className="admin-field">
-                  <span>공개 표시명 (선택)</span>
-                  <input
-                    className="admin-input"
-                    defaultValue={stringValue(publicConfig, "displayName") || selectedDealer.displayName || selectedDealer.name}
-                    name="displayName"
-                    placeholder="비우면 몰 이름과 같게 노출"
-                    type="text"
-                  />
-                </label>
-                <label className="admin-field">
-                  <span>문의 메일</span>
-                  <input
-                    className="admin-input"
-                    defaultValue={stringValue(publicConfig, "supportEmail") || selectedDealer.supportEmail}
-                    name="supportEmail"
-                    type="email"
-                  />
-                </label>
-                <label className="admin-field">
-                  <span>문의 전화</span>
-                  <input
-                    className="admin-input"
-                    defaultValue={stringValue(publicConfig, "supportPhone") || selectedDealer.supportPhone}
-                    name="supportPhone"
-                    type="text"
-                  />
-                </label>
-                <label className="admin-field">
-                  <span>활성 여부</span>
-                  <select className="admin-select" defaultValue={stringValue(publicConfig, "activeYn") || "Y"} name="activeYn">
-                    <option value="Y">활성</option>
-                    <option value="N">비활성</option>
-                  </select>
-                </label>
+                <div className="admin-field-grid three">
+                  <label className="admin-field">
+                    <span>딜러몰 이름</span>
+                    <input
+                      className="admin-input"
+                      defaultValue={stringValue(publicConfig, "mallName") || selectedDealer.name}
+                      name="mallName"
+                      type="text"
+                    />
+                  </label>
+                  <label className="admin-field">
+                    <span>표시명</span>
+                    <input
+                      className="admin-input"
+                      defaultValue={stringValue(publicConfig, "displayName") || selectedDealer.displayName || selectedDealer.name}
+                      name="displayName"
+                      placeholder="비우면 딜러몰 이름과 같게 노출"
+                      type="text"
+                    />
+                  </label>
+                  <label className="admin-field">
+                    <span>상태</span>
+                    <select className="admin-select" defaultValue={stringValue(publicConfig, "activeYn") || "Y"} name="activeYn">
+                      <option value="Y">활성</option>
+                      <option value="N">비활성</option>
+                    </select>
+                  </label>
+
+                  <label className="admin-field">
+                    <span>도메인</span>
+                    <input className="admin-input" disabled type="text" value={selectedDealer.domain} />
+                  </label>
+                  <label className="admin-field">
+                    <span>계정</span>
+                    <input
+                      className="admin-input"
+                      disabled
+                      type="text"
+                      value={stringValue(publicConfig, "supportEmail") || selectedDealer.supportEmail || "-"}
+                    />
+                  </label>
+                  <label className="admin-field">
+                    <span>전화</span>
+                    <input
+                      className="admin-input"
+                      defaultValue={stringValue(publicConfig, "supportPhone") || selectedDealer.supportPhone}
+                      name="supportPhone"
+                      type="text"
+                    />
+                  </label>
+
+                  <label className="admin-field">
+                    <span>가입일</span>
+                    <input className="admin-input" disabled type="text" value={selectedDealer.joinedAt} />
+                  </label>
+                  <label className="admin-field">
+                    <span>회원</span>
+                    <input className="admin-input" disabled type="text" value={selectedDealer.memberCount} />
+                  </label>
+                  <label className="admin-field">
+                    <span>주문</span>
+                    <input className="admin-input" disabled type="text" value={selectedDealer.orderCount} />
+                  </label>
+
+                  <label className="admin-field span-two">
+                    <span>누적판매</span>
+                    <input className="admin-input" disabled type="text" value={selectedDealer.totalSales} />
+                  </label>
+                </div>
                 {hasHealthBoxApi() ? (
                   <AdminSubmitButton className="admin-button" pendingLabel="저장중...">
                     저장

@@ -4098,6 +4098,17 @@ a.admin-list-row:hover {
   color: #8ca0b4;
 }
 
+.admin-input:disabled,
+.admin-select:disabled,
+.admin-textarea:disabled {
+  border-color: rgba(216, 228, 239, 0.92);
+  background: #f4f8fc;
+  color: #7b8ea3;
+  cursor: not-allowed;
+  -webkit-text-fill-color: #7b8ea3;
+  opacity: 1;
+}
+
 .admin-toggle-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

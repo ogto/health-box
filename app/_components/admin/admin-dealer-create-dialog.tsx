@@ -1,15 +1,20 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useActionState, useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 
+import type { CreateDealerMallDialogState } from "../../_actions/health-box-admin";
 import { AdminSubmitButton } from "./admin-submit-button";
 
 export function AdminDealerCreateDialog({
   action,
   hasApi,
 }: {
-  action: (formData: FormData) => void | Promise<void>;
+  action: (
+    previousState: CreateDealerMallDialogState,
+    formData: FormData,
+  ) => CreateDealerMallDialogState | Promise<CreateDealerMallDialogState>;
   hasApi: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -73,63 +78,12 @@ export function AdminDealerCreateDialog({
                 </div>
 
                 <div className="admin-info-dialog-body">
-                  <form action={action} className="admin-status-stack">
-                    <input name="redirectTo" type="hidden" value="/admin/dealers" />
-                    <div className="admin-field-grid two">
-                      <label className="admin-field">
-                        <span>딜러몰 이름</span>
-                        <input className="admin-input" name="mallName" placeholder="예: 강남웰니스몰" type="text" />
-                      </label>
-                      <label className="admin-field">
-                        <span>표시명 (선택)</span>
-                        <input className="admin-input" name="displayName" placeholder="비우면 딜러몰 이름 사용" type="text" />
-                      </label>
-                    </div>
-
-                    <div className="admin-field-grid two">
-                      <label className="admin-field">
-                        <span>slug</span>
-                        <input className="admin-input" name="slug" placeholder="예: gangnam-wellness" type="text" />
-                      </label>
-                      <label className="admin-field">
-                        <span>담당자 이름</span>
-                        <input className="admin-input" name="applicantName" placeholder="담당자명 입력" type="text" />
-                      </label>
-                    </div>
-
-                    <div className="admin-field-grid two">
-                      <label className="admin-field">
-                        <span>로그인 이메일</span>
-                        <input className="admin-input" name="email" placeholder="login@example.com" type="email" />
-                      </label>
-                      <label className="admin-field">
-                        <span>휴대폰 번호</span>
-                        <input className="admin-input" name="phone" placeholder="010-0000-0000" type="text" />
-                      </label>
-                    </div>
-
-                    <label className="admin-field">
-                      <span>메모</span>
-                      <textarea className="admin-textarea" name="reviewMemo" placeholder="필요 시 메모 입력" />
-                    </label>
-
-                    {hasApi ? (
-                      <div className="admin-dealer-dialog-actions">
-                        <button
-                          className="admin-button secondary"
-                          onClick={() => setOpen(false)}
-                          type="button"
-                        >
-                          취소
-                        </button>
-                        <AdminSubmitButton className="admin-button" pendingLabel="추가중...">
-                          딜러 추가
-                        </AdminSubmitButton>
-                      </div>
-                    ) : (
-                      <div className="admin-row-muted">API 미연결 상태입니다.</div>
-                    )}
-                  </form>
+                  <AdminDealerCreateDialogForm
+                    action={action}
+                    hasApi={hasApi}
+                    onCancel={() => setOpen(false)}
+                    onSuccess={() => setOpen(false)}
+                  />
                 </div>
               </div>
             </div>,
@@ -137,5 +91,94 @@ export function AdminDealerCreateDialog({
           )
         : null}
     </>
+  );
+}
+
+const INITIAL_STATE: CreateDealerMallDialogState = {
+  message: undefined,
+  status: "idle",
+};
+
+function AdminDealerCreateDialogForm({
+  action,
+  hasApi,
+  onCancel,
+  onSuccess,
+}: {
+  action: (
+    previousState: CreateDealerMallDialogState,
+    formData: FormData,
+  ) => CreateDealerMallDialogState | Promise<CreateDealerMallDialogState>;
+  hasApi: boolean;
+  onCancel: () => void;
+  onSuccess: () => void;
+}) {
+  const router = useRouter();
+  const [state, formAction] = useActionState(action, INITIAL_STATE);
+
+  useEffect(() => {
+    if (state.status === "success") {
+      router.refresh();
+      onSuccess();
+    }
+  }, [onSuccess, router, state.status]);
+
+  return (
+    <form action={formAction} className="admin-status-stack">
+      <div className="admin-field-grid two">
+        <label className="admin-field">
+          <span>딜러몰 이름</span>
+          <input className="admin-input" name="mallName" placeholder="예: 강남웰니스몰" type="text" />
+        </label>
+        <label className="admin-field">
+          <span>표시명 (선택)</span>
+          <input className="admin-input" name="displayName" placeholder="비우면 딜러몰 이름 사용" type="text" />
+        </label>
+      </div>
+
+      <div className="admin-field-grid two">
+        <label className="admin-field">
+          <span>slug</span>
+          <input className="admin-input" name="slug" placeholder="예: gangnam-wellness" type="text" />
+        </label>
+        <label className="admin-field">
+          <span>담당자 이름</span>
+          <input className="admin-input" name="applicantName" placeholder="담당자명 입력" type="text" />
+        </label>
+      </div>
+
+      <div className="admin-field-grid two">
+        <label className="admin-field">
+          <span>로그인 이메일</span>
+          <input className="admin-input" name="email" placeholder="login@example.com" type="email" />
+        </label>
+        <label className="admin-field">
+          <span>휴대폰 번호</span>
+          <input className="admin-input" name="phone" placeholder="010-0000-0000" type="text" />
+        </label>
+      </div>
+
+      <label className="admin-field">
+        <span>메모</span>
+        <textarea className="admin-textarea" name="reviewMemo" placeholder="필요 시 메모 입력" />
+      </label>
+
+      {state.status === "error" && state.message ? (
+        <div className="admin-feedback is-error">{state.message}</div>
+      ) : null}
+
+      {hasApi ? (
+        <div className="admin-dealer-dialog-actions">
+          <button className="admin-button secondary" onClick={onCancel} type="button">
+            취소
+          </button>
+          <AdminSubmitButton className="admin-button" pendingLabel="추가중...">
+            딜러 추가
+          </AdminSubmitButton>
+        </div>
+      ) : (
+        <div className="admin-row-muted">API 미연결 상태입니다.</div>
+      )}
+    </form>
   );
 }

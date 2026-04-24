@@ -36,7 +36,7 @@ export default async function SignupPage({
         />
 
         <div className="member-auth-screen">
-          {runtime.dealer?.dealerMallId ? (
+          {runtime.dealer?.slug ? (
             <MemberSignupForm
               dealerMallId={runtime.dealer.dealerMallId}
               dealerName={runtime.dealer.displayName}

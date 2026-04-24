@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   fetchAdminBuyerSignupApplications,
   fetchAdminDealerMallMembers,
+  fetchDealerPublicBySlug,
   healthBoxFetch,
   stringValue,
 } from "../../../_lib/health-box-api";
@@ -32,13 +33,17 @@ function buildSignupSlug(name: string, dealerSlug?: string) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const dealerMallId = Number(body.dealerMallId);
+    const requestedDealerMallId = Number(body.dealerMallId);
     const dealerSlug = String(body.dealerSlug || "").trim() || undefined;
     const name = String(body.name || "").trim();
     const email = String(body.email || "").trim();
     const phone = normalizePhone(body.phone);
+    const resolvedDealerMallId =
+      requestedDealerMallId ||
+      Number((await fetchDealerPublicBySlug(dealerSlug || ""))?.dealerMallId || 0) ||
+      0;
 
-    if (!dealerMallId) {
+    if (!resolvedDealerMallId && !dealerSlug) {
       return NextResponse.json(
         { ok: false, message: "딜러몰 정보가 없습니다. 딜러몰에서 다시 접속해주세요." },
         { status: 400 },
@@ -52,8 +57,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!resolvedDealerMallId) {
+      return NextResponse.json(
+        { ok: false, message: "딜러몰 정보를 확인할 수 없습니다. 다시 시도해주세요." },
+        { status: 400 },
+      );
+    }
+
     const normalizedName = normalizeName(name);
-    const members = (await fetchAdminDealerMallMembers(dealerMallId)) || [];
+    const members = (await fetchAdminDealerMallMembers(resolvedDealerMallId)) || [];
     const existingMember = members.find((member) => {
       const memberPhone = normalizePhone(stringValue(member, "phone"));
       const memberName = normalizeName(stringValue(member, "name"));
@@ -73,7 +85,7 @@ export async function POST(request: NextRequest) {
       const applicationPhone = normalizePhone(stringValue(application, "phone"));
       const applicationName = normalizeName(stringValue(application, "name"));
       return (
-        applicationDealerMallId === dealerMallId &&
+        applicationDealerMallId === resolvedDealerMallId &&
         applicationPhone === phone &&
         applicationName === normalizedName
       );
@@ -89,7 +101,7 @@ export async function POST(request: NextRequest) {
     await healthBoxFetch("/health-box/public/buyer-signup-applications", {
       method: "POST",
       body: {
-        dealerMallId,
+        dealerMallId: resolvedDealerMallId,
         name,
         phone,
         email: email || undefined,

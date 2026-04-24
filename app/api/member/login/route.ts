@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import {
+  fetchDealerPublicBySlug,
   type HealthBoxRecord,
   stringValue,
 } from "../../../_lib/health-box-api";
@@ -26,13 +27,13 @@ function extractErrorMessage(payload: string) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const dealerMallId = Number(body.dealerMallId);
+    const requestedDealerMallId = Number(body.dealerMallId);
     const loginId = String(body.loginId || "").trim();
     const password = String(body.password || "");
     const dealerSlug = String(body.dealerSlug || "").trim() || undefined;
     const apiBaseUrl = getApiBaseUrl();
 
-    if (!dealerMallId) {
+    if (!requestedDealerMallId && !dealerSlug) {
       return NextResponse.json(
         { ok: false, message: "딜러몰 정보가 없습니다. 딜러몰에서 다시 접속해주세요." },
         { status: 400 },
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        dealerMallId,
+        dealerMallId: requestedDealerMallId || undefined,
         loginId,
         password,
         slug: dealerSlug,
@@ -85,6 +86,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const responseDealerMallId =
+      Number(
+        memberPayload?.dealerMallId ??
+          memberPayload?.dealer_mall_id ??
+          memberPayload?.mallId ??
+          0,
+      ) || 0;
+    const fallbackDealerMallId =
+      requestedDealerMallId ||
+      Number((await fetchDealerPublicBySlug(dealerSlug || ""))?.dealerMallId || 0) ||
+      0;
+    const finalDealerMallId = responseDealerMallId || fallbackDealerMallId;
+
+    if (!finalDealerMallId) {
+      return NextResponse.json(
+        { ok: false, message: "딜러몰 정보를 확인할 수 없습니다. 다시 시도해주세요." },
+        { status: 500 },
+      );
+    }
+
     const response = NextResponse.json({ ok: true, message: "로그인 성공" });
     response.cookies.set({
       name: MEMBER_COOKIE_NAME,
@@ -96,7 +117,7 @@ export async function POST(request: NextRequest) {
               memberPayload?.memberId ??
               0,
           ) || null,
-        dealerMallId,
+        dealerMallId: finalDealerMallId,
         name: stringValue(memberPayload, "name", "memberName", "buyerName") || loginId,
         loginId,
         phone: stringValue(memberPayload, "phone") || undefined,

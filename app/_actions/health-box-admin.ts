@@ -5,6 +5,11 @@ import { redirect } from "next/navigation";
 
 import { hasHealthBoxApi, healthBoxFetch } from "../_lib/health-box-api";
 
+export type CreateDealerMallDialogState = {
+  message?: string;
+  status: "error" | "idle" | "success";
+};
+
 function requiredString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
@@ -97,6 +102,69 @@ function ensureApiConfigured() {
   }
 }
 
+async function submitDealerMall(formData: FormData): Promise<CreateDealerMallDialogState> {
+  ensureApiConfigured();
+
+  const mallName = requiredString(formData, "mallName");
+  const slug = requiredString(formData, "slug");
+  const applicantName = requiredString(formData, "applicantName");
+  const email = requiredString(formData, "email");
+  const phone = requiredString(formData, "phone");
+
+  if (!mallName || !slug || !applicantName || !email || !phone) {
+    return {
+      message: "필수 항목을 모두 입력해주세요.",
+      status: "error",
+    };
+  }
+
+  try {
+    await healthBoxFetch("/health-box/admin/dealer-malls/manual", {
+      method: "POST",
+      body: {
+        displayName: optionalString(formData, "displayName") || mallName,
+        applicantName,
+        email,
+        phone,
+        mallName,
+        slug,
+        reviewMemo: optionalString(formData, "reviewMemo"),
+      },
+    });
+
+    revalidatePath("/admin/dealers");
+    return {
+      message: "딜러몰을 추가했습니다.",
+      status: "success",
+    };
+  } catch (error) {
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    const cleanedMessage = rawMessage
+      .replace(/^HealthBox API \d+:\s*/, "")
+      .replace(/^Error:\s*/, "")
+      .trim();
+
+    if (/404|Not Found/i.test(rawMessage)) {
+      return {
+        message: "백엔드 수동 딜러 등록 API를 찾지 못했습니다.",
+        status: "error",
+      };
+    }
+
+    if (/405|Method Not Allowed/i.test(rawMessage)) {
+      return {
+        message: "백엔드가 수동 딜러 등록을 아직 지원하지 않습니다.",
+        status: "error",
+      };
+    }
+
+    return {
+      message: cleanedMessage || "딜러 추가 중 오류가 발생했습니다.",
+      status: "error",
+    };
+  }
+}
+
 export async function saveStorefrontConfigAction(formData: FormData) {
   ensureApiConfigured();
 
@@ -147,58 +215,27 @@ export async function saveDealerMallPublicConfigAction(formData: FormData) {
 }
 
 export async function createDealerMallAction(formData: FormData) {
-  ensureApiConfigured();
-
   const redirectTo = optionalString(formData, "redirectTo") || "/admin/dealers";
-  const mallName = requiredString(formData, "mallName");
-  const slug = requiredString(formData, "slug");
-  const applicantName = requiredString(formData, "applicantName");
-  const email = requiredString(formData, "email");
-  const phone = requiredString(formData, "phone");
+  const result = await submitDealerMall(formData);
 
-  if (!mallName || !slug || !applicantName || !email || !phone) {
-    redirect(buildRedirectWithMessage(redirectTo, "createError", "필수 항목을 모두 입력해주세요."));
-  }
-
-  try {
-    await healthBoxFetch("/health-box/admin/dealer-malls/manual", {
-      method: "POST",
-      body: {
-        displayName: optionalString(formData, "displayName") || mallName,
-        applicantName,
-        email,
-        phone,
-        mallName,
-        slug,
-        reviewMemo: optionalString(formData, "reviewMemo"),
-      },
-    });
-
-    revalidatePath("/admin/dealers");
+  if (result.status === "success") {
     redirect(buildRedirectWithMessage(redirectTo, "createStatus", "success"));
-  } catch (error) {
-    const rawMessage = error instanceof Error ? error.message : String(error);
-    const cleanedMessage = rawMessage
-      .replace(/^HealthBox API \d+:\s*/, "")
-      .replace(/^Error:\s*/, "")
-      .trim();
-
-    if (/404|Not Found/i.test(rawMessage)) {
-      redirect(buildRedirectWithMessage(redirectTo, "createError", "백엔드 수동 딜러 등록 API를 찾지 못했습니다."));
-    }
-
-    if (/405|Method Not Allowed/i.test(rawMessage)) {
-      redirect(buildRedirectWithMessage(redirectTo, "createError", "백엔드가 수동 딜러 등록을 아직 지원하지 않습니다."));
-    }
-
-    redirect(
-      buildRedirectWithMessage(
-        redirectTo,
-        "createError",
-        cleanedMessage || "딜러 추가 중 오류가 발생했습니다.",
-      ),
-    );
   }
+
+  redirect(
+    buildRedirectWithMessage(
+      redirectTo,
+      "createError",
+      result.message || "딜러 추가 중 오류가 발생했습니다.",
+    ),
+  );
+}
+
+export async function createDealerMallDialogAction(
+  _previousState: CreateDealerMallDialogState,
+  formData: FormData,
+) {
+  return submitDealerMall(formData);
 }
 
 export async function approveDealerApplicationAction(formData: FormData) {

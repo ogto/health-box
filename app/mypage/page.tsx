@@ -14,7 +14,11 @@ export default async function MyPage() {
     redirect("/login?next=/mypage");
   }
 
-  if (dealer?.dealerMallId && session.dealerMallId !== dealer.dealerMallId) {
+  const dealerMismatch =
+    (dealer?.dealerMallId && session.dealerMallId !== dealer.dealerMallId) ||
+    (dealer?.slug && session.dealerSlug && session.dealerSlug !== dealer.slug);
+
+  if (dealerMismatch) {
     redirect("/login?next=/mypage");
   }
 
