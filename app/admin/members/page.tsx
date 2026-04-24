@@ -1,13 +1,21 @@
 import Link from "next/link";
 
+import {
+  approveBuyerSignupApplicationAction,
+  rejectBuyerSignupApplicationAction,
+} from "../../_actions/health-box-admin";
 import { AdminHeader } from "../../_components/admin/admin-header";
+import { AdminSubmitButton } from "../../_components/admin/admin-submit-button";
 import { AdminBadge, AdminMetrics, AdminPanel, AdminTable } from "../../_components/admin/admin-ui";
 import {
+  dateTimeValue,
   fetchAdminBuyerSignupApplications,
   fetchAdminDealerMallMembers,
   fetchAdminDealerMalls,
   fetchAdminMembers,
   hasHealthBoxApi,
+  idValue,
+  stringValue,
 } from "../../_lib/health-box-api";
 import {
   buildDealerMetrics,
@@ -45,6 +53,21 @@ export default async function AdminMembersPage({
 
   const metrics = buildMemberMetrics(scopedMembers, dealers, buyerApplications);
   const memberRows = mapMemberRows(scopedMembers);
+  const pendingBuyerApplications = (buyerApplications ?? []).filter((application) => {
+    const dealerMallId = idValue(application, "dealerMallId");
+    const status = stringValue(application, "status");
+
+    if (status && !/^PENDING$/i.test(status)) {
+      return false;
+    }
+
+    if (selectedDealer?.id) {
+      return dealerMallId === selectedDealer.id;
+    }
+
+    return true;
+  });
+  const dealerNameById = new Map(dealerRows.map((dealer) => [dealer.id, dealer.name]));
 
   return (
     <div className="admin-page">
@@ -77,6 +100,64 @@ export default async function AdminMembersPage({
             </Link>
           ))}
         </div>
+      </AdminPanel>
+
+      <AdminPanel
+        title="승인 대기 회원"
+        action={<span className="admin-row-muted">총 {pendingBuyerApplications.length}명</span>}
+      >
+        <AdminTable
+          columns="minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1fr) 132px 90px 164px"
+          emptyDescription={
+            selectedDealer
+              ? "선택한 딜러몰에 승인 대기 회원이 없습니다."
+              : "승인 대기 회원 신청이 없습니다."
+          }
+          headers={["이름", "딜러몰", "연락처", "신청일", "상태", "처리"]}
+          isEmpty={!pendingBuyerApplications.length}
+        >
+          {pendingBuyerApplications.map((application, index) => {
+            const applicationId = idValue(application, "id", "applicationId") ?? index + 1;
+            const dealerMallId = idValue(application, "dealerMallId");
+            const dealerName =
+              stringValue(application, "dealerMallName", "mallName", "dealer") ||
+              (dealerMallId ? dealerNameById.get(dealerMallId) : "") ||
+              "-";
+            const phone = stringValue(application, "phone");
+            const email = stringValue(application, "email");
+            const contact = [phone, email].filter(Boolean).join(" / ") || "-";
+            const submittedAt =
+              dateTimeValue(application, "appliedAt", "createdAt", "submittedAt", "requestedAt") || "-";
+
+            return (
+              <div className="admin-table-row" key={applicationId}>
+                <strong>{stringValue(application, "name", "buyerName") || "이름 없음"}</strong>
+                <span className="admin-row-muted">{dealerName}</span>
+                <span className="admin-row-muted" title={contact}>{contact}</span>
+                <span className="admin-row-muted">{submittedAt}</span>
+                <AdminBadge tone="gold">승인 대기</AdminBadge>
+                {hasHealthBoxApi() ? (
+                  <div className="admin-inline-actions">
+                    <form action={approveBuyerSignupApplicationAction}>
+                      <input name="applicationId" type="hidden" value={String(applicationId)} />
+                      <AdminSubmitButton className="admin-button small" pendingLabel="승인중...">
+                        승인
+                      </AdminSubmitButton>
+                    </form>
+                    <form action={rejectBuyerSignupApplicationAction}>
+                      <input name="applicationId" type="hidden" value={String(applicationId)} />
+                      <AdminSubmitButton className="admin-button secondary small" pendingLabel="반려중...">
+                        반려
+                      </AdminSubmitButton>
+                    </form>
+                  </div>
+                ) : (
+                  <span className="admin-row-muted">API 미연결</span>
+                )}
+              </div>
+            );
+          })}
+        </AdminTable>
       </AdminPanel>
 
       <AdminPanel
