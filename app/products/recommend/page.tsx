@@ -3,8 +3,6 @@ import { fetchStoreProducts } from "../../_lib/storefront-content";
 
 const recommendationTags = ["루틴 추천", "면역 케어", "활력 보충", "시즌 픽"] as const;
 
-export const dynamic = "force-dynamic";
-
 export default async function RecommendedProductsPage() {
   const products = await fetchStoreProducts();
   const recommendedList = products.slice(0, 4).map((product, index) => ({

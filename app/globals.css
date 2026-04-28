@@ -56,6 +56,111 @@ button {
   cursor: pointer;
 }
 
+.loading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.loading-mark,
+.loading-pill,
+.loading-card,
+.loading-panel {
+  display: block;
+  overflow: hidden;
+  position: relative;
+  background: linear-gradient(90deg, #edf1f6 0%, #f8fafc 48%, #edf1f6 100%);
+  background-size: 220% 100%;
+  animation: loading-shimmer 1.25s ease-in-out infinite;
+}
+
+.loading-mark {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+}
+
+.loading-pill {
+  width: min(360px, 48vw);
+  height: 18px;
+  border-radius: 999px;
+}
+
+.loading-pill.short {
+  width: 160px;
+}
+
+.store-loading-header {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  padding: 28px 0 18px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.store-loading-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.9fr);
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.loading-panel {
+  min-height: 220px;
+  border: 1px solid var(--line);
+  border-radius: 26px;
+}
+
+.loading-panel.hero {
+  min-height: 520px;
+}
+
+.loading-panel.stack {
+  min-height: 520px;
+}
+
+.store-loading-grid,
+.admin-loading-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 36px;
+}
+
+.loading-card {
+  min-height: 260px;
+  border: 1px solid var(--line);
+  border-radius: 26px;
+}
+
+.admin-loading-shell {
+  display: grid;
+  gap: 24px;
+  padding: 28px;
+}
+
+.admin-loading-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.8fr);
+  gap: 20px;
+}
+
+.admin-loading-grid .loading-panel.tall {
+  min-height: 360px;
+}
+
+@keyframes loading-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
+}
+
 .mall-shell {
   width: 100%;
 }
@@ -5131,6 +5236,21 @@ a.admin-list-row:hover {
 }
 
 @media (max-width: 860px) {
+  .store-loading-hero,
+  .admin-loading-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .store-loading-grid,
+  .admin-loading-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .loading-panel.hero,
+  .loading-panel.stack {
+    min-height: 320px;
+  }
+
   .admin-content {
     padding: 0 16px 42px;
   }
@@ -5395,6 +5515,20 @@ a.admin-list-row:hover {
 }
 
 @media (max-width: 560px) {
+  .store-loading-grid,
+  .admin-loading-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-loading-shell {
+    padding: 18px 14px;
+  }
+
+  .loading-pill,
+  .loading-pill.short {
+    width: 100%;
+  }
+
   .admin-mobile-bar {
     margin: 12px 12px 16px;
     padding: 11px 12px;

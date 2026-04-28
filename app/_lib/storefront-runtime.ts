@@ -167,18 +167,20 @@ export const getStorefrontRuntime = cache(async (): Promise<StorefrontRuntime> =
   );
   const dealerSlug = resolveDealerSlug(hostname, rootDomain);
   const dealer = !hasHealthBoxApi() && dealerSlug ? buildDealerRuntime(dealerSlug, hostname) : null;
-  const publicSiteConfig = hasHealthBoxApi() ? await fetchPublicSiteConfig() : null;
-  const dealerContext =
-    hasHealthBoxApi() && hostname ? await fetchDealerContext(hostname) : null;
+  const apiEnabled = hasHealthBoxApi();
+  const [publicSiteConfig, dealerContext] = apiEnabled
+    ? await Promise.all([
+        fetchPublicSiteConfig(),
+        hostname ? fetchDealerContext(hostname) : Promise.resolve(null),
+      ])
+    : [null, null];
   const resolvedSlug = dealerContext?.slug || dealerSlug || "";
-  const dealerPublicConfig =
-    hasHealthBoxApi() && resolvedSlug
-      ? await fetchDealerPublicConfig(resolvedSlug)
-      : null;
-  const dealerPublic =
-    hasHealthBoxApi() && (dealerContext?.slug || dealerSlug)
-      ? await fetchDealerPublicBySlug(resolvedSlug)
-      : null;
+  const [dealerPublicConfig, dealerPublic] = apiEnabled && resolvedSlug
+    ? await Promise.all([
+        fetchDealerPublicConfig(resolvedSlug),
+        fetchDealerPublicBySlug(resolvedSlug),
+      ])
+    : [null, null];
 
   const mergedConfig: StorefrontConfigShape = {
     ...storefrontConfig,

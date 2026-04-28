@@ -5,8 +5,6 @@ import { Breadcrumbs, ProductCard, StoreShell } from "../_components/store-ui";
 import { fetchStoreProducts } from "../_lib/storefront-content";
 import { getStorefrontRuntime } from "../_lib/storefront-runtime";
 
-export const dynamic = "force-dynamic";
-
 export default async function PromotionPage() {
   const { assets, dealer, home } = await getStorefrontRuntime();
   const promotionProducts = (await fetchStoreProducts()).slice(0, 3);

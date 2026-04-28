@@ -1,8 +1,6 @@
 import { Breadcrumbs, ProductCard, StoreShell } from "../../_components/store-ui";
 import { fetchStoreProducts } from "../../_lib/storefront-content";
 
-export const dynamic = "force-dynamic";
-
 export default async function BestProductsPage() {
   const bestProducts = await fetchStoreProducts();
 

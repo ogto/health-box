@@ -1,10 +1,10 @@
 import { cache } from "react";
 
 import {
-  fetchAdminNotice,
-  fetchAdminNotices,
-  fetchAdminProduct,
-  fetchAdminProducts,
+  fetchStorefrontNotice,
+  fetchStorefrontNotices,
+  fetchStorefrontProduct,
+  fetchStorefrontProductPage,
   hasHealthBoxApi,
   type HealthBoxPageResponse,
   type HealthBoxRecord,
@@ -117,7 +117,7 @@ export const fetchStoreProducts = cache(async () => {
     return fallbackProducts;
   }
 
-  const page = await fetchAdminProducts({ page: 1, size: 40 });
+  const page = await fetchStorefrontProductPage({ page: 1, size: 40 });
   return mapProductRows(page).items.map(toStoreProduct);
 });
 
@@ -127,11 +127,11 @@ export const fetchStoreProductBySlug = cache(async (slug: string) => {
   }
 
   const fallbackProductId = extractFallbackRecordId(slug, "product");
-  const page = await fetchAdminProducts({ q: slug, page: 1, size: 20 });
+  const page = await fetchStorefrontProductPage({ q: slug, page: 1, size: 20 });
   const listedProduct = findProductBySlug(mapProductRows(page).items, slug);
   const detailedProduct =
     listedProduct?.recordId || fallbackProductId
-      ? toProductPage(await fetchAdminProduct(listedProduct?.recordId || fallbackProductId || 0))
+      ? toProductPage(await fetchStorefrontProduct(listedProduct?.recordId || fallbackProductId || 0))
       : null;
   const mergedProduct =
     listedProduct && detailedProduct
@@ -146,7 +146,7 @@ export const fetchStoreNotices = cache(async () => {
     return fallbackNotices;
   }
 
-  const notices = await fetchAdminNotices();
+  const notices = await fetchStorefrontNotices();
   return mapNoticeRows(notices).map(toStoreNotice);
 });
 
@@ -156,11 +156,11 @@ export const fetchStoreNoticeBySlug = cache(async (slug: string) => {
   }
 
   const fallbackNoticeId = extractFallbackRecordId(slug, "notice");
-  const notices = await fetchAdminNotices();
+  const notices = await fetchStorefrontNotices();
   const listedNotice = findNoticeBySlug(mapNoticeRows(notices), slug);
   const detailedNotice =
     listedNotice?.recordId || fallbackNoticeId
-      ? toNoticeRow(await fetchAdminNotice(listedNotice?.recordId || fallbackNoticeId || 0))
+      ? toNoticeRow(await fetchStorefrontNotice(listedNotice?.recordId || fallbackNoticeId || 0))
       : null;
   const mergedNotice =
     listedNotice && detailedNotice

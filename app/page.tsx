@@ -5,8 +5,6 @@ import { NoticeRow, ProductCard, StoreShell } from "./_components/store-ui";
 import { fetchStoreNotices, fetchStoreProducts } from "./_lib/storefront-content";
 import { getStorefrontRuntime } from "./_lib/storefront-runtime";
 
-export const dynamic = "force-dynamic";
-
 const galleryItems = [
   {
     title: "그린픽스 프레시파워 스무디",

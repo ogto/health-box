@@ -7,8 +7,6 @@ import {
 } from "../../_lib/storefront-content";
 import { getStorefrontRuntime } from "../../_lib/storefront-runtime";
 
-export const dynamic = "force-dynamic";
-
 export default async function NoticeDetailPage({
   params,
 }: {

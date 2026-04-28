@@ -47,6 +47,7 @@ export type HealthBoxPageResponse<T> = {
 };
 
 const API_BASE_URL = process.env.HEALTH_BOX_API_BASE_URL?.trim().replace(/\/+$/, "") || "";
+const PUBLIC_REVALIDATE_SECONDS = 60;
 
 function buildUrl(path: string, query?: Record<string, string | number | null | undefined>) {
   const url = new URL(`${API_BASE_URL}${path}`);
@@ -95,15 +96,19 @@ export async function healthBoxFetch<T>(
     query?: Record<string, string | number | null | undefined>;
     body?: unknown;
     headers?: HeadersInit;
+    revalidate?: number;
   },
 ): Promise<T> {
   if (!API_BASE_URL) {
     throw new Error("HEALTH_BOX_API_BASE_URL is not configured");
   }
 
+  const method = options?.method || "GET";
+  const isRead = method === "GET" && !options?.body;
   const response = await fetch(buildUrl(path, options?.query), {
-    method: options?.method || "GET",
-    cache: "no-store",
+    method,
+    cache: isRead && typeof options?.revalidate === "number" ? undefined : "no-store",
+    next: isRead && typeof options?.revalidate === "number" ? { revalidate: options.revalidate } : undefined,
     headers: {
       ...(options?.body ? { "Content-Type": "application/json" } : {}),
       ...options?.headers,
@@ -131,6 +136,7 @@ export async function healthBoxFetchOrNull<T>(
     query?: Record<string, string | number | null | undefined>;
     body?: unknown;
     headers?: HeadersInit;
+    revalidate?: number;
   },
 ) {
   try {
@@ -142,24 +148,29 @@ export async function healthBoxFetchOrNull<T>(
 }
 
 export const fetchPublicSiteConfig = cache(async () =>
-  healthBoxFetchOrNull<HealthBoxPublicSiteConfig>("/health-box/public/public-site-config"),
+  healthBoxFetchOrNull<HealthBoxPublicSiteConfig>("/health-box/public/public-site-config", {
+    revalidate: PUBLIC_REVALIDATE_SECONDS,
+  }),
 );
 
 export const fetchDealerContext = cache(async (host: string) =>
   healthBoxFetchOrNull<HealthBoxDealerContextResponse>("/health-box/public/dealer-context", {
     query: { host },
+    revalidate: PUBLIC_REVALIDATE_SECONDS,
   }),
 );
 
 export const fetchDealerPublicBySlug = cache(async (slug: string) =>
   healthBoxFetchOrNull<HealthBoxDealerPublicResponse>("/health-box/public/dealer-malls/by-slug", {
     query: { slug },
+    revalidate: PUBLIC_REVALIDATE_SECONDS,
   }),
 );
 
 export const fetchDealerPublicConfig = cache(async (slug: string) =>
   healthBoxFetchOrNull<HealthBoxDealerPublicResponse>("/health-box/public/dealer-public-config", {
     query: { slug },
+    revalidate: PUBLIC_REVALIDATE_SECONDS,
   }),
 );
 
@@ -205,22 +216,51 @@ export async function fetchAdminProducts(query?: {
   status?: string;
   page?: number;
   size?: number;
-}) {
+}, options?: { revalidate?: number }) {
   return healthBoxFetchOrNull<HealthBoxPageResponse<HealthBoxRecord>>("/health-box/admin/products", {
     query,
+    revalidate: options?.revalidate,
   });
 }
 
-export async function fetchAdminProduct(productId: number) {
-  return healthBoxFetchOrNull<HealthBoxRecord>(`/health-box/admin/products/${productId}`);
+export async function fetchAdminProduct(productId: number, options?: { revalidate?: number }) {
+  return healthBoxFetchOrNull<HealthBoxRecord>(`/health-box/admin/products/${productId}`, {
+    revalidate: options?.revalidate,
+  });
 }
 
 export async function fetchAdminNotices() {
   return healthBoxFetchOrNull<HealthBoxRecord[]>("/health-box/admin/notices");
 }
 
-export async function fetchAdminNotice(noticeId: number) {
-  return healthBoxFetchOrNull<HealthBoxRecord>(`/health-box/admin/notices/${noticeId}`);
+export async function fetchStorefrontProductPage(query?: {
+  q?: string;
+  category?: string;
+  status?: string;
+  page?: number;
+  size?: number;
+}) {
+  return fetchAdminProducts(query, { revalidate: PUBLIC_REVALIDATE_SECONDS });
+}
+
+export async function fetchStorefrontNotices() {
+  return healthBoxFetchOrNull<HealthBoxRecord[]>("/health-box/admin/notices", {
+    revalidate: PUBLIC_REVALIDATE_SECONDS,
+  });
+}
+
+export async function fetchAdminNotice(noticeId: number, options?: { revalidate?: number }) {
+  return healthBoxFetchOrNull<HealthBoxRecord>(`/health-box/admin/notices/${noticeId}`, {
+    revalidate: options?.revalidate,
+  });
+}
+
+export async function fetchStorefrontProduct(productId: number) {
+  return fetchAdminProduct(productId, { revalidate: PUBLIC_REVALIDATE_SECONDS });
+}
+
+export async function fetchStorefrontNotice(noticeId: number) {
+  return fetchAdminNotice(noticeId, { revalidate: PUBLIC_REVALIDATE_SECONDS });
 }
 
 export async function fetchAdminMonthlySales(dealerMallId: number) {
