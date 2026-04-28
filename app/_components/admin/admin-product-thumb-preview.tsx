@@ -42,7 +42,7 @@ export function AdminProductThumbPreview({
             alt={alt}
             className="admin-product-table-thumb-image"
             fill
-            sizes="60px"
+            sizes="84px"
             src={src}
           />
         </button>

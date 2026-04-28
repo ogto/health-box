@@ -15,10 +15,10 @@ const mainNavItems: Array<{
   label: string;
   href: string;
 }> = [
-  { key: "best", label: "식품/간식", href: "/products/best" },
-  { key: "recommend", label: "영양제/보조제", href: "/products/recommend" },
-  { key: "promotion", label: "드링크", href: "/promotion" },
-  { key: "etc", label: "기타", href: "/promotion" },
+  { key: "best", label: "베스트", href: "/products/best" },
+  { key: "recommend", label: "추천상품", href: "/products/recommend" },
+  { key: "promotion", label: "기획전", href: "/promotion" },
+  { key: "etc", label: "건강루틴", href: "/promotion" },
   { key: "notice", label: "공지사항", href: "/notice" },
 ];
 
@@ -35,7 +35,9 @@ export async function StoreShell({
     notFound();
   }
 
-  const promoLabel = dealer ? `${dealer.displayName} 회원가입 쿠폰` : "3,000원 회원가입 쿠폰";
+  const promoLabel = dealer
+    ? `${dealer.displayName} 회원 전용 혜택`
+    : "회원 전용 혜택과 추천 상품을 확인하세요";
 
   return (
     <main className="mall-shell">
@@ -67,7 +69,7 @@ export async function StoreShell({
               href="/"
             >
               <BrandLogo
-                alt="건강창고 쇼핑몰 로고"
+                alt="건강창고 로고"
                 className="brand-mark"
                 src={assets.logoUrl}
                 variant="circle"
@@ -126,22 +128,29 @@ export function ProductCard({
           alt={product.title}
           className="object-cover"
           fill
-          sizes="(max-width: 1024px) 100vw, 25vw"
+          sizes="(max-width: 720px) 100vw, (max-width: 1180px) 50vw, 25vw"
           src={product.image}
         />
         {label ? (
           <span className={`product-badge${light ? " is-light" : ""}`}>{label}</span>
         ) : null}
+        <span className="product-card-quick">상세보기</span>
       </div>
       <div className="product-info">
-        <p className="product-brand">{product.brand}</p>
+        <div className="product-card-head">
+          <p className="product-brand">{product.brand}</p>
+          <span>{product.category}</span>
+        </div>
         <h4>{product.title}</h4>
-        <p className="product-subtitle">{product.subtitle}</p>
-        <p className="product-price">{product.price}</p>
+        <p className="product-subtitle">{product.subtitle || product.summary}</p>
+        <div className="product-card-price-row">
+          <p className="product-price">{product.price}</p>
+          <span>회원가</span>
+        </div>
         {showMeta ? (
           <div className="product-meta">
-            <span>{product.review}</span>
-            <span>{product.shipping}</span>
+            <span>{product.review || "후기 준비중"}</span>
+            <span>{product.shipping || "배송 정보 확인"}</span>
           </div>
         ) : null}
       </div>
@@ -210,7 +219,7 @@ function CartIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg fill="none" viewBox="0 0 24 24" {...props}>
       <path
-        d="M4 5h2l2.2 9.5a1 1 0 0 0 1 .8H17a1 1 0 0 0 1-.78L19.5 8H7.2M10 20a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm9 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"
+        d="M4 5h2l2.2 9.5a1 1 0 0 0 1 .8H17a1 1 0 0 0 1-.78L19.5 8H7.2M10 20a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm9 0a1 1 0 1 1-2 0 1 1 2 0Z"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"

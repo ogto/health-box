@@ -91,6 +91,7 @@ function toStoreProduct(row: StoreProductRow): Product {
     image,
     gallery,
     summary,
+    detailHtml: row.detailHtml,
     highlights,
     description,
     detailSections,

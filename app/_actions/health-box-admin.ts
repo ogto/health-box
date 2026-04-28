@@ -3,7 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { hasHealthBoxApi, healthBoxFetch } from "../_lib/health-box-api";
+import {
+  fetchAdminProducts,
+  hasHealthBoxApi,
+  healthBoxFetch,
+  type HealthBoxRecord,
+} from "../_lib/health-box-api";
+import { mapProductRows } from "../_lib/health-box-presenters";
 
 export type CreateDealerMallDialogState = {
   message?: string;
@@ -86,6 +92,16 @@ function buildNoticeSlug(formData: FormData, title: string, id: number | undefin
 function redirectIfRequested(formData: FormData) {
   const redirectTo = optionalString(formData, "redirectTo");
   if (redirectTo) {
+    const toast = optionalString(formData, "toast");
+    const toastError = optionalString(formData, "toastError");
+    if (toast) {
+      redirect(buildRedirectWithMessage(redirectTo, "toast", toast));
+    }
+
+    if (toastError) {
+      redirect(buildRedirectWithMessage(redirectTo, "toastError", toastError));
+    }
+
     redirect(redirectTo);
   }
 }
@@ -100,6 +116,231 @@ function ensureApiConfigured() {
   if (!hasHealthBoxApi()) {
     throw new Error("HEALTH_BOX_API_BASE_URL is not configured");
   }
+}
+
+function isMissingEndpointError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /HealthBox API (404|405):/i.test(message);
+}
+
+async function findProductWithSlug(slug: string, currentProductId: number | undefined) {
+  const page = await fetchAdminProducts({ q: slug, page: 1, size: 50 });
+
+  return mapProductRows(page).items.find((product) => {
+    const isSameProduct = currentProductId && product.recordId === currentProductId;
+    return !isSameProduct && (product.sourceSlug === slug || product.slug === slug);
+  });
+}
+
+const PRODUCT_IMAGE_MEMBER_NO = "505";
+const DEFAULT_UPLOAD_BASE_URL = "https://cloud.1472.ai:18443";
+const DEFAULT_CDN_BASE_URL = "https://cdn.1472.ai";
+
+type UploadedFileResponse = {
+  fileDownloadUri?: string;
+  fileName?: string;
+  fileType?: string;
+  size?: number;
+};
+
+type ProductMediaItem = {
+  altText?: string;
+  id?: number;
+  mediaType?: string;
+  mediaUrl?: string;
+  sortOrder?: number;
+};
+
+async function fetchExistingProductForSave(id: number | undefined) {
+  if (!id) {
+    return {};
+  }
+
+  try {
+    return await healthBoxFetch<HealthBoxRecord>(`/health-box/admin/products/${id}`);
+  } catch (error) {
+    if (!isMissingEndpointError(error)) {
+      console.error("[saveProductAction] failed to fetch existing product", error);
+    }
+    return {};
+  }
+}
+
+function getUploadBaseUrl() {
+  const explicitBaseUrl = process.env.FILE_UPLOAD_API_BASE_URL?.trim();
+  if (explicitBaseUrl) {
+    return explicitBaseUrl.replace(/\/+$/, "");
+  }
+
+  const healthBoxBaseUrl = process.env.HEALTH_BOX_API_BASE_URL?.trim();
+  if (healthBoxBaseUrl) {
+    try {
+      return new URL(healthBoxBaseUrl).origin;
+    } catch {
+      return healthBoxBaseUrl.replace(/\/api\/v\d+\/?$/i, "").replace(/\/+$/, "");
+    }
+  }
+
+  return DEFAULT_UPLOAD_BASE_URL;
+}
+
+function getCdnBaseUrl() {
+  return process.env.FILE_CDN_BASE_URL?.trim().replace(/\/+$/, "") || DEFAULT_CDN_BASE_URL;
+}
+
+function normalizeCdnUrl(value: string, cdnBaseUrl = getCdnBaseUrl()) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (/^https?:\/\/cloud\.1472\.ai(?::\d+)?\/downloadFile\//i.test(trimmed)) {
+    return trimmed.replace(/^https?:\/\/cloud\.1472\.ai(?::\d+)?\/downloadFile\//i, `${cdnBaseUrl}/`);
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith("//")) {
+    return `https:${trimmed}`;
+  }
+
+  return new URL(trimmed.replace(/^\/?/, "/"), cdnBaseUrl).toString();
+}
+
+function getProductImageFiles(formData: FormData) {
+  return formData.getAll("productImages").filter((value): value is File => value instanceof File && value.size > 0);
+}
+
+async function parseUploadResponse(response: Response) {
+  const contentType = response.headers.get("content-type") || "";
+  const payload = contentType.includes("application/json") ? await response.json() : await response.text();
+
+  if (!response.ok) {
+    const message = typeof payload === "string" ? payload : JSON.stringify(payload);
+    throw new Error(`Upload API ${response.status}: ${message || response.statusText}`);
+  }
+
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    const record = payload as Record<string, unknown>;
+    const wrappedPayload = record.data || record.result || record.payload;
+
+    if (Array.isArray(wrappedPayload)) {
+      return wrappedPayload as UploadedFileResponse[];
+    }
+
+    if (wrappedPayload && typeof wrappedPayload === "object") {
+      return [wrappedPayload as UploadedFileResponse];
+    }
+  }
+
+  return Array.isArray(payload) ? (payload as UploadedFileResponse[]) : [payload as UploadedFileResponse];
+}
+
+async function uploadProductImageFiles(files: File[]) {
+  if (!files.length) {
+    return [];
+  }
+
+  const uploadBaseUrl = getUploadBaseUrl();
+  const cdnBaseUrl = getCdnBaseUrl();
+
+  if (files.length === 1) {
+    const uploadUrl = new URL("/api/v1/uploadFile", uploadBaseUrl);
+    uploadUrl.searchParams.set("fileType", "I");
+    uploadUrl.searchParams.set("ids", "S");
+    uploadUrl.searchParams.set("mberNo", PRODUCT_IMAGE_MEMBER_NO);
+
+    const outboundFormData = new FormData();
+    outboundFormData.set("file", files[0]);
+
+    const uploaded = await parseUploadResponse(
+      await fetch(uploadUrl, {
+        method: "POST",
+        body: outboundFormData,
+      }),
+    );
+
+    return uploaded.map((file) => (file.fileDownloadUri ? normalizeCdnUrl(file.fileDownloadUri, cdnBaseUrl) : ""));
+  }
+
+  const outboundFormData = new FormData();
+  outboundFormData.set("fileType", "I");
+  outboundFormData.set("ids", "S");
+  outboundFormData.set("mberNo", PRODUCT_IMAGE_MEMBER_NO);
+  for (const file of files) {
+    outboundFormData.append("files", file);
+  }
+
+  const uploaded = await parseUploadResponse(
+    await fetch(new URL("/api/v1/uploadFiles", uploadBaseUrl), {
+      method: "POST",
+      body: outboundFormData,
+    }),
+  );
+
+  return uploaded.map((file) => (file.fileDownloadUri ? normalizeCdnUrl(file.fileDownloadUri, cdnBaseUrl) : ""));
+}
+
+function existingProductMediaItems(product: HealthBoxRecord) {
+  const mediaItems = product.mediaItems;
+  if (!Array.isArray(mediaItems)) {
+    return [];
+  }
+
+  return mediaItems.filter((item): item is ProductMediaItem => Boolean(item && typeof item === "object"));
+}
+
+function mediaItemsFromFormAndUploads(
+  formData: FormData,
+  existingProduct: HealthBoxRecord,
+  uploadedImageUrls: string[],
+) {
+  const formImageUrls = [
+    optionalString(formData, "thumbnailUrl"),
+    optionalString(formData, "image"),
+    optionalString(formData, "imageUrl"),
+    optionalString(formData, "mainImageUrl"),
+    optionalString(formData, "fileDownloadUri"),
+  ].filter((url): url is string => Boolean(url));
+
+  const gallery = optionalString(formData, "gallery");
+  if (gallery) {
+    try {
+      const parsed = JSON.parse(gallery) as unknown;
+      if (Array.isArray(parsed)) {
+        formImageUrls.push(...parsed.filter((item): item is string => typeof item === "string"));
+      }
+    } catch {
+      formImageUrls.push(...gallery.split(","));
+    }
+  }
+
+  const existingItems = existingProductMediaItems(existingProduct);
+  const existingByUrl = new Map(existingItems.map((item) => [item.mediaUrl ? normalizeCdnUrl(item.mediaUrl) : "", item]));
+  const hasSubmittedImageState = formData.has("gallery") || formData.has("thumbnailUrl") || formData.has("image");
+  const mediaSourceUrls = hasSubmittedImageState
+    ? [...formImageUrls, ...uploadedImageUrls]
+    : [...existingItems.map((item) => item.mediaUrl || ""), ...uploadedImageUrls];
+  const mediaUrls = Array.from(
+    new Set(
+      mediaSourceUrls
+        .map((url) => (url ? normalizeCdnUrl(url) : ""))
+        .filter(Boolean),
+    ),
+  );
+
+  return mediaUrls.map((mediaUrl, index) => {
+    const existingItem = existingByUrl.get(mediaUrl);
+    return {
+      id: existingItem?.id,
+      altText: existingItem?.altText || requiredString(formData, "name"),
+      mediaType: existingItem?.mediaType || "IMAGE",
+      mediaUrl,
+      sortOrder: index,
+    };
+  });
 }
 
 async function submitDealerMall(formData: FormData): Promise<CreateDealerMallDialogState> {
@@ -352,27 +593,92 @@ export async function saveNoticeAction(formData: FormData) {
 export async function saveProductAction(formData: FormData) {
   ensureApiConfigured();
 
+  const name = requiredString(formData, "name");
+  const slug = requiredString(formData, "slug");
+
+  if (!name || !slug) {
+    throw new Error("상품명과 슬러그를 입력해주세요.");
+  }
+
+  const id = optionalNumber(formData, "id");
+  const productId = id;
+  const duplicatedProduct = await findProductWithSlug(slug, productId);
+  if (duplicatedProduct) {
+    const redirectTo = productId ? optionalString(formData, "redirectTo") || "/admin/products" : "/admin/products/new";
+    redirect(
+      buildRedirectWithMessage(
+        redirectTo,
+        "toastError",
+        `이미 사용 중인 슬러그입니다. "${slug}" 대신 다른 슬러그를 입력해주세요.`,
+      ),
+    );
+  }
+
+  const existingProduct = await fetchExistingProductForSave(productId);
+  const uploadedImageUrls = (await uploadProductImageFiles(getProductImageFiles(formData))).filter(Boolean);
+  const mediaItems = mediaItemsFromFormAndUploads(formData, existingProduct, uploadedImageUrls);
+  const productPayload = {
+    id: productId ?? 0,
+    brandName: optionalString(formData, "brandName") || "",
+    categoryId: optionalNumber(formData, "categoryId") ?? 1,
+    consumerPrice: optionalNumber(formData, "consumerPrice") ?? 0,
+    deliveryPolicyText: optionalString(formData, "deliveryPolicyText") || optionalString(formData, "shipping") || "",
+    detailHtml: optionalString(formData, "detailHtml") || "",
+    mediaItems: mediaItems.map((item) => ({
+      id: item.id ?? 0,
+      altText: item.altText || name,
+      mediaType: item.mediaType || "IMAGE",
+      mediaUrl: item.mediaUrl || "",
+      sortOrder: item.sortOrder ?? 0,
+    })),
+    memberPrice: optionalNumber(formData, "memberPrice") ?? 0,
+    name,
+    priceExposurePolicy: optionalString(formData, "priceExposurePolicy") || "MEMBER_ONLY",
+    publishStatus: optionalString(formData, "publishStatus") || "정상 판매",
+    salesPolicyText: optionalString(formData, "salesPolicyText") || "",
+    settlementBasePrice: optionalNumber(formData, "settlementBasePrice") ?? 0,
+    slug,
+    sortOrder: optionalNumber(formData, "sortOrder") ?? 0,
+    status: optionalString(formData, "status") || "ACTIVE",
+    summaryText: optionalString(formData, "summaryText") || optionalString(formData, "summary") || "",
+    supplyPrice: optionalNumber(formData, "supplyPrice") ?? 0,
+  };
+
   await healthBoxFetch("/health-box/admin/products", {
     method: "PUT",
-    body: {
-      id: optionalNumber(formData, "id"),
-      brandName: optionalString(formData, "brandName"),
-      categoryId: optionalNumber(formData, "categoryId"),
-      name: optionalString(formData, "name"),
-      subtitle: optionalString(formData, "subtitle"),
-      slug: optionalString(formData, "slug"),
-      summary: optionalString(formData, "summary"),
-      status: optionalString(formData, "status"),
-      publishStatus: optionalString(formData, "publishStatus"),
-      badge: optionalString(formData, "badge"),
-      image: optionalString(formData, "image"),
-      shipping: optionalString(formData, "shipping"),
-      note: optionalString(formData, "note"),
-    },
+    body: productPayload,
   });
 
   revalidatePath("/admin/products");
+  revalidatePath(`/admin/products/${slug}`);
+  revalidatePath(`/product/${slug}`);
+  revalidatePath("/");
+  revalidatePath("/products/best");
+  revalidatePath("/products/recommend");
   redirectIfRequested(formData);
+}
+
+export async function deleteProductAction(formData: FormData) {
+  ensureApiConfigured();
+
+  const productId = optionalNumber(formData, "id");
+  if (!productId) {
+    redirect(buildRedirectWithMessage("/admin/products", "toastError", "삭제 처리할 상품 ID가 없습니다."));
+  }
+
+  const slug = optionalString(formData, "slug") || `product-${productId}`;
+
+  await healthBoxFetch(`/health-box/admin/products/${productId}`, {
+    method: "DELETE",
+  });
+
+  revalidatePath("/admin/products");
+  revalidatePath(`/admin/products/${slug}`);
+  revalidatePath(`/product/${slug}`);
+  revalidatePath("/");
+  revalidatePath("/products/best");
+  revalidatePath("/products/recommend");
+  redirect(buildRedirectWithMessage("/admin/products", "toast", "상품이 삭제 처리되었습니다."));
 }
 
 export async function updateShipmentStatusAction(formData: FormData) {

@@ -1,0 +1,90 @@
+.simple-editor-wrapper {
+  --tt-toolbar-height: 44px;
+  --tt-theme-text: var(--tt-gray-light-900);
+}
+
+.simple-editor-wrapper.dark {
+  --tt-theme-text: var(--tt-gray-dark-900);
+}
+
+::-webkit-scrollbar {
+  width: 0.25rem;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--tt-scrollbar-color) transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--tt-scrollbar-color);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tiptap.ProseMirror {
+  font-family: inherit;
+}
+
+.simple-editor-wrapper {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 640px;
+  max-height: 760px;
+  overflow: auto;
+  contain: inline-size;
+  border: 1px solid var(--tt-border-color);
+  border-radius: 18px;
+  background-color: var(--tt-bg-color);
+  color: var(--tt-theme-text);
+}
+
+.simple-editor-content {
+  max-width: 860px;
+  width: 100%;
+  min-width: 0;
+  margin: 0 auto;
+  min-height: 640px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.simple-editor-wrapper .tiptap-toolbar {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.simple-editor-wrapper .tiptap-toolbar-group {
+  flex-shrink: 1;
+}
+
+.simple-editor-content .tiptap.ProseMirror.simple-editor {
+  flex: 1;
+  padding: 3rem 1.75rem 30vh;
+}
+
+.simple-editor-upload-message {
+  position: sticky;
+  bottom: 0;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--tt-border-color);
+  background: var(--tt-bg-color);
+  color: var(--tt-theme-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+@media screen and (max-width: 480px) {
+  .simple-editor-content .tiptap.ProseMirror.simple-editor {
+    padding: 1rem 1.5rem 30vh;
+  }
+}

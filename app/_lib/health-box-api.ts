@@ -92,7 +92,7 @@ export function hasHealthBoxApi() {
 export async function healthBoxFetch<T>(
   path: string,
   options?: {
-    method?: "GET" | "POST" | "PUT";
+    method?: "DELETE" | "GET" | "POST" | "PUT";
     query?: Record<string, string | number | null | undefined>;
     body?: unknown;
     headers?: HeadersInit;
@@ -132,7 +132,7 @@ export async function healthBoxFetch<T>(
 export async function healthBoxFetchOrNull<T>(
   path: string,
   options?: {
-    method?: "GET" | "POST" | "PUT";
+    method?: "DELETE" | "GET" | "POST" | "PUT";
     query?: Record<string, string | number | null | undefined>;
     body?: unknown;
     headers?: HeadersInit;

@@ -157,7 +157,8 @@ export default async function AdminProductsPage({
       >
         <div className="admin-product-table-wrap">
           <AdminTable
-            columns="minmax(320px, 2.15fr) 108px 148px 112px 120px 108px 118px"
+            alignments={["center", "center", "center", "center", "center", "center", "center", "center", "center"]}
+            columns="90px minmax(300px, 2fr) 118px 118px 136px 94px 108px 108px 150px"
             emptyAction={
               hasFilters ? (
                 <Link className="admin-button secondary small" href="/admin/products">
@@ -170,29 +171,25 @@ export default async function AdminProductsPage({
                 ? "등록된 상품이 없거나 검색 결과가 비었습니다."
                 : "API를 연결하면 상품 목록을 조회할 수 있습니다."
             }
-            headers={["상품", "카테고리", "노출상태", "재고", "월 매출", "수정일", "관리"]}
+            headers={["상품 ID", "상품명", "브랜드", "카테고리", "노출상태", "재고", "월 매출", "수정일", "관리"]}
             isEmpty={!visibleProducts.length}
           >
             {visibleProducts.map((product) => (
               <div className="admin-table-row admin-product-table-row" key={product.slug}>
+                <span className="admin-row-muted admin-product-table-id">{product.id}</span>
+
                 <div className="admin-product-table-main">
-                  <AdminProductThumbPreview
-                    alt={product.title}
-                    src={product.image}
-                    title={product.title}
-                  />
+                  <AdminProductThumbPreview alt={product.title} src={product.image} title={product.title} />
 
                   <div className="admin-product-table-copy">
                     <Link className="admin-product-table-title" href={product.adminHref}>
                       {product.title}
                     </Link>
                     <p>{product.subtitle}</p>
-                    <span>
-                      {product.id} · {product.brand}
-                    </span>
                   </div>
                 </div>
 
+                <span className="admin-row-muted admin-product-table-brand">{product.brand}</span>
                 <span className="admin-row-muted admin-product-table-category">{product.category}</span>
 
                 <div className="admin-product-table-badges">

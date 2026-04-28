@@ -11,6 +11,7 @@ import {
 } from "./health-box-api";
 
 type AdminTone = "blue" | "cyan" | "green" | "gold" | "violet" | "rose";
+const CDN_BASE_URL = "https://cdn.1472.ai";
 
 function tone(status: string): AdminTone {
   return toneFromStatus(status);
@@ -18,6 +19,27 @@ function tone(status: string): AdminTone {
 
 function textOrDash(value: string, fallback = "-") {
   return value || fallback;
+}
+
+function normalizeProductImageUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (/^https?:\/\/cloud\.1472\.ai\/downloadFile\//i.test(trimmed)) {
+    return trimmed.replace(/^https?:\/\/cloud\.1472\.ai\/downloadFile\//i, `${CDN_BASE_URL}/`);
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith("//")) {
+    return `https:${trimmed}`;
+  }
+
+  return new URL(trimmed.replace(/^\/?/, "/"), CDN_BASE_URL).toString();
 }
 
 function splitNoticeParagraphs(record: HealthBoxRecord) {
@@ -60,6 +82,50 @@ function productCategoryLabel(product: HealthBoxRecord) {
 
   const categoryId = idValue(product, "categoryId");
   return categoryId === null ? "" : `카테고리 ID ${categoryId}`;
+}
+
+function stringArrayValue(record: HealthBoxRecord, ...keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (Array.isArray(value)) {
+      return value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
+    }
+
+    if (typeof value === "string" && value.trim()) {
+      const trimmed = value.trim();
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) {
+          return parsed.filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
+        }
+      } catch {
+        return trimmed
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+    }
+  }
+
+  return [];
+}
+
+function productMediaUrls(product: HealthBoxRecord) {
+  if (!Array.isArray(product.mediaItems)) {
+    return [];
+  }
+
+  return product.mediaItems
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return "";
+      }
+
+      const mediaUrl = (item as HealthBoxRecord).mediaUrl;
+      return typeof mediaUrl === "string" ? normalizeProductImageUrl(mediaUrl) : "";
+    })
+    .filter(Boolean);
 }
 
 function dealerStatusLabel(status: string) {
@@ -485,7 +551,11 @@ export function mapProductRows(page: HealthBoxPageResponse<HealthBoxRecord> | nu
     const badge = stringValue(product, "badge");
     const categoryLabel = productCategoryLabel(product);
     const memberPrice = numberValue(product, "memberPrice", "consumerPrice");
+    const consumerPrice = numberValue(product, "consumerPrice");
+    const supplyPrice = numberValue(product, "supplyPrice");
+    const settlementBasePrice = numberValue(product, "settlementBasePrice");
     const plainPrice = stringValue(product, "price");
+    const mediaUrls = productMediaUrls(product);
 
     return {
       recordId: apiRecordId ?? null,
@@ -501,6 +571,14 @@ export function mapProductRows(page: HealthBoxPageResponse<HealthBoxRecord> | nu
       subtitle: textOrDash(stringValue(product, "subtitle", "summary", "summaryText"), ""),
       category: textOrDash(categoryLabel),
       status: textOrDash(stringValue(product, "status"), "ACTIVE"),
+      consumerPrice,
+      memberPrice,
+      supplyPrice,
+      settlementBasePrice,
+      priceExposurePolicy: stringValue(product, "priceExposurePolicy"),
+      salesPolicyText: stringValue(product, "salesPolicyText"),
+      deliveryPolicyText: stringValue(product, "deliveryPolicyText"),
+      sortOrder: numberValue(product, "sortOrder"),
       badge,
       publishStatus,
       publishTone: tone(publishStatus),
@@ -508,10 +586,26 @@ export function mapProductRows(page: HealthBoxPageResponse<HealthBoxRecord> | nu
       monthlySales: formatWon(numberValue(product, "monthlySales", "salesAmount") ?? 0),
       inventoryCount: textOrDash(stringValue(product, "inventoryCount", "stockQuantity"), "0"),
       updatedAt: textOrDash(dateTimeValue(product, "updatedAt", "createdAt")),
-      image: stringValue(product, "image", "thumbnailUrl", "thumbUrl"),
+      image:
+        normalizeProductImageUrl(
+          stringValue(
+            product,
+            "thumbnailUrl",
+            "image",
+            "imageUrl",
+            "mainImageUrl",
+            "thumbUrl",
+            "fileDownloadUri",
+            "prdImgFlpth",
+            "extrlImgUrl",
+          ),
+        ) ||
+        mediaUrls[0] ||
+        "",
       shipping: textOrDash(stringValue(product, "shipping", "deliveryPolicyText")),
       summary: textOrDash(stringValue(product, "summary", "summaryText"), ""),
-      gallery: Array.isArray(product.gallery) ? (product.gallery as string[]) : [],
+      detailHtml: stringValue(product, "detailHtml"),
+      gallery: mediaUrls.length ? mediaUrls : stringArrayValue(product, "gallery", "images", "imageUrls", "detailImages"),
       highlights: Array.isArray(product.highlights) ? (product.highlights as string[]) : [],
       detailSections: Array.isArray(product.detailSections)
         ? (product.detailSections as Product["detailSections"])

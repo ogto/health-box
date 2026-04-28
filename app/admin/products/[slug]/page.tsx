@@ -1,10 +1,11 @@
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { saveProductAction } from "../../../_actions/health-box-admin";
+import { deleteProductAction, saveProductAction } from "../../../_actions/health-box-admin";
+import { AdminConfirmSubmitButton } from "../../../_components/admin/admin-confirm-submit-button";
 import { AdminHeader } from "../../../_components/admin/admin-header";
-import { AdminSubmitButton } from "../../../_components/admin/admin-submit-button";
+import { AdminProductDetailBlocksEditor } from "../../../_components/admin/admin-product-detail-blocks-editor";
+import { AdminProductImageUpload } from "../../../_components/admin/admin-product-image-upload";
 import { AdminBadge, AdminPanel } from "../../../_components/admin/admin-ui";
 import {
   fetchAdminProduct,
@@ -58,241 +59,231 @@ export default async function AdminProductDetailPage({
     notFound();
   }
 
-  const canSave = hasHealthBoxApi() && Boolean(product.recordId);
+  const productId = product.recordId ?? fallbackProductId;
+  const canSave = hasHealthBoxApi() && Boolean(productId);
+  const productImages = Array.from(new Set([product.image, ...product.gallery].filter(Boolean)));
+  const imageCount = productImages.length;
 
   return (
     <div className="admin-page">
       <AdminHeader
-        title={product.title}
+        title="상품 수정"
         actions={
-          <Link className="admin-button" href={product.previewHref}>
-            공개 페이지 보기
-          </Link>
+          <>
+            <Link aria-label="상품 목록으로 돌아가기" className="admin-icon-button" href="/admin/products" title="상품 목록">
+              <BackIcon />
+            </Link>
+            <Link className="admin-button" href={product.previewHref}>
+              공개 페이지 보기
+            </Link>
+          </>
         }
       />
 
-      <div className="admin-product-detail-hero">
-        <div className="admin-product-detail-media">
-          <div className="admin-product-detail-image">
-            {product.image ? (
-              <Image
-                alt={product.title}
-                className="object-cover"
-                fill
-                sizes="(max-width: 1180px) 100vw, 360px"
-                src={product.image}
-              />
-            ) : (
-              <div className="admin-empty-state">
-                <strong>대표 이미지 없음</strong>
-                <p>상품 이미지가 아직 등록되지 않았습니다.</p>
-              </div>
-            )}
-          </div>
-          <div className="admin-product-thumb-grid">
-            {product.gallery.map((image, index) => (
-              <div className="admin-product-thumb-card" key={`${image}-${index}`}>
-                <Image alt={`${product.title} 썸네일 ${index + 1}`} className="object-cover" fill sizes="88px" src={image} />
-              </div>
-            ))}
-            {!product.gallery.length ? <p className="admin-row-muted">추가 갤러리 이미지가 없습니다.</p> : null}
-          </div>
-        </div>
+      <form action={saveProductAction} className="admin-product-edit-form" id="admin-product-save-form">
+        <input name="id" type="hidden" value={String(productId ?? "")} />
+        <input name="categoryId" type="hidden" value={String(product.categoryId ?? "")} />
+        <input name="redirectTo" type="hidden" value={`/admin/products/${product.slug}`} />
+        <input name="toast" type="hidden" value="상품 수정이 완료되었습니다." />
 
-        <div className="admin-product-detail-summary">
+        <div className="admin-product-edit-topbar">
+          <div>
+            <span>상품 ID {product.id}</span>
+            <strong>{product.title}</strong>
+          </div>
           <div className="admin-pill-row">
-            <AdminBadge tone={product.publishTone}>{product.publishStatus}</AdminBadge>
-            {product.badge ? <AdminBadge tone={product.statusTone}>{product.badge}</AdminBadge> : null}
-            <AdminBadge tone="cyan">{product.category}</AdminBadge>
-          </div>
-
-          <div className="admin-row-stack">
-            <strong className="admin-detail-brand">{product.brand}</strong>
-            <h2 className="admin-detail-product-title">{product.title}</h2>
-            <p className="admin-detail-product-subtitle">{product.subtitle}</p>
-          </div>
-
-          <div className="admin-insight-grid">
-            <div className="admin-insight-card">
-              <span>상품코드</span>
-              <strong>{product.id}</strong>
-            </div>
-            <div className="admin-insight-card">
-              <span>월간 매출</span>
-              <strong>{product.monthlySales}</strong>
-            </div>
-            <div className="admin-insight-card">
-              <span>재고 수량</span>
-              <strong>{product.inventoryCount}</strong>
-            </div>
-            <div className="admin-insight-card">
-              <span>최근 수정</span>
-              <strong>{product.updatedAt}</strong>
-            </div>
-          </div>
-
-          <div className="admin-list">
-            <div className="admin-list-row">
-              <div className="admin-row-stack">
-                <strong>운영 메모</strong>
-                <p>{product.editorNote}</p>
-              </div>
-              <AdminBadge tone="gold">{product.displayStatus}</AdminBadge>
-            </div>
-            <div className="admin-list-row">
-              <div className="admin-row-stack">
-                <strong>노출 위치</strong>
-                <p>{product.exposureZones.join(" · ")}</p>
-              </div>
-              <AdminBadge tone="blue">노출중</AdminBadge>
-            </div>
+            <AdminBadge tone={product.publishTone}>{product.publishStatus || "공개 상태 없음"}</AdminBadge>
+            <AdminBadge tone="cyan">{product.category || "카테고리 미지정"}</AdminBadge>
+            <AdminBadge tone={product.statusTone}>{product.status || "상태 미지정"}</AdminBadge>
           </div>
         </div>
-      </div>
 
-      <div className="admin-grid-side">
-        <div className="admin-stack">
-          <AdminPanel title="기본 정보">
-            <div className="admin-field-grid two read-only">
-              <div className="admin-field read-only">
-                <span>브랜드명</span>
-                <strong>{product.brand}</strong>
-              </div>
-              <div className="admin-field read-only">
-                <span>카테고리</span>
-                <strong>{product.category}</strong>
-              </div>
-              <div className="admin-field read-only span-two">
-                <span>상품 요약</span>
-                <strong>{product.summary}</strong>
-              </div>
-              <div className="admin-field read-only span-two">
-                <span>하이라이트</span>
-                <strong>{product.highlights.join(" · ")}</strong>
-              </div>
-            </div>
-          </AdminPanel>
+        <section className="admin-product-edit-layout">
+          <aside className="admin-product-edit-media">
+            <AdminProductImageUpload defaultImages={productImages} />
+          </aside>
 
-          <AdminPanel title="상세 본문 구성">
-            <div className="admin-section-card-list">
-              {product.detailSections.map((section, index) => (
-                <div className="admin-section-card" key={section.title}>
-                  <div className="admin-detail-block-head">
-                    <span className="admin-step-index">{index + 1}</span>
-                    <div className="admin-row-stack">
-                      <strong>{section.title}</strong>
-                      <p>{section.caption}</p>
-                    </div>
+          <div className="admin-product-edit-main">
+            <AdminPanel
+              className="admin-product-core-panel"
+              title="기본 정보"
+              description="상품명, 브랜드명, 검색과 공유에 쓰이는 슬러그를 관리합니다."
+            >
+              <div className="admin-field-grid two">
+                <label className="admin-field span-two admin-title-field">
+                  <span>상품명</span>
+                  <input className="admin-input admin-title-input" defaultValue={product.title} name="name" required type="text" />
+                </label>
+                <label className="admin-field">
+                  <span>브랜드명</span>
+                  <input className="admin-input" defaultValue={product.brand} name="brandName" type="text" />
+                </label>
+                <label className="admin-field">
+                  <span>슬러그</span>
+                  <input className="admin-input" defaultValue={product.sourceSlug} name="slug" required type="text" />
+                </label>
+                <label className="admin-field span-two">
+                  <span>요약 설명</span>
+                  <textarea
+                    className="admin-textarea admin-summary-textarea"
+                    defaultValue={product.summary}
+                    name="summaryText"
+                    placeholder="상품 목록과 상세 상단에 노출될 짧은 설명을 입력하세요."
+                  />
+                </label>
+              </div>
+            </AdminPanel>
+
+            <AdminPanel title="가격 정보" description="고객에게 보이는 가격과 정산 기준 가격입니다.">
+              <div className="admin-price-grid">
+                <label className="admin-field admin-price-field">
+                  <span>소비자가</span>
+                  <input className="admin-input" defaultValue={product.consumerPrice ?? ""} min="0" name="consumerPrice" type="number" />
+                </label>
+                <label className="admin-field admin-price-field">
+                  <span>회원가</span>
+                  <input className="admin-input" defaultValue={product.memberPrice ?? ""} min="0" name="memberPrice" type="number" />
+                </label>
+                <label className="admin-field admin-price-field">
+                  <span>공급가</span>
+                  <input className="admin-input" defaultValue={product.supplyPrice ?? ""} min="0" name="supplyPrice" type="number" />
+                </label>
+                <label className="admin-field admin-price-field">
+                  <span>정산 기준가</span>
+                  <input
+                    className="admin-input"
+                    defaultValue={product.settlementBasePrice ?? ""}
+                    min="0"
+                    name="settlementBasePrice"
+                    type="number"
+                  />
+                </label>
+              </div>
+            </AdminPanel>
+
+            <div className="admin-product-edit-columns">
+              <AdminPanel title="판매 상태" description="판매 가능 여부와 가격 노출 정책을 설정합니다.">
+                <div className="admin-field-grid two">
+                  <label className="admin-field">
+                    <span>판매 상태</span>
+                    <select className="admin-select" defaultValue={product.status || "ACTIVE"} name="status">
+                      <option value="ACTIVE">판매중</option>
+                      <option value="INACTIVE">판매중지</option>
+                    </select>
+                  </label>
+                  <label className="admin-field">
+                    <span>공개 상태</span>
+                    <input className="admin-input" defaultValue={product.publishStatus} name="publishStatus" type="text" />
+                  </label>
+                  <label className="admin-field">
+                    <span>가격 노출</span>
+                    <select className="admin-select" defaultValue={product.priceExposurePolicy || "MEMBER_ONLY"} name="priceExposurePolicy">
+                      <option value="MEMBER_ONLY">회원가 노출</option>
+                      <option value="PUBLIC">정가/회원가 모두 노출</option>
+                      <option value="CONTACT">가격 문의</option>
+                    </select>
+                  </label>
+                  <label className="admin-field">
+                    <span>정렬 순서</span>
+                    <input className="admin-input" defaultValue={product.sortOrder ?? ""} min="0" name="sortOrder" type="number" />
+                  </label>
+                </div>
+              </AdminPanel>
+
+              <AdminPanel title="저장 전 확인" description="대표 이미지와 가격 노출 상태를 확인하세요.">
+                <div className="admin-product-check-list">
+                  <div>
+                    <span>등록 이미지</span>
+                    <strong>{imageCount}개</strong>
                   </div>
-                  <p className="admin-section-card-body">{section.body}</p>
+                  <div>
+                    <span>현재 회원가</span>
+                    <strong>{product.price}</strong>
+                  </div>
+                  <div>
+                    <span>최근 수정</span>
+                    <strong>{product.updatedAt || "수정 이력 없음"}</strong>
+                  </div>
                 </div>
-              ))}
+              </AdminPanel>
             </div>
-          </AdminPanel>
 
-          <AdminPanel title="스펙 / 배송 안내">
-            <div className="admin-spec-list">
-              {product.specs.map((spec) => (
-                <div className="admin-spec-row" key={spec.label}>
-                  <span>{spec.label}</span>
-                  <strong>{spec.value}</strong>
-                </div>
-              ))}
+            <AdminPanel title="상품 상세 콘텐츠" description="텍스트와 이미지를 원하는 순서대로 쌓아 상세 페이지를 구성합니다.">
+              <AdminProductDetailBlocksEditor defaultHtml={product.detailHtml} />
+            </AdminPanel>
+
+            <AdminPanel title="판매/배송 문구" description="상품 상세 하단과 구매 안내에 노출되는 운영 문구입니다.">
+              <div className="admin-field-grid two">
+                <label className="admin-field span-two">
+                  <span>판매 정책 문구</span>
+                  <textarea className="admin-textarea" defaultValue={product.salesPolicyText} name="salesPolicyText" />
+                </label>
+                <label className="admin-field span-two">
+                  <span>배송 정책 문구</span>
+                  <textarea
+                    className="admin-textarea"
+                    defaultValue={product.deliveryPolicyText || product.shipping}
+                    name="deliveryPolicyText"
+                  />
+                </label>
+              </div>
+            </AdminPanel>
+          </div>
+        </section>
+
+        <div className="admin-product-save-strip is-bottom">
+          <div>
+            <strong>{product.updatedAt || "수정 이력 없음"}</strong>
+            <span>변경 내용을 확인한 뒤 상품 정보를 저장합니다.</span>
+          </div>
+          {canSave ? (
+            <div className="admin-product-save-actions">
+              <AdminConfirmSubmitButton
+                className="admin-button danger admin-delete-button"
+                confirmMessage="이 상품을 삭제 처리할까요? 상품은 물리 삭제되지 않고 삭제 상태로 전환됩니다."
+                confirmTitle="상품 삭제"
+                form="admin-product-delete-form"
+                pendingLabel="삭제 처리중..."
+                tone="danger"
+              >
+                상품 삭제
+              </AdminConfirmSubmitButton>
+              <AdminConfirmSubmitButton
+                className="admin-button admin-save-button"
+                confirmMessage="변경한 상품 정보를 저장할까요?"
+                confirmTitle="상품 수정"
+                form="admin-product-save-form"
+                pendingLabel="수정 중..."
+              >
+                상품 수정
+              </AdminConfirmSubmitButton>
             </div>
-          </AdminPanel>
+          ) : (
+            <button className="admin-button admin-save-button" disabled type="button">
+              상품 ID 없음
+            </button>
+          )}
         </div>
+      </form>
 
-        <div className="admin-stack">
-          <AdminPanel title="빠른 수정">
-            <form action={saveProductAction} className="admin-status-stack">
-              <input name="id" type="hidden" value={String(product.recordId ?? "")} />
-              <input name="categoryId" type="hidden" value={String(product.categoryId ?? "")} />
-              <input name="redirectTo" type="hidden" value={`/admin/products/${product.slug}`} />
-              <label className="admin-field">
-                <span>브랜드명</span>
-                <input className="admin-input" defaultValue={product.brand} name="brandName" type="text" />
-              </label>
-              <label className="admin-field">
-                <span>상품명</span>
-                <input className="admin-input" defaultValue={product.title} name="name" type="text" />
-              </label>
-              <label className="admin-field">
-                <span>짧은 소개 문구</span>
-                <input className="admin-input" defaultValue={product.subtitle} name="subtitle" type="text" />
-              </label>
-              <label className="admin-field">
-                <span>슬러그</span>
-                <input className="admin-input" defaultValue={product.sourceSlug} name="slug" type="text" />
-              </label>
-              <label className="admin-field">
-                <span>노출 상태</span>
-                <input className="admin-input" defaultValue={product.publishStatus} name="publishStatus" type="text" />
-              </label>
-              <label className="admin-field">
-                <span>판매 상태 코드</span>
-                <input className="admin-input" defaultValue={product.status} name="status" type="text" />
-              </label>
-              <label className="admin-field">
-                <span>대표 배지</span>
-                <input className="admin-input" defaultValue={product.badge} name="badge" type="text" />
-              </label>
-              <label className="admin-field">
-                <span>배송 문구</span>
-                <input className="admin-input" defaultValue={product.shipping} name="shipping" type="text" />
-              </label>
-              <label className="admin-field">
-                <span>대표 이미지 URL</span>
-                <input className="admin-input" defaultValue={product.image} name="image" type="url" />
-              </label>
-              <label className="admin-field">
-                <span>요약 설명</span>
-                <textarea className="admin-textarea" defaultValue={product.summary} name="summary" />
-              </label>
-              <label className="admin-field">
-                <span>운영 메모</span>
-                <textarea className="admin-textarea" defaultValue={product.editorNote} name="note" />
-              </label>
-              {canSave ? (
-                <AdminSubmitButton className="admin-button" pendingLabel="저장중...">
-                  수정 저장
-                </AdminSubmitButton>
-              ) : (
-                <div className="admin-row-muted">API 상품 ID를 찾지 못해 저장 버튼을 비활성화했습니다.</div>
-              )}
-            </form>
-          </AdminPanel>
-
-          <AdminPanel title="상세 연결 상태">
-            <div className="admin-status-stack">
-              <div className="admin-status-row">
-                <span>공개 상세 연결</span>
-                <AdminBadge tone="blue">연결됨</AdminBadge>
-              </div>
-              <div className="admin-status-row">
-                <span>상세 이미지 수</span>
-                <strong>{product.detailImageCount}개</strong>
-              </div>
-              <div className="admin-status-row">
-                <span>대표 썸네일</span>
-                <strong>{product.gallery.length}컷</strong>
-              </div>
-              <div className="admin-status-row">
-                <span>노출 위치</span>
-                <strong>{product.exposureZones.join(" · ")}</strong>
-              </div>
-            </div>
-          </AdminPanel>
-
-          <AdminPanel title="운영 메모">
-            <ul className="admin-bullet-list">
-              <li>{product.editorNote}</li>
-              <li>상품 상세 이미지 {product.detailImageCount}개가 공개 화면에 연결되어 있습니다.</li>
-              <li>회원가 문구는 현재 &quot;{product.price}&quot; 기준으로 노출됩니다.</li>
-              <li>추천 세트와 메인 노출 위치 변경 시 기획전 페이지도 함께 점검합니다.</li>
-            </ul>
-          </AdminPanel>
-        </div>
-      </div>
+      <form action={deleteProductAction} id="admin-product-delete-form">
+        <input name="id" type="hidden" value={String(productId ?? "")} />
+        <input name="slug" type="hidden" value={product.sourceSlug} />
+      </form>
     </div>
+  );
+}
+
+function BackIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+      <path
+        d="M15 6l-6 6 6 6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
   );
 }

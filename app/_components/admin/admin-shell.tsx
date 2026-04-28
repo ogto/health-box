@@ -5,6 +5,7 @@ import { useState, type ReactNode, type SVGProps } from "react";
 
 import { BrandLogo } from "../brand-logo";
 import { AdminMobileSidebar, AdminSidebar } from "./admin-sidebar";
+import { AdminToastViewport } from "./admin-toast";
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -45,6 +46,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="admin-content">{children}</div>
+          <AdminToastViewport />
         </main>
       </div>
     </div>
