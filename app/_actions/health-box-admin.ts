@@ -729,10 +729,10 @@ export async function saveProductAction(formData: FormData) {
   }
 
   revalidatePath("/admin/products");
-  const existingSlug = typeof existingProduct.slug === "string" ? existingProduct.slug : "";
-  if (existingSlug) {
-    revalidatePath(`/admin/products/${existingSlug}`);
-    revalidatePath(`/product/${existingSlug}`);
+  if (productId) {
+    const routeSlug = `product-${productId}`;
+    revalidatePath(`/admin/products/${routeSlug}`);
+    revalidatePath(`/product/${routeSlug}`);
   }
   revalidatePath("/");
   revalidatePath("/products/best");
