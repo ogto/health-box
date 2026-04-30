@@ -37,14 +37,12 @@ export default async function Home() {
             src={heroProduct?.image || runtime.assets.heroImage}
           />
           <div className="shop-hero-overlay">
-            <span>BEST PICK</span>
             <strong>{heroProduct?.title || runtime.home.hero.titleLines.join(" ")}</strong>
             <p>{heroProduct?.summary || heroDescription}</p>
           </div>
         </Link>
 
         <div className="shop-hero-panel">
-          <span className="shop-hero-kicker">HEALTH BOX</span>
           <h1>{heroTitle}</h1>
           <p>{heroDescription}</p>
           <div className="shop-hero-actions">
@@ -82,7 +80,6 @@ export default async function Home() {
       <section className="section-block shop-home-section" id="best">
         <div className="section-head shop-section-head">
           <div>
-            <p className="section-kicker">BEST PRODUCTS</p>
             <h3>{runtime.dealer ? `${runtime.dealer.displayName} 베스트 상품` : "지금 많이 보는 상품"}</h3>
           </div>
           <Link className="more-link" href="/products/best">
@@ -92,7 +89,7 @@ export default async function Home() {
 
         <div className="product-grid shop-product-grid">
           {featuredProducts.map((product, index) => (
-            <ProductCard key={product.slug} label={index === 0 ? "BEST" : product.badge} product={product} />
+            <ProductCard key={product.slug} label={index === 0 ? "인기" : product.badge} product={product} />
           ))}
           {!featuredProducts.length ? (
             <div className="content-panel">
@@ -116,7 +113,6 @@ export default async function Home() {
       <section className="section-block shop-home-section" id="recommend">
         <div className="section-head shop-section-head">
           <div>
-            <p className="section-kicker">RECOMMEND</p>
             <h3>루틴별 추천 상품</h3>
           </div>
           <Link className="more-link" href="/products/recommend">
@@ -139,7 +135,6 @@ export default async function Home() {
       <section className="section-block shop-home-section">
         <div className="section-head shop-section-head">
           <div>
-            <p className="section-kicker">ALL PRODUCTS</p>
             <h3>한눈에 보는 상품</h3>
           </div>
         </div>
@@ -148,7 +143,7 @@ export default async function Home() {
           {allProducts.map((product) => (
             <ProductCard
               key={`all-${product.slug}`}
-              label="NEW"
+              label="상품"
               light
               product={product}
               showMeta={false}
@@ -160,7 +155,6 @@ export default async function Home() {
       <section className="section-block shop-home-section" id="notice">
         <div className="section-head shop-section-head">
           <div>
-            <p className="section-kicker">NOTICE</p>
             <h3>운영 안내</h3>
           </div>
           <Link className="more-link" href="/notice">
