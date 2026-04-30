@@ -139,6 +139,18 @@ function buildRedirectWithMessage(path: string, key: string, value: string) {
   return `${path}${path.includes("?") ? "&" : "?"}${params.toString()}`;
 }
 
+function actionErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return error.trim();
+  }
+
+  return fallback;
+}
+
 function ensureApiConfigured() {
   if (!hasHealthBoxApi()) {
     throw new Error("HEALTH_BOX_API_BASE_URL is not configured");
@@ -699,10 +711,22 @@ export async function saveProductAction(formData: FormData) {
     supplyPrice: optionalNumber(formData, "supplyPrice") ?? 0,
   };
 
-  await healthBoxFetch("/health-box/admin/products", {
-    method: "PUT",
-    body: productPayload,
-  });
+  try {
+    await healthBoxFetch("/health-box/admin/products", {
+      method: "PUT",
+      body: productPayload,
+    });
+  } catch (error) {
+    console.error("[saveProductAction]", error);
+    const redirectTo = optionalString(formData, "redirectTo") || (productId ? `/admin/products/product-${productId}` : "/admin/products");
+    redirect(
+      buildRedirectWithMessage(
+        redirectTo,
+        "toastError",
+        actionErrorMessage(error, "상품 저장 중 오류가 발생했습니다."),
+      ),
+    );
+  }
 
   revalidatePath("/admin/products");
   const existingSlug = typeof existingProduct.slug === "string" ? existingProduct.slug : "";
