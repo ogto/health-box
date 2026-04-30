@@ -63,7 +63,7 @@ function toStoreProduct(row: StoreProductRow): Product {
   const description = row.description.length ? row.description : summary ? [summary] : [];
   const highlights = row.highlights.length
     ? row.highlights
-    : [row.badge, row.category, row.shipping].filter(Boolean);
+    : [row.badge, row.category].filter(Boolean);
   const detailSections = row.detailSections.length
     ? row.detailSections
     : description.length
@@ -85,7 +85,9 @@ function toStoreProduct(row: StoreProductRow): Product {
     title: row.title,
     subtitle: row.subtitle || summary,
     category: row.category || "상품",
+    deliveryPolicyText: row.deliveryPolicyText,
     review: row.review || "후기 정보 준비중",
+    salesPolicyText: row.salesPolicyText,
     shipping: row.shipping || "배송 정보 준비중",
     price: row.price || "회원가 로그인 후 확인",
     image,
@@ -98,6 +100,9 @@ function toStoreProduct(row: StoreProductRow): Product {
     specs: row.specs.length
       ? row.specs
       : [{ label: "배송 안내", value: row.shipping || "배송 정보 준비중" }],
+    optionGroups: row.optionGroups,
+    optionUseYn: row.optionUseYn,
+    skus: row.skus,
   };
 }
 

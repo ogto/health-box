@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const PROMO_HIDE_KEY = "health-box-promo-hidden-on";
 
@@ -17,18 +17,16 @@ function getTodayKey() {
 }
 
 export function HeaderPromoBar({ label = "3,000원 회원가입 쿠폰" }: { label?: string }) {
-  const [hidden, setHidden] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    try {
-      return window.localStorage.getItem(PROMO_HIDE_KEY) === getTodayKey();
-    } catch {
-      return false;
-    }
-  });
+  const [hidden, setHidden] = useState(false);
   const [hideToday, setHideToday] = useState(false);
+
+  useEffect(() => {
+    try {
+      setHidden(window.localStorage.getItem(PROMO_HIDE_KEY) === getTodayKey());
+    } catch {
+      setHidden(false);
+    }
+  }, []);
 
   function handleClose() {
     try {

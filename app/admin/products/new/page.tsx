@@ -4,9 +4,20 @@ import { saveProductAction } from "../../../_actions/health-box-admin";
 import { AdminHeader } from "../../../_components/admin/admin-header";
 import { AdminProductDetailBlocksEditor } from "../../../_components/admin/admin-product-detail-blocks-editor";
 import { AdminProductImageUpload } from "../../../_components/admin/admin-product-image-upload";
+import { AdminProductOptionsEditor } from "../../../_components/admin/admin-product-options-editor";
+import {
+  AdminPolicyTemplatePicker,
+  type AdminPolicyTemplate,
+} from "../../../_components/admin/admin-policy-template-picker";
 import { AdminSubmitButton } from "../../../_components/admin/admin-submit-button";
 import { AdminBadge, AdminPanel } from "../../../_components/admin/admin-ui";
-import { hasHealthBoxApi } from "../../../_lib/health-box-api";
+import {
+  fetchAdminDeliveryPolicies,
+  fetchAdminCategories,
+  fetchAdminSalesPolicies,
+  hasHealthBoxApi,
+  type HealthBoxSalesPolicy,
+} from "../../../_lib/health-box-api";
 
 const statusOptions = [
   { label: "판매중", value: "ACTIVE" },
@@ -27,8 +38,32 @@ const priceExposureOptions = [
   { label: "가격 문의", value: "CONTACT" },
 ] as const;
 
-export default function AdminProductNewPage() {
+function mapPolicyTemplates(
+  policies: HealthBoxSalesPolicy[] | null,
+  type: "delivery" | "sales",
+): AdminPolicyTemplate[] {
+  return (policies || [])
+    .filter((policy) => policy.id && policy.title && policy.content)
+    .map((policy) => ({
+      content: policy.content || "",
+      id: `${type}-${policy.id}`,
+      policyId: policy.id,
+      sortOrder: policy.sortOrder ?? 0,
+      status: policy.status || "ACTIVE",
+      title: policy.title || "",
+      type,
+    }));
+}
+
+export default async function AdminProductNewPage() {
   const apiConnected = hasHealthBoxApi();
+  const [salesPolicyTemplates, deliveryPolicyTemplates, categories] = apiConnected
+    ? await Promise.all([
+        fetchAdminSalesPolicies().then((policies) => mapPolicyTemplates(policies, "sales")),
+        fetchAdminDeliveryPolicies().then((policies) => mapPolicyTemplates(policies, "delivery")),
+        fetchAdminCategories(),
+      ])
+    : [[], [], []];
 
   return (
     <div className="admin-page">
@@ -54,8 +89,18 @@ export default function AdminProductNewPage() {
               </label>
 
               <label className="admin-field">
-                <span>카테고리 ID</span>
-                <input className="admin-input" min="1" name="categoryId" placeholder="예: 1" type="number" />
+                <span>카테고리</span>
+                <select className="admin-select" defaultValue={categories?.[0]?.id ? String(categories[0].id) : "1"} name="categoryId">
+                  {categories?.length ? (
+                    categories.map((category) => (
+                      <option key={category.id || category.slug || category.name} value={category.id}>
+                        {category.name || category.categoryCode || `카테고리 ${category.id}`}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="1">기본 카테고리</option>
+                  )}
+                </select>
               </label>
 
               <label className="admin-field span-two">
@@ -63,25 +108,6 @@ export default function AdminProductNewPage() {
                 <input className="admin-input" name="name" placeholder="상품명을 입력하세요" required type="text" />
               </label>
 
-              <label className="admin-field span-two">
-                <span>슬러그</span>
-                <input
-                  className="admin-input"
-                  name="slug"
-                  placeholder="예: daily-vitamin-balance"
-                  required
-                  type="text"
-                />
-              </label>
-
-              <label className="admin-field span-two">
-                <span>요약 설명</span>
-                <textarea
-                  className="admin-textarea"
-                  name="summaryText"
-                  placeholder="상품 목록과 상세 상단에 사용할 짧은 소개를 입력하세요."
-                />
-              </label>
             </div>
           </AdminPanel>
 
@@ -118,11 +144,6 @@ export default function AdminProductNewPage() {
               </label>
 
               <label className="admin-field">
-                <span>정렬 순서</span>
-                <input className="admin-input" min="0" name="sortOrder" placeholder="예: 10" type="number" />
-              </label>
-
-              <label className="admin-field">
                 <span>가격 노출 정책</span>
                 <select className="admin-select" defaultValue="MEMBER_ONLY" name="priceExposurePolicy">
                   {priceExposureOptions.map((option) => (
@@ -135,25 +156,31 @@ export default function AdminProductNewPage() {
             </div>
           </AdminPanel>
 
+          <AdminPanel title="옵션 / 옵션별 재고" description="상품의 선택 옵션별로 가격과 재고를 관리합니다.">
+            <AdminProductOptionsEditor />
+          </AdminPanel>
+
           <AdminPanel title="판매 / 배송 문구">
             <div className="admin-field-grid two">
-              <label className="admin-field span-two">
-                <span>판매 정책 문구</span>
-                <textarea
-                  className="admin-textarea"
+              <div className="span-two">
+                <AdminPolicyTemplatePicker
+                  initialTemplates={salesPolicyTemplates}
+                  label="판매정책"
                   name="salesPolicyText"
                   placeholder="회원 구매 조건, 할인, 묶음 판매 등 판매 안내 문구를 입력하세요."
+                  type="sales"
                 />
-              </label>
+              </div>
 
-              <label className="admin-field span-two">
-                <span>배송 정책 문구</span>
-                <textarea
-                  className="admin-textarea"
+              <div className="span-two">
+                <AdminPolicyTemplatePicker
+                  initialTemplates={deliveryPolicyTemplates}
+                  label="배송정책"
                   name="deliveryPolicyText"
                   placeholder="예: 평일 오전 주문 건 당일 출고 / 본사 통합 배송"
+                  type="delivery"
                 />
-              </label>
+              </div>
             </div>
           </AdminPanel>
 
@@ -179,6 +206,11 @@ export default function AdminProductNewPage() {
                     </option>
                   ))}
                 </select>
+              </label>
+
+              <label className="admin-field">
+                <span>정렬 순서</span>
+                <input className="admin-input" min="0" name="sortOrder" placeholder="예: 10" type="number" />
               </label>
             </div>
           </AdminPanel>
@@ -210,7 +242,7 @@ export default function AdminProductNewPage() {
 
           <AdminPanel title="등록 체크">
             <ul className="admin-bullet-list">
-              <li>상품명과 슬러그는 필수입니다.</li>
+              <li>상품명은 필수이며, 상품 주소는 저장 시 서버에서 자동 생성됩니다.</li>
               <li>대표 이미지는 상품 목록과 상세 상단에 사용됩니다.</li>
               <li>상세 콘텐츠는 텍스트/이미지 블록 순서대로 공개 페이지에 노출됩니다.</li>
               <li>등록 후 상품 목록과 공개 상품 영역 캐시가 갱신됩니다.</li>

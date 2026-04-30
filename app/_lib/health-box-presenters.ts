@@ -84,6 +84,25 @@ function productCategoryLabel(product: HealthBoxRecord) {
   return categoryId === null ? "" : `카테고리 ID ${categoryId}`;
 }
 
+function productStockQuantity(product: HealthBoxRecord) {
+  const totalStockQuantity = numberValue(product, "totalStockQuantity");
+  if (totalStockQuantity !== null) {
+    return totalStockQuantity;
+  }
+
+  if (Array.isArray(product.skus)) {
+    return product.skus.reduce((sum, sku) => {
+      if (!sku || typeof sku !== "object") {
+        return sum;
+      }
+
+      return sum + (numberValue(sku as HealthBoxRecord, "stockQuantity") ?? 0);
+    }, 0);
+  }
+
+  return numberValue(product, "inventoryCount", "stockQuantity") ?? 0;
+}
+
 function stringArrayValue(record: HealthBoxRecord, ...keys: string[]) {
   for (const key of keys) {
     const value = record[key];
@@ -556,12 +575,14 @@ export function mapProductRows(page: HealthBoxPageResponse<HealthBoxRecord> | nu
     const settlementBasePrice = numberValue(product, "settlementBasePrice");
     const plainPrice = stringValue(product, "price");
     const mediaUrls = productMediaUrls(product);
+    const stockQuantity = productStockQuantity(product);
 
     return {
       recordId: apiRecordId ?? null,
       categoryId: idValue(product, "categoryId") ?? null,
       categoryQueryValue: stringValue(product, "categoryName", "category"),
       id: textOrDash(stringValue(product, "productCode", "code", "id"), String(recordId)),
+      productCode: stringValue(product, "productCode"),
       slug: routeSlug,
       sourceSlug: sourceSlug || routeSlug,
       adminHref: `/admin/products/${routeSlug}`,
@@ -570,7 +591,9 @@ export function mapProductRows(page: HealthBoxPageResponse<HealthBoxRecord> | nu
       title: textOrDash(stringValue(product, "name", "title"), "제목 없음"),
       subtitle: textOrDash(stringValue(product, "subtitle", "summary", "summaryText"), ""),
       category: textOrDash(categoryLabel),
+      categoryCode: stringValue(product, "categoryCode"),
       status: textOrDash(stringValue(product, "status"), "ACTIVE"),
+      optionUseYn: stringValue(product, "optionUseYn") || "N",
       consumerPrice,
       memberPrice,
       supplyPrice,
@@ -584,7 +607,8 @@ export function mapProductRows(page: HealthBoxPageResponse<HealthBoxRecord> | nu
       publishTone: tone(publishStatus),
       statusTone: tone(badge || publishStatus),
       monthlySales: formatWon(numberValue(product, "monthlySales", "salesAmount") ?? 0),
-      inventoryCount: textOrDash(stringValue(product, "inventoryCount", "stockQuantity"), "0"),
+      inventoryCount: String(stockQuantity),
+      totalStockQuantity: stockQuantity,
       updatedAt: textOrDash(dateTimeValue(product, "updatedAt", "createdAt")),
       image:
         normalizeProductImageUrl(
@@ -611,6 +635,8 @@ export function mapProductRows(page: HealthBoxPageResponse<HealthBoxRecord> | nu
         ? (product.detailSections as Product["detailSections"])
         : [],
       specs: Array.isArray(product.specs) ? (product.specs as Product["specs"]) : [],
+      optionGroups: Array.isArray(product.optionGroups) ? (product.optionGroups as Product["optionGroups"]) : [],
+      skus: Array.isArray(product.skus) ? (product.skus as Product["skus"]) : [],
       displayStatus: textOrDash(stringValue(product, "displayStatus", "publishStatus")),
       stockNote: textOrDash(stringValue(product, "stockNote")),
       detailImageCount: Array.isArray(product.detailSections) ? product.detailSections.length : 0,

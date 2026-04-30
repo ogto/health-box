@@ -126,6 +126,7 @@ export default async function AdminDealersPage({
             {selectedDealer ? (
               <form action={saveDealerMallPublicConfigAction} className="admin-status-stack">
                 <input name="dealerMallId" type="hidden" value={String(selectedDealer.id)} />
+                <input name="id" type="hidden" value={stringValue(publicConfig, "id")} />
                 <div className="admin-field-grid three">
                   <label className="admin-field">
                     <span>딜러몰 이름</span>
@@ -156,15 +157,20 @@ export default async function AdminDealersPage({
 
                   <label className="admin-field">
                     <span>도메인</span>
-                    <input className="admin-input" disabled type="text" value={selectedDealer.domain} />
+                    <input
+                      className="admin-input"
+                      defaultValue={stringValue(publicConfig, "slug") || selectedDealer.slug || ""}
+                      name="slug"
+                      type="text"
+                    />
                   </label>
                   <label className="admin-field">
                     <span>계정</span>
                     <input
                       className="admin-input"
-                      disabled
+                      defaultValue={stringValue(publicConfig, "supportEmail") || selectedDealer.supportEmail || ""}
+                      name="supportEmail"
                       type="text"
-                      value={stringValue(publicConfig, "supportEmail") || selectedDealer.supportEmail || "-"}
                     />
                   </label>
                   <label className="admin-field">

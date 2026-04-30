@@ -11,6 +11,7 @@ const navItems = [
   { href: "/admin/dashboard", label: "대시보드", icon: DashboardIcon },
   { href: "/admin/storefront", label: "홈페이지", icon: StorefrontIcon },
   { href: "/admin/products", label: "상품", icon: ProductIcon },
+  { href: "/admin/categories", label: "카테고리", icon: CategoryIcon },
   { href: "/admin/orders", label: "주문", icon: OrderIcon },
   { href: "/admin/sales", label: "매출/정산", icon: SalesIcon },
   { href: "/admin/members", label: "회원", icon: MemberIcon },
@@ -130,6 +131,20 @@ function ProductIcon(props: SVGProps<SVGSVGElement>) {
     <svg fill="none" viewBox="0 0 24 24" {...props}>
       <path
         d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Zm0 0v18m8-13.5-8 4.5-8-4.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      />
+    </svg>
+  );
+}
+
+function CategoryIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg fill="none" viewBox="0 0 24 24" {...props}>
+      <path
+        d="M4 5.5h7v6H4v-6Zm9 0h7v6h-7v-6ZM4 13.5h7v5H4v-5Zm9 0h7v5h-7v-5Z"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"

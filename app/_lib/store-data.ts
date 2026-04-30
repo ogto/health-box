@@ -5,7 +5,9 @@ export type Product = {
   title: string;
   subtitle: string;
   category: string;
+  deliveryPolicyText?: string;
   review: string;
+  salesPolicyText?: string;
   shipping: string;
   price: string;
   image: string;
@@ -22,6 +24,34 @@ export type Product = {
     caption: string;
   }>;
   specs: Array<{ label: string; value: string }>;
+  optionGroups?: Array<{
+    groupName?: string;
+    id?: number;
+    requiredYn?: string;
+    sortOrder?: number;
+    values?: Array<{
+      id?: number;
+      sortOrder?: number;
+      status?: string;
+      valueCode?: string;
+      valueName?: string;
+    }>;
+  }>;
+  optionUseYn?: string;
+  skus?: Array<{
+    consumerPrice?: number;
+    id?: number;
+    memberPrice?: number;
+    optionValueCodes?: string[];
+    safetyStock?: number;
+    settlementBasePrice?: number;
+    skuCode?: string;
+    skuName?: string;
+    soldOutYn?: string;
+    status?: string;
+    stockQuantity?: number;
+    supplyPrice?: number;
+  }>;
 };
 
 export type RecommendedProduct = {

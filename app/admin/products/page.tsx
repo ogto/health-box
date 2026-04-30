@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AdminHeader } from "../../_components/admin/admin-header";
 import { AdminProductThumbPreview } from "../../_components/admin/admin-product-thumb-preview";
 import { AdminBadge, AdminMetrics, AdminPanel, AdminTable } from "../../_components/admin/admin-ui";
-import { fetchAdminProducts, hasHealthBoxApi } from "../../_lib/health-box-api";
+import { fetchAdminCategories, fetchAdminProducts, hasHealthBoxApi } from "../../_lib/health-box-api";
 import { buildProductMetrics, mapProductRows } from "../../_lib/health-box-presenters";
 
 const PRODUCTS_PER_PAGE = 10;
@@ -56,20 +56,23 @@ export default async function AdminProductsPage({
   const status = (params.status ?? "").trim();
   const currentPage = Math.max(1, Number(params.page) || 1);
 
-  const livePage = hasHealthBoxApi()
-    ? await fetchAdminProducts({
-        q: keyword || undefined,
-        category: category || undefined,
-        status: status || undefined,
-        page: currentPage,
-        size: PRODUCTS_PER_PAGE,
-      })
-    : null;
+  const [livePage, categories] = hasHealthBoxApi()
+    ? await Promise.all([
+        fetchAdminProducts({
+          q: keyword || undefined,
+          category: category || undefined,
+          status: status || undefined,
+          page: currentPage,
+          size: PRODUCTS_PER_PAGE,
+        }),
+        fetchAdminCategories(),
+      ])
+    : [null, []];
 
   const liveRows = mapProductRows(livePage);
-  const categoryOptions = Array.from(
-    new Set(liveRows.items.map((product) => product.categoryQueryValue).filter(Boolean)),
-  );
+  const categoryOptions = categories?.length
+    ? categories.map((item) => item.name || item.categoryCode || "").filter(Boolean)
+    : Array.from(new Set(liveRows.items.map((product) => product.categoryQueryValue).filter(Boolean)));
   const statusOptions = ["메인 노출중", "정상 판매", "재고 주의", "추천 운영"];
   const hasLivePage = Boolean(livePage);
   const totalPages = hasLivePage ? Math.max(liveRows.totalPages, 0) : 0;

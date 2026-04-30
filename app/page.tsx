@@ -79,7 +79,7 @@ export default async function Home() {
         <span>공지/배송 안내</span>
       </section>
 
-      <section className="section-block" id="best">
+      <section className="section-block shop-home-section" id="best">
         <div className="section-head shop-section-head">
           <div>
             <p className="section-kicker">BEST PRODUCTS</p>
@@ -113,7 +113,7 @@ export default async function Home() {
         </Link>
       </section>
 
-      <section className="section-block" id="recommend">
+      <section className="section-block shop-home-section" id="recommend">
         <div className="section-head shop-section-head">
           <div>
             <p className="section-kicker">RECOMMEND</p>
@@ -136,7 +136,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="section-block">
+      <section className="section-block shop-home-section">
         <div className="section-head shop-section-head">
           <div>
             <p className="section-kicker">ALL PRODUCTS</p>
@@ -157,7 +157,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="section-block" id="notice">
+      <section className="section-block shop-home-section" id="notice">
         <div className="section-head shop-section-head">
           <div>
             <p className="section-kicker">NOTICE</p>

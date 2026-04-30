@@ -46,8 +46,8 @@ export default async function NoticeDetailPage({
             </div>
 
             <div className="stack-paragraphs">
-              {notice.paragraphs.map((paragraph) => (
-                <p key={paragraph}>{paragraph}</p>
+              {notice.paragraphs.map((paragraph, index) => (
+                <p key={`${index}-${paragraph}`}>{paragraph}</p>
               ))}
             </div>
           </article>

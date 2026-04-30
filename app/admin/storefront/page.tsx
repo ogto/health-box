@@ -94,6 +94,7 @@ export default async function AdminStorefrontPage() {
 
       <div className="admin-form-layout admin-storefront-layout">
         <form action={saveStorefrontConfigAction} className="admin-form-main">
+          <input name="id" type="hidden" value={String(remoteConfig?.id || "")} />
           <AdminPanel title="검색 / 정책 문구">
             <div className="admin-field-grid two">
               <label className="admin-field span-two">

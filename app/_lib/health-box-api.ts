@@ -25,6 +25,7 @@ export type HealthBoxDealerPublicResponse = {
 };
 
 export type HealthBoxPublicSiteConfig = {
+  createdAt?: string;
   id?: number;
   logoUrl?: string;
   faviconUrl?: string;
@@ -36,6 +37,63 @@ export type HealthBoxPublicSiteConfig = {
   searchPlaceholder?: string;
   policyText?: string;
   customerCenterText?: string;
+  updatedAt?: string;
+};
+
+export type HealthBoxSalesPolicy = {
+  content?: string;
+  createdAt?: string;
+  deletedAt?: string;
+  deletedYn?: string;
+  id?: number;
+  sortOrder?: number;
+  status?: string;
+  title?: string;
+  updatedAt?: string;
+};
+
+export type HealthBoxCategory = {
+  categoryCode?: string;
+  createdAt?: string;
+  deletedAt?: string;
+  deletedYn?: string;
+  id?: number;
+  name?: string;
+  slug?: string;
+  sortOrder?: number;
+  status?: string;
+  updatedAt?: string;
+};
+
+export type HealthBoxProductOptionValue = {
+  id?: number;
+  sortOrder?: number;
+  status?: string;
+  valueCode?: string;
+  valueName?: string;
+};
+
+export type HealthBoxProductOptionGroup = {
+  groupName?: string;
+  id?: number;
+  requiredYn?: string;
+  sortOrder?: number;
+  values?: HealthBoxProductOptionValue[];
+};
+
+export type HealthBoxProductSku = {
+  consumerPrice?: number;
+  id?: number;
+  memberPrice?: number;
+  optionValueCodes?: string[];
+  safetyStock?: number;
+  settlementBasePrice?: number;
+  skuCode?: string;
+  skuName?: string;
+  soldOutYn?: string;
+  status?: string;
+  stockQuantity?: number;
+  supplyPrice?: number;
 };
 
 export type HealthBoxPageResponse<T> = {
@@ -198,6 +256,12 @@ export async function fetchAdminOrders() {
   return healthBoxFetchOrNull<HealthBoxRecord[]>("/health-box/admin/orders");
 }
 
+export async function fetchAdminOrder(orderId: number, options?: { revalidate?: number }) {
+  return healthBoxFetchOrNull<HealthBoxRecord>(`/health-box/admin/orders/${orderId}`, {
+    revalidate: options?.revalidate,
+  });
+}
+
 export async function fetchAdminDealerMallOrders(dealerMallId: number) {
   return healthBoxFetchOrNull<HealthBoxRecord[]>(`/health-box/admin/dealer-malls/${dealerMallId}/orders`);
 }
@@ -225,6 +289,30 @@ export async function fetchAdminProducts(query?: {
 
 export async function fetchAdminProduct(productId: number, options?: { revalidate?: number }) {
   return healthBoxFetchOrNull<HealthBoxRecord>(`/health-box/admin/products/${productId}`, {
+    revalidate: options?.revalidate,
+  });
+}
+
+export async function fetchAdminCategories(options?: { revalidate?: number }) {
+  return healthBoxFetchOrNull<HealthBoxCategory[]>("/health-box/admin/categories", {
+    revalidate: options?.revalidate,
+  });
+}
+
+export async function fetchAdminProductSkus(productId: number, options?: { revalidate?: number }) {
+  return healthBoxFetchOrNull<HealthBoxProductSku[]>(`/health-box/admin/products/${productId}/skus`, {
+    revalidate: options?.revalidate,
+  });
+}
+
+export async function fetchAdminSalesPolicies(options?: { revalidate?: number }) {
+  return healthBoxFetchOrNull<HealthBoxSalesPolicy[]>("/health-box/admin/sales-policies", {
+    revalidate: options?.revalidate,
+  });
+}
+
+export async function fetchAdminDeliveryPolicies(options?: { revalidate?: number }) {
+  return healthBoxFetchOrNull<HealthBoxSalesPolicy[]>("/health-box/admin/delivery-policies", {
     revalidate: options?.revalidate,
   });
 }

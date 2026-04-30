@@ -6,13 +6,22 @@ import { AdminConfirmSubmitButton } from "../../../_components/admin/admin-confi
 import { AdminHeader } from "../../../_components/admin/admin-header";
 import { AdminProductDetailBlocksEditor } from "../../../_components/admin/admin-product-detail-blocks-editor";
 import { AdminProductImageUpload } from "../../../_components/admin/admin-product-image-upload";
+import { AdminProductOptionsEditor } from "../../../_components/admin/admin-product-options-editor";
+import {
+  AdminPolicyTemplatePicker,
+  type AdminPolicyTemplate,
+} from "../../../_components/admin/admin-policy-template-picker";
 import { AdminBadge, AdminPanel } from "../../../_components/admin/admin-ui";
 import {
+  fetchAdminCategories,
   fetchAdminProduct,
   fetchAdminProducts,
+  fetchAdminDeliveryPolicies,
+  fetchAdminSalesPolicies,
   hasHealthBoxApi,
   type HealthBoxPageResponse,
   type HealthBoxRecord,
+  type HealthBoxSalesPolicy,
 } from "../../../_lib/health-box-api";
 import { findProductBySlug, mapProductRows } from "../../../_lib/health-box-presenters";
 
@@ -35,6 +44,23 @@ function toProductRow(record: HealthBoxRecord | null) {
 function extractProductIdFromFallbackSlug(slug: string) {
   const match = /^product-(\d+)$/i.exec(slug);
   return match ? Number(match[1]) : null;
+}
+
+function mapPolicyTemplates(
+  policies: HealthBoxSalesPolicy[] | null,
+  type: "delivery" | "sales",
+): AdminPolicyTemplate[] {
+  return (policies || [])
+    .filter((policy) => policy.id && policy.title && policy.content)
+    .map((policy) => ({
+      content: policy.content || "",
+      id: `${type}-${policy.id}`,
+      policyId: policy.id,
+      sortOrder: policy.sortOrder ?? 0,
+      status: policy.status || "ACTIVE",
+      title: policy.title || "",
+      type,
+    }));
 }
 
 export default async function AdminProductDetailPage({
@@ -63,6 +89,13 @@ export default async function AdminProductDetailPage({
   const canSave = hasHealthBoxApi() && Boolean(productId);
   const productImages = Array.from(new Set([product.image, ...product.gallery].filter(Boolean)));
   const imageCount = productImages.length;
+  const [salesPolicyTemplates, deliveryPolicyTemplates, categories] = hasHealthBoxApi()
+    ? await Promise.all([
+        fetchAdminSalesPolicies().then((policies) => mapPolicyTemplates(policies, "sales")),
+        fetchAdminDeliveryPolicies().then((policies) => mapPolicyTemplates(policies, "delivery")),
+        fetchAdminCategories(),
+      ])
+    : [[], [], []];
 
   return (
     <div className="admin-page">
@@ -82,7 +115,6 @@ export default async function AdminProductDetailPage({
 
       <form action={saveProductAction} className="admin-product-edit-form" id="admin-product-save-form">
         <input name="id" type="hidden" value={String(productId ?? "")} />
-        <input name="categoryId" type="hidden" value={String(product.categoryId ?? "")} />
         <input name="redirectTo" type="hidden" value={`/admin/products/${product.slug}`} />
         <input name="toast" type="hidden" value="상품 수정이 완료되었습니다." />
 
@@ -107,7 +139,7 @@ export default async function AdminProductDetailPage({
             <AdminPanel
               className="admin-product-core-panel"
               title="기본 정보"
-              description="상품명, 브랜드명, 검색과 공유에 쓰이는 슬러그를 관리합니다."
+              description="상품명, 브랜드명, 검색과 공유에 쓰이는 정보를 관리합니다."
             >
               <div className="admin-field-grid two">
                 <label className="admin-field span-two admin-title-field">
@@ -119,17 +151,18 @@ export default async function AdminProductDetailPage({
                   <input className="admin-input" defaultValue={product.brand} name="brandName" type="text" />
                 </label>
                 <label className="admin-field">
-                  <span>슬러그</span>
-                  <input className="admin-input" defaultValue={product.sourceSlug} name="slug" required type="text" />
-                </label>
-                <label className="admin-field span-two">
-                  <span>요약 설명</span>
-                  <textarea
-                    className="admin-textarea admin-summary-textarea"
-                    defaultValue={product.summary}
-                    name="summaryText"
-                    placeholder="상품 목록과 상세 상단에 노출될 짧은 설명을 입력하세요."
-                  />
+                  <span>카테고리</span>
+                  <select className="admin-select" defaultValue={String(product.categoryId ?? categories?.[0]?.id ?? 1)} name="categoryId">
+                    {categories?.length ? (
+                      categories.map((category) => (
+                        <option key={category.id || category.slug || category.name} value={category.id}>
+                          {category.name || category.categoryCode || `카테고리 ${category.id}`}
+                        </option>
+                      ))
+                    ) : (
+                      <option value={product.categoryId ?? 1}>{product.category || "기본 카테고리"}</option>
+                    )}
+                  </select>
                 </label>
               </div>
             </AdminPanel>
@@ -159,6 +192,19 @@ export default async function AdminProductDetailPage({
                   />
                 </label>
               </div>
+            </AdminPanel>
+
+            <AdminPanel title="옵션 / 옵션별 재고" description="상품의 선택 옵션별로 가격과 재고를 관리합니다.">
+              <AdminProductOptionsEditor
+                defaultConsumerPrice={product.consumerPrice}
+                defaultMemberPrice={product.memberPrice}
+                defaultOptionGroups={product.optionGroups}
+                defaultOptionUseYn={product.optionUseYn}
+                defaultSettlementBasePrice={product.settlementBasePrice}
+                defaultSkus={product.skus}
+                defaultSupplyPrice={product.supplyPrice}
+                productName={product.title}
+              />
             </AdminPanel>
 
             <div className="admin-product-edit-columns">
@@ -214,18 +260,24 @@ export default async function AdminProductDetailPage({
 
             <AdminPanel title="판매/배송 문구" description="상품 상세 하단과 구매 안내에 노출되는 운영 문구입니다.">
               <div className="admin-field-grid two">
-                <label className="admin-field span-two">
-                  <span>판매 정책 문구</span>
-                  <textarea className="admin-textarea" defaultValue={product.salesPolicyText} name="salesPolicyText" />
-                </label>
-                <label className="admin-field span-two">
-                  <span>배송 정책 문구</span>
-                  <textarea
-                    className="admin-textarea"
-                    defaultValue={product.deliveryPolicyText || product.shipping}
-                    name="deliveryPolicyText"
+                <div className="span-two">
+                  <AdminPolicyTemplatePicker
+                    defaultValue={product.salesPolicyText}
+                    initialTemplates={salesPolicyTemplates}
+                    label="판매정책"
+                    name="salesPolicyText"
+                    type="sales"
                   />
-                </label>
+                </div>
+                <div className="span-two">
+                  <AdminPolicyTemplatePicker
+                    defaultValue={product.deliveryPolicyText || product.shipping}
+                    initialTemplates={deliveryPolicyTemplates}
+                    label="배송정책"
+                    name="deliveryPolicyText"
+                    type="delivery"
+                  />
+                </div>
               </div>
             </AdminPanel>
           </div>

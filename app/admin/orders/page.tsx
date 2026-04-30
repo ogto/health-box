@@ -1,14 +1,19 @@
 import Link from "next/link";
 
-import { updateShipmentStatusAction } from "../../_actions/health-box-admin";
+import { cancelOrderAction, partialCancelOrderAction, updateShipmentStatusAction } from "../../_actions/health-box-admin";
+import { AdminConfirmSubmitButton } from "../../_components/admin/admin-confirm-submit-button";
 import { AdminHeader } from "../../_components/admin/admin-header";
 import { AdminSubmitButton } from "../../_components/admin/admin-submit-button";
 import { AdminBadge, AdminMetrics, AdminPanel, AdminTable } from "../../_components/admin/admin-ui";
 import {
   fetchAdminDealerMallOrders,
   fetchAdminDealerMalls,
+  fetchAdminOrder,
   fetchAdminOrders,
   hasHealthBoxApi,
+  idValue,
+  numberValue,
+  stringValue,
 } from "../../_lib/health-box-api";
 import { buildOrderMetrics, mapDealerRows, mapOrderRows } from "../../_lib/health-box-presenters";
 
@@ -98,6 +103,13 @@ export default async function AdminOrdersPage({
     orderRows.find((order) => order.shipmentId) ||
     orderRows[0] ||
     null;
+  const selectedOrderDetail =
+    hasHealthBoxApi() && selectedOrder?.id
+      ? await fetchAdminOrder(selectedOrder.id)
+      : null;
+  const selectedOrderItems = Array.isArray(selectedOrderDetail?.items)
+    ? (selectedOrderDetail.items as Array<Record<string, unknown>>)
+    : [];
 
   return (
     <div className="admin-page">
@@ -169,6 +181,45 @@ export default async function AdminOrdersPage({
         </AdminPanel>
 
         <div className="admin-stack">
+          <AdminPanel title="주문 상세 / 취소">
+            {selectedOrder ? (
+              <div className="admin-status-stack">
+                <div className="admin-list-row">
+                  <div className="admin-row-stack">
+                    <strong>{selectedOrder.number}</strong>
+                    <p>
+                      {stringValue(selectedOrderDetail, "receiverName") || selectedOrder.buyer} ·{" "}
+                      {stringValue(selectedOrderDetail, "receiverPhone", "ordererPhone") || "-"}
+                    </p>
+                    <span>
+                      {[stringValue(selectedOrderDetail, "zipCode"), stringValue(selectedOrderDetail, "baseAddress"), stringValue(selectedOrderDetail, "detailAddress")]
+                        .filter(Boolean)
+                        .join(" ")}
+                    </span>
+                  </div>
+                  <AdminBadge tone={selectedOrder.tone}>{selectedOrder.status}</AdminBadge>
+                </div>
+                <form action={cancelOrderAction} id="admin-order-cancel-form">
+                  <input name="orderId" type="hidden" value={String(selectedOrder.id ?? "")} />
+                  <input name="redirectTo" type="hidden" value={buildOrderHref(selectedOrder.id ?? selectedOrder.number, selectedDealer?.id)} />
+                </form>
+                {selectedOrder.id ? (
+                  <AdminConfirmSubmitButton
+                    className="admin-button danger"
+                    confirmMessage="이 주문을 전체 취소할까요? 남은 수량 기준으로 SKU 재고가 복구됩니다."
+                    confirmTitle="주문 전체 취소"
+                    form="admin-order-cancel-form"
+                    pendingLabel="취소중..."
+                    tone="danger"
+                  >
+                    주문 전체 취소
+                  </AdminConfirmSubmitButton>
+                ) : null}
+              </div>
+            ) : (
+              <p className="admin-row-muted">조회된 주문이 없습니다.</p>
+            )}
+          </AdminPanel>
           <AdminPanel title="회원사 요약">
             <div className="admin-list">
               {companyRows.map((company) => (
@@ -226,6 +277,14 @@ export default async function AdminOrdersPage({
                   <label className="admin-field">
                     <span>송장 번호</span>
                     <input className="admin-input" name="trackingNo" placeholder="송장 번호를 입력하세요" type="text" />
+                  </label>
+                  <label className="admin-field">
+                    <span>출고일시</span>
+                    <input className="admin-input" name="shippedAt" type="datetime-local" />
+                  </label>
+                  <label className="admin-field">
+                    <span>배송완료일시</span>
+                    <input className="admin-input" name="deliveredAt" type="datetime-local" />
                   </label>
                   <AdminSubmitButton className="admin-button" pendingLabel="저장중...">
                     배송 상태 저장

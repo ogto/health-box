@@ -2,7 +2,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ProductDetailAnchorTabs, type ProductDetailAnchorTab } from "../../_components/product-detail-anchor-tabs";
 import { ProductDetailGallery } from "../../_components/product-detail-gallery";
+import { ProductPurchaseBox, ProductPurchaseProvider } from "../../_components/product-purchase-controls";
 import { Breadcrumbs, ProductCard, StoreShell } from "../../_components/store-ui";
 import {
   fetchStoreProductBySlug,
@@ -46,6 +48,14 @@ function sanitizeProductHtml(value: string) {
     .replace(/javascript:/gi, "");
 }
 
+function paragraphsFromText(value: string) {
+  return value
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 export default async function ProductDetailPage({
   params,
 }: {
@@ -62,7 +72,15 @@ export default async function ProductDetailPage({
   }
 
   const relatedProducts = products.filter((entry) => entry.slug !== product.slug).slice(0, 4);
-  const highlights = uniqueTexts([product.category, product.shipping, product.badge, ...product.highlights]).slice(0, 5);
+  const salesPolicyText = meaningfulText(product.salesPolicyText);
+  const deliveryPolicyText = meaningfulText(product.deliveryPolicyText) || meaningfulText(product.shipping);
+  const reviewText = meaningfulText(product.review) || "후기 정보 준비중";
+  const policyTextKeys = new Set(
+    [salesPolicyText, deliveryPolicyText, product.shipping].map((text) => normalizeText(text || "")).filter(Boolean),
+  );
+  const highlights = uniqueTexts([product.category, product.badge, ...product.highlights])
+    .filter((highlight) => !policyTextKeys.has(normalizeText(highlight)))
+    .slice(0, 3);
   const rawDetailSections = product.detailSections.length
     ? product.detailSections
     : product.gallery.slice(0, 2).map((image, index) => ({
@@ -90,16 +108,21 @@ export default async function ProductDetailPage({
       caption: meaningfulText(section.caption),
     };
   });
-  const shippingText = meaningfulText(product.shipping) || "배송 정보는 상품별 운영 기준에 따라 안내됩니다.";
-  const reviewText = meaningfulText(product.review) || "준비중";
   const subtitleText = meaningfulText(product.subtitle);
   const displaySubtitle =
     subtitleText && normalizeText(subtitleText) !== normalizeText(introParagraphs[0] || "")
       ? subtitleText
       : "";
+  const tabItems: ProductDetailAnchorTab[] = [
+    { id: "detail-info", label: "상품상세정보" },
+    { id: "sales-policy", label: "판매정책" },
+    { id: "delivery-policy", label: "배송정책" },
+    { id: "product-reviews", label: "후기" },
+  ];
 
   return (
     <StoreShell>
+      <ProductPurchaseProvider>
       <section className="subpage-block">
         <Breadcrumbs
           items={[
@@ -113,63 +136,92 @@ export default async function ProductDetailPage({
           <ProductDetailGallery title={product.title} images={product.gallery} />
 
           <aside className="detail-summary shop-buy-panel">
-            <div className="detail-chip-row">
-              {highlights.slice(0, 3).map((highlight, index) => (
-                <span className={`detail-chip${index === 0 ? " primary" : ""}`} key={highlight}>
-                  {highlight}
-                </span>
-              ))}
-            </div>
-
-            <p className="detail-brand">{product.brand}</p>
-            <h1 className="detail-title">{product.title}</h1>
-            {displaySubtitle ? <p className="detail-subtitle">{displaySubtitle}</p> : null}
-
-            <div className="price-panel shop-price-panel">
-              <div>
-                <p className="price-label">회원 전용가</p>
-                <p className="price-value">{product.price}</p>
-              </div>
-              <p className="price-note">로그인 후 회원 조건에 맞는 가격과 구매 기능을 확인할 수 있습니다.</p>
-            </div>
-
-            <div className="shop-purchase-box">
-              <div className="shop-purchase-row">
-                <span>배송 안내</span>
-                <strong>{shippingText}</strong>
-              </div>
-              <div className="shop-purchase-row">
-                <span>상품 후기</span>
-                <strong>{reviewText}</strong>
-              </div>
-            </div>
-
-            <div className="detail-action-row">
-              <Link className="button-secondary" href="/cart">
-                장바구니 담기
-              </Link>
-              <Link className="button-primary" href="/cart">
-                바로 구매하기
-              </Link>
-            </div>
-
-            <div className="shop-safe-note">
-              <strong>구매 전 확인</strong>
-              <span>상품 이미지와 상세 정보를 확인한 뒤 주문을 진행하세요.</span>
-            </div>
+            <ProductPurchaseBox
+              brand={product.brand}
+              displaySubtitle={displaySubtitle}
+              highlights={highlights}
+              optionGroups={product.optionGroups}
+              price={product.price}
+              skus={product.skus}
+              title={product.title}
+            />
           </aside>
         </div>
       </section>
 
-      <section className="subpage-section">
-        <div className="shop-detail-tabs">
-          <a href="#detail-info">상품정보</a>
-          <a href="#delivery-info">배송/교환</a>
-          <a href="#related-products">추천상품</a>
+      <section className="shop-mini-review-section">
+        <div className="shop-mini-review-head">
+          <h2>
+            4점 이상 리뷰가 <strong>100%</strong>예요
+          </h2>
+          <Link href="#product-reviews">리뷰 전체보기</Link>
         </div>
+        <div className="shop-mini-review-grid">
+          {[0, 1, 2].map((index) => (
+            <article className="shop-mini-review-card" key={`review-${index}`}>
+              <div className="shop-mini-review-image">
+                <Image
+                  alt={`${product.title} 리뷰 이미지 ${index + 1}`}
+                  className="object-cover"
+                  fill
+                  sizes="88px"
+                  src={product.gallery[index % product.gallery.length] || product.image}
+                  unoptimized
+                />
+              </div>
+              <div>
+                <p>
+                  <strong>★ 5</strong> 맛 만족도 · 구매 만족
+                </p>
+                <span>
+                  제품 구성이 깔끔하고 설명이 자세해서 구매 전에 확인하기 좋았어요. 배송 안내도 보기 편했습니다.
+                </span>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
 
-        <div className="detail-body-grid shop-detail-body-grid">
-          <article className="content-panel detail-description-panel" id="detail-info">
+      <section className="shop-bundle-pick-section">
+        <div className="shop-bundle-head">
+          <h2>다른 구성 상품 골라 담기</h2>
+          <span>함께 구매하기 좋은 상품을 빠르게 담아보세요.</span>
+        </div>
+        <div className="shop-bundle-card-grid">
+          {relatedProducts.slice(0, 3).map((bundleProduct) => (
+            <article className="shop-bundle-card" key={bundleProduct.slug}>
+              <div className="shop-bundle-image">
+                <Image
+                  alt={bundleProduct.title}
+                  className="object-cover"
+                  fill
+                  sizes="(max-width: 760px) 42vw, 180px"
+                  src={bundleProduct.image}
+                  unoptimized
+                />
+              </div>
+              <button type="button">담기</button>
+              <h3>{bundleProduct.title}</h3>
+              <p>{bundleProduct.price}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="shop-detail-banner-section">
+        <div className="shop-detail-banner">
+          <strong>건강창고 회원 혜택</strong>
+          <span>매일 챙기는 영양제, 회원 전용 혜택으로 더 가볍게</span>
+        </div>
+      </section>
+
+      <section className="subpage-section shop-detail-info-section">
+        <div className="shop-detail-body-grid">
+          <div className="shop-detail-main-column">
+            <ProductDetailAnchorTabs tabs={tabItems} />
+
+            <div className="shop-detail-content-stack">
+          <article className="content-panel detail-description-panel shop-detail-section" id="detail-info">
             <p className="section-kicker">PRODUCT DETAIL</p>
             <h2 className="section-panel-title">상품 상세 정보</h2>
 
@@ -214,40 +266,59 @@ export default async function ProductDetailPage({
             ) : null}
           </article>
 
-          <aside className="detail-side-stack" id="delivery-info">
-            <article className="content-panel shop-info-card">
-              <p className="section-kicker">GUIDE</p>
-              <h2 className="section-panel-title">추천 포인트</h2>
-              <ul className="bullet-list">
-                {highlights.length ? highlights.map((item) => <li key={item}>{item}</li>) : null}
-                <li>상품별 이미지와 설명을 확인하고 필요한 루틴에 맞춰 선택하세요.</li>
-              </ul>
-            </article>
+          <article className="content-panel shop-policy-section" id="sales-policy">
+            <p className="section-kicker">SALES POLICY</p>
+            <h2 className="section-panel-title">판매정책</h2>
+            {salesPolicyText ? (
+              <div className="shop-policy-copy">
+                {paragraphsFromText(salesPolicyText).map((paragraph) => (
+                  <p key={paragraph}>{paragraph}</p>
+                ))}
+              </div>
+            ) : (
+              <p className="detail-copy">등록된 판매정책이 없습니다.</p>
+            )}
+          </article>
 
-            <article className="content-panel shop-info-card">
-              <p className="section-kicker">DELIVERY</p>
-              <h2 className="section-panel-title">배송 / 교환 안내</h2>
-              <ul className="bullet-list">
-                <li>{shippingText}</li>
-                <li>교환/반품은 상품 수령 후 안내 기준에 따라 접수됩니다.</li>
-                <li>회원 로그인 후 장바구니와 결제 기능을 이용할 수 있습니다.</li>
-              </ul>
-            </article>
+          <article className="content-panel shop-policy-section" id="delivery-policy">
+            <p className="section-kicker">DELIVERY POLICY</p>
+            <h2 className="section-panel-title">배송정책</h2>
+            {deliveryPolicyText ? (
+              <div className="shop-policy-copy">
+                {paragraphsFromText(deliveryPolicyText).map((paragraph) => (
+                  <p key={paragraph}>{paragraph}</p>
+                ))}
+              </div>
+            ) : (
+              <p className="detail-copy">등록된 배송정책이 없습니다.</p>
+            )}
+          </article>
 
-            {product.specs.length ? (
-              <article className="content-panel shop-info-card">
-                <p className="section-kicker">SPEC</p>
-                <h2 className="section-panel-title">상품 정보</h2>
-                <div className="info-panel compact">
-                  {product.specs.map((spec) => (
-                    <div className="info-row" key={spec.label}>
-                      <strong>{spec.label}</strong>
-                      <span>{spec.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            ) : null}
+          <article className="content-panel shop-review-section" id="product-reviews">
+            <p className="section-kicker">REVIEWS</p>
+            <div className="shop-review-head">
+              <h2 className="section-panel-title">상품 후기</h2>
+              <strong>{reviewText}</strong>
+            </div>
+            <div className="shop-review-empty">
+              <strong>후기 정보 준비중</strong>
+              <span>구매 회원의 후기를 모아볼 수 있도록 준비하고 있습니다.</span>
+            </div>
+          </article>
+            </div>
+          </div>
+
+          <aside className="shop-floating-buy-panel">
+            <ProductPurchaseBox
+              brand={product.brand}
+              className="is-compact"
+              displaySubtitle=""
+              highlights={highlights}
+              optionGroups={product.optionGroups}
+              price={product.price}
+              skus={product.skus}
+              title={product.title}
+            />
           </aside>
         </div>
       </section>
@@ -273,6 +344,7 @@ export default async function ProductDetailPage({
           ))}
         </div>
       </section>
+      </ProductPurchaseProvider>
     </StoreShell>
   );
 }
