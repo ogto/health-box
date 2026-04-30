@@ -161,7 +161,7 @@ export default async function AdminProductsPage({
         <div className="admin-product-table-wrap">
           <AdminTable
             alignments={["center", "center", "center", "center", "center", "center", "center", "center", "center"]}
-            columns="90px minmax(300px, 2fr) 118px 118px 136px 94px 108px 108px 150px"
+            columns="90px minmax(300px, 2fr) 118px 118px 136px 94px 108px 108px 96px"
             emptyAction={
               hasFilters ? (
                 <Link className="admin-button secondary small" href="/admin/products">
@@ -209,9 +209,6 @@ export default async function AdminProductsPage({
                 <span className="admin-row-muted admin-product-table-updated">{product.updatedAt}</span>
 
                 <div className="admin-product-table-actions">
-                  <Link className="admin-button secondary small" href={product.previewHref}>
-                    보기
-                  </Link>
                   <Link className="admin-button small" href={product.adminHref}>
                     관리
                   </Link>

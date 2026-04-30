@@ -222,7 +222,6 @@ export default async function ProductDetailPage({
 
             <div className="shop-detail-content-stack">
           <article className="content-panel detail-description-panel shop-detail-section" id="detail-info">
-            <p className="section-kicker">PRODUCT DETAIL</p>
             <h2 className="section-panel-title">상품 상세 정보</h2>
 
             {detailHtml ? (
@@ -267,7 +266,6 @@ export default async function ProductDetailPage({
           </article>
 
           <article className="content-panel shop-policy-section" id="sales-policy">
-            <p className="section-kicker">SALES POLICY</p>
             <h2 className="section-panel-title">판매정책</h2>
             {salesPolicyText ? (
               <div className="shop-policy-copy">
@@ -281,7 +279,6 @@ export default async function ProductDetailPage({
           </article>
 
           <article className="content-panel shop-policy-section" id="delivery-policy">
-            <p className="section-kicker">DELIVERY POLICY</p>
             <h2 className="section-panel-title">배송정책</h2>
             {deliveryPolicyText ? (
               <div className="shop-policy-copy">
@@ -295,7 +292,6 @@ export default async function ProductDetailPage({
           </article>
 
           <article className="content-panel shop-review-section" id="product-reviews">
-            <p className="section-kicker">REVIEWS</p>
             <div className="shop-review-head">
               <h2 className="section-panel-title">상품 후기</h2>
               <strong>{reviewText}</strong>
@@ -326,7 +322,6 @@ export default async function ProductDetailPage({
       <section className="section-block" id="related-products">
         <div className="section-head shop-section-head">
           <div>
-            <p className="section-kicker">RECOMMEND</p>
             <h3>함께 보면 좋은 상품</h3>
           </div>
           <Link className="more-link" href="/products/recommend">
