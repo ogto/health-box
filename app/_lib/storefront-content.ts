@@ -1,6 +1,8 @@
 import { cache } from "react";
 
 import {
+  fetchDealerMallProduct,
+  fetchDealerMallProductPage,
   fetchStorefrontNotice,
   fetchStorefrontNotices,
   fetchStorefrontProduct,
@@ -21,6 +23,7 @@ import {
   type Notice,
   type Product,
 } from "./store-data";
+import { getStorefrontRuntime } from "./storefront-runtime";
 
 type StoreProductRow = ReturnType<typeof mapProductRows>["items"][number];
 type StoreNoticeRow = ReturnType<typeof mapNoticeRows>[number];
@@ -54,6 +57,14 @@ function toNoticeRow(record: HealthBoxRecord | null) {
 function extractFallbackRecordId(slug: string, prefix: "product" | "notice") {
   const match = new RegExp(`^${prefix}-(\\d+)$`, "i").exec(slug);
   return match ? Number(match[1]) : null;
+}
+
+function decodeRouteSlug(slug: string) {
+  try {
+    return decodeURIComponent(slug);
+  } catch {
+    return slug;
+  }
 }
 
 function toStoreProduct(row: StoreProductRow): Product {
@@ -106,6 +117,13 @@ function toStoreProduct(row: StoreProductRow): Product {
   };
 }
 
+function mapStorefrontProductRows(page: HealthBoxPageResponse<HealthBoxRecord> | null) {
+  return mapProductRows(page).items.map((row) => ({
+    ...row,
+    slug: row.sourceSlug || row.slug,
+  }));
+}
+
 function toStoreNotice(row: StoreNoticeRow): Notice {
   return {
     slug: row.slug,
@@ -123,20 +141,30 @@ export const fetchStoreProducts = cache(async () => {
     return fallbackProducts;
   }
 
-  const page = await fetchStorefrontProductPage({ page: 1, size: 40 });
-  return mapProductRows(page).items.map(toStoreProduct);
+  const runtime = await getStorefrontRuntime();
+  const page = runtime.dealer
+    ? await fetchDealerMallProductPage(runtime.dealer.slug, { page: 1, size: 40 })
+    : await fetchStorefrontProductPage({ page: 1, size: 40 });
+
+  return mapStorefrontProductRows(page).map(toStoreProduct);
 });
 
 export const fetchStoreProductBySlug = cache(async (slug: string) => {
+  const decodedSlug = decodeRouteSlug(slug);
+
   if (!hasHealthBoxApi()) {
-    return fallbackProducts.find((product) => product.slug === slug) || null;
+    return fallbackProducts.find((product) => product.slug === decodedSlug) || null;
   }
 
-  const fallbackProductId = extractFallbackRecordId(slug, "product");
-  const page = await fetchStorefrontProductPage({ q: slug, page: 1, size: 20 });
-  const listedProduct = findProductBySlug(mapProductRows(page).items, slug);
-  const detailedProduct =
-    listedProduct?.recordId || fallbackProductId
+  const runtime = await getStorefrontRuntime();
+  const fallbackProductId = extractFallbackRecordId(decodedSlug, "product");
+  const page = runtime.dealer
+    ? await fetchDealerMallProductPage(runtime.dealer.slug, { q: decodedSlug, page: 1, size: 20 })
+    : await fetchStorefrontProductPage({ q: decodedSlug, page: 1, size: 20 });
+  const listedProduct = findProductBySlug(mapStorefrontProductRows(page), decodedSlug);
+  const detailedProduct = runtime.dealer
+    ? toProductPage(await fetchDealerMallProduct(runtime.dealer.slug, listedProduct?.sourceSlug || decodedSlug))
+    : listedProduct?.recordId || fallbackProductId
       ? toProductPage(await fetchStorefrontProduct(listedProduct?.recordId || fallbackProductId || 0))
       : null;
   const mergedProduct =

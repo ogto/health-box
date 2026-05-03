@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { NoticeRow, ProductCard, StoreShell } from "./_components/store-ui";
 import { fetchStoreNotices, fetchStoreProducts } from "./_lib/storefront-content";
@@ -7,6 +8,14 @@ import { getStorefrontRuntime } from "./_lib/storefront-runtime";
 
 export default async function Home() {
   const runtime = await getStorefrontRuntime();
+
+  if (
+    runtime.host.hostname === "admin.localhost" ||
+    runtime.host.hostname === `admin.${runtime.host.rootDomain}`
+  ) {
+    redirect("/dashboard");
+  }
+
   const [storeProducts, storeNotices] = await Promise.all([
     fetchStoreProducts(),
     fetchStoreNotices(),

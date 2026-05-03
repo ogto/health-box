@@ -8,7 +8,7 @@ import { AdminShell } from "./admin-shell";
 export function AdminRouteShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
-  if (pathname === "/admin/login") {
+  if (pathname === "/admin/login" || pathname === "/login") {
     return <>{children}</>;
   }
 

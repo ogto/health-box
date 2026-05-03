@@ -293,6 +293,33 @@ export async function fetchAdminProduct(productId: number, options?: { revalidat
   });
 }
 
+export async function fetchDealerMallProductPage(
+  dealerSlug: string,
+  query?: {
+    q?: string;
+    category?: string;
+    page?: number;
+    size?: number;
+  },
+) {
+  return healthBoxFetchOrNull<HealthBoxPageResponse<HealthBoxRecord>>(
+    `/health-box/dealer-malls/${encodeURIComponent(dealerSlug)}/products`,
+    {
+      query,
+      revalidate: PUBLIC_REVALIDATE_SECONDS,
+    },
+  );
+}
+
+export async function fetchDealerMallProduct(dealerSlug: string, productSlug: string) {
+  return healthBoxFetchOrNull<HealthBoxRecord>(
+    `/health-box/dealer-malls/${encodeURIComponent(dealerSlug)}/products/${encodeURIComponent(productSlug)}`,
+    {
+      revalidate: PUBLIC_REVALIDATE_SECONDS,
+    },
+  );
+}
+
 export async function fetchAdminCategories(options?: { revalidate?: number }) {
   return healthBoxFetchOrNull<HealthBoxCategory[]>("/health-box/admin/categories", {
     revalidate: options?.revalidate,

@@ -142,6 +142,14 @@ function resolveDealerSlug(hostname: string, rootDomain: string) {
   return null;
 }
 
+function resolveDealerContextHost(hostname: string, dealerSlug: string | null, rootDomain: string) {
+  if (hostname.endsWith(".localhost") && dealerSlug) {
+    return `${dealerSlug}.${rootDomain}`;
+  }
+
+  return hostname;
+}
+
 function buildDealerRuntime(slug: string, hostname: string): DealerRuntime {
   const preset = dealerPresets[slug];
   const displayName = preset?.displayName || prettifySlug(slug);
@@ -166,12 +174,13 @@ export const getStorefrontRuntime = cache(async (): Promise<StorefrontRuntime> =
     headerStore.get("x-forwarded-host") || headerStore.get("host") || rootDomain,
   );
   const dealerSlug = resolveDealerSlug(hostname, rootDomain);
+  const dealerContextHost = resolveDealerContextHost(hostname, dealerSlug, rootDomain);
   const dealer = !hasHealthBoxApi() && dealerSlug ? buildDealerRuntime(dealerSlug, hostname) : null;
   const apiEnabled = hasHealthBoxApi();
   const [publicSiteConfig, dealerContext] = apiEnabled
     ? await Promise.all([
         fetchPublicSiteConfig(),
-        hostname ? fetchDealerContext(hostname) : Promise.resolve(null),
+        dealerContextHost ? fetchDealerContext(dealerContextHost) : Promise.resolve(null),
       ])
     : [null, null];
   const resolvedSlug = dealerContext?.slug || dealerSlug || "";
