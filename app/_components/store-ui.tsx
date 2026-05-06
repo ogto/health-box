@@ -6,22 +6,12 @@ import type { ReactNode, SVGProps } from "react";
 import { BrandLogo } from "./brand-logo";
 import { CartCountBadge } from "./cart-count-badge";
 import { HeaderPromoBar } from "./header-promo-bar";
+import { StoreNavigation } from "./store-navigation";
 import type { Notice, Product } from "../_lib/store-data";
+import { fetchStoreCategories } from "../_lib/storefront-content";
 import { getStorefrontRuntime } from "../_lib/storefront-runtime";
 
-type ActiveKey = "best" | "promotion" | "recommend" | "etc" | "notice" | "mypage" | "cart" | null;
-
-const mainNavItems: Array<{
-  key: Exclude<ActiveKey, "mypage" | "cart" | null>;
-  label: string;
-  href: string;
-}> = [
-  { key: "best", label: "베스트", href: "/products/best" },
-  { key: "recommend", label: "추천상품", href: "/products/recommend" },
-  { key: "promotion", label: "기획전", href: "/promotion" },
-  { key: "etc", label: "건강루틴", href: "/promotion" },
-  { key: "notice", label: "공지사항", href: "/notice" },
-];
+type ActiveKey = string | null;
 
 export async function StoreShell({
   children,
@@ -30,7 +20,10 @@ export async function StoreShell({
   children: ReactNode;
   activeKey?: ActiveKey;
 }) {
-  const { assets, brand, dealer, host } = await getStorefrontRuntime();
+  const [{ assets, brand, dealer, host, navigation }, categories] = await Promise.all([
+    getStorefrontRuntime(),
+    fetchStoreCategories(),
+  ]);
 
   if (host.requestedDealerSlug && !dealer) {
     notFound();
@@ -78,31 +71,21 @@ export async function StoreShell({
               />
             </Link>
 
-            <div className="header-search-row" role="search">
+            <form action="/search" className="header-search-row" role="search">
               <div className="search-bar">
                 <label className="search-field">
                   <SearchIcon className="h-5 w-5" />
-                  <input name="keyword" placeholder={brand.searchPlaceholder} type="text" />
+                  <input minLength={2} name="q" placeholder={brand.searchPlaceholder} type="search" />
                 </label>
-                <button className="search-button" type="button">
+                <button className="search-button" type="submit">
                   검색
                 </button>
               </div>
-            </div>
+            </form>
           </div>
 
           <div className="header-nav">
-            <nav className="main-nav">
-              {mainNavItems.map((item) => (
-                <Link
-                  className={activeKey === item.key ? "is-active" : ""}
-                  href={item.href}
-                  key={item.key}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
+            <StoreNavigation activeKey={activeKey} categories={categories} navigation={navigation} />
           </div>
         </header>
 
@@ -114,14 +97,14 @@ export async function StoreShell({
 
 export function ProductCard({
   product,
-  label,
-  light = false,
   showMeta = true,
+  showPrice = true,
 }: {
   product: Product;
   label?: string;
   light?: boolean;
   showMeta?: boolean;
+  showPrice?: boolean;
 }) {
   return (
     <Link className="product-card" href={`/product/${product.slug}`}>
@@ -133,9 +116,6 @@ export function ProductCard({
           sizes="(max-width: 720px) 100vw, (max-width: 1180px) 50vw, 25vw"
           src={product.image}
         />
-        {label ? (
-          <span className={`product-badge${light ? " is-light" : ""}`}>{label}</span>
-        ) : null}
         <span className="product-card-quick">상세보기</span>
       </div>
       <div className="product-info">
@@ -146,8 +126,8 @@ export function ProductCard({
         <h4>{product.title}</h4>
         <p className="product-subtitle">{product.subtitle || product.summary}</p>
         <div className="product-card-price-row">
-          <p className="product-price">{product.price}</p>
-          <span>회원가</span>
+          <p className="product-price">{showPrice ? product.price : "로그인 후 확인"}</p>
+          <span>{showPrice ? "판매가" : "회원 전용"}</span>
         </div>
         {showMeta ? (
           <div className="product-meta">

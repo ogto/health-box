@@ -1,5 +1,6 @@
 export type Product = {
   slug: string;
+  sourceSlug?: string;
   badge: string;
   brand: string;
   title: string;

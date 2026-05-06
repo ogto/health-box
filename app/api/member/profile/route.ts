@@ -39,7 +39,7 @@ function toFriendlyMessage(message: string) {
 export async function PUT(request: NextRequest) {
   try {
     const session = await getMemberSession();
-    if (!session?.memberId || !session.dealerMallId || !session.sessionToken) {
+    if (!session?.memberId || session.dealerMallId == null || !session.sessionToken) {
       return NextResponse.json(
         { ok: false, message: "로그인이 필요합니다." },
         { status: 401 },

@@ -2,32 +2,51 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { Breadcrumbs, ProductCard, StoreShell } from "../_components/store-ui";
+import { getMemberSession } from "../_lib/member-auth";
+import {
+  findFirstNavigationItemByPath,
+  findNavigationItemByKey,
+  resolveNavigationProducts,
+} from "../_lib/storefront-config";
 import { fetchStoreProducts } from "../_lib/storefront-content";
 import { getStorefrontRuntime } from "../_lib/storefront-runtime";
 
-export default async function PromotionPage() {
-  const { assets, dealer, home } = await getStorefrontRuntime();
-  const promotionProducts = (await fetchStoreProducts()).slice(0, 3);
+export default async function PromotionPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ menu?: string }>;
+}) {
+  const params = await searchParams;
+  const runtime = await getStorefrontRuntime();
+  const { assets, dealer, home, navigation } = runtime;
+  const menuKey = params?.menu?.trim() || "";
+  const activeNavigationItem =
+    findNavigationItemByKey(navigation, menuKey) || findFirstNavigationItemByPath(navigation, "/promotion");
+  const activeKey = activeNavigationItem?.key || "coupon";
+  const pageTitle = activeNavigationItem?.label || "기획전";
+  const [storeProducts, session] = await Promise.all([fetchStoreProducts(), getMemberSession()]);
+  const showPrice = Boolean(session);
+  const promotionProducts = resolveNavigationProducts(storeProducts, activeNavigationItem).slice(0, 12);
   const leadProduct = promotionProducts[0] || null;
 
   return (
-    <StoreShell activeKey="promotion">
+    <StoreShell activeKey={activeKey}>
       <section className="subpage-block">
         <Breadcrumbs
           items={[
             { label: "홈", href: "/" },
-            { label: "기획전" },
+            { label: pageTitle },
           ]}
         />
 
         <div className="promo-banner">
           <div className="promo-copy">
             <p className="section-kicker">{home.banner.kicker}</p>
-            <h3>{home.banner.title}</h3>
+            <h3>{pageTitle}</h3>
             <p>
               {dealer
-                ? `${dealer.displayName} 회원이 자주 찾는 기본 영양 루틴과 시즌 케어 상품을 한 번에 보는 기획전 페이지입니다.`
-                : "자주 찾는 기본 영양 루틴과 재구매가 잦은 건강 루틴 상품을 한 번에 보는 기획전 페이지입니다. 메인 배너에서 보던 흐름을 별도 페이지로 정리했습니다."}
+                ? `${dealer.displayName} 회원을 위한 ${pageTitle} 상품을 한 번에 확인할 수 있습니다.`
+                : `${pageTitle} 메뉴에 맞춰 자주 찾는 건강 루틴 상품을 한 번에 볼 수 있습니다.`}
             </p>
             {leadProduct ? (
               <Link className="button-secondary" href={`/product/${leadProduct.slug}`}>
@@ -50,13 +69,13 @@ export default async function PromotionPage() {
         <section className="subpage-section">
           <div className="section-head">
             <div>
-              <h3>기획전 상품 모아보기</h3>
+              <h3>{pageTitle} 상품 모아보기</h3>
             </div>
           </div>
 
           <div className="product-grid product-grid-three">
-            {promotionProducts.map((product) => (
-              <ProductCard key={product.slug} label="기획전" light product={product} />
+            {promotionProducts.map((product, index) => (
+              <ProductCard key={`${product.slug}-${index}`} product={product} showPrice={showPrice} />
             ))}
             {!promotionProducts.length ? (
               <div className="content-panel">

@@ -1,3 +1,22 @@
+export type StorefrontNavigationItem = {
+  children?: StorefrontNavigationSubItem[];
+  href: string;
+  key: string;
+  label: string;
+  productSlugs?: string[];
+  sortOrder?: number;
+  style?: "category" | "link";
+  visible?: boolean;
+};
+
+export type StorefrontNavigationSubItem = {
+  href: string;
+  key: string;
+  label: string;
+  sortOrder?: number;
+  visible?: boolean;
+};
+
 export const storefrontConfig = {
   metadata: {
     title: "건강창고 | 프리미엄 건강식품 쇼핑몰",
@@ -24,6 +43,14 @@ export const storefrontConfig = {
     faviconPath: "/favicon.ico",
     logoType: "심볼 마크",
   },
+  navigation: [
+    { key: "category", label: "카테고리", href: "/products/best?menu=category", style: "category", visible: true },
+    { key: "coupon", label: "[에스더데이]10%쿠폰", href: "/promotion?menu=coupon", style: "link", visible: true },
+    { key: "national", label: "[8,900원]국민영양", href: "/promotion?menu=national", style: "link", visible: true },
+    { key: "best", label: "베스트", href: "/products/best?menu=best", style: "link", visible: true },
+    { key: "sale", label: "세일중", href: "/promotion?menu=sale", style: "link", visible: true },
+    { key: "event", label: "이벤트", href: "/promotion?menu=event", style: "link", visible: true },
+  ] satisfies StorefrontNavigationItem[],
   home: {
     hero: {
       kicker: "건강기능식품 전문몰",
@@ -65,3 +92,149 @@ export const storefrontConfig = {
     "기본 메타 타이틀, 설명, 공유용 썸네일",
   ],
 } as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function parseStorefrontNavigationItems(raw: unknown) {
+  const parsed = typeof raw === "string" ? parseNavigationJson(raw) : raw;
+  if (!Array.isArray(parsed)) {
+    return null;
+  }
+
+  const items = parsed
+    .map((item, index): StorefrontNavigationItem | null => {
+      if (!isRecord(item)) {
+        return null;
+      }
+
+      const label = typeof item.label === "string" ? item.label.trim() : "";
+      const href = typeof item.href === "string" ? item.href.trim() : "";
+      if (!label || !href) {
+        return null;
+      }
+
+      const key =
+        typeof item.key === "string" && item.key.trim()
+          ? item.key.trim()
+          : `custom-${index + 1}`;
+      const style = item.style === "category" ? "category" : "link";
+      const sortOrder = typeof item.sortOrder === "number" ? item.sortOrder : index + 1;
+      const visible = item.visible === false ? false : true;
+      const children = parseStorefrontNavigationChildren(item.children);
+      const productSlugs = parseStringArray(item.productSlugs);
+
+      return { children, href, key, label, productSlugs, sortOrder, style, visible };
+    })
+    .filter((item): item is StorefrontNavigationItem => Boolean(item))
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
+  return items.length ? items : null;
+}
+
+function parseStorefrontNavigationChildren(raw: unknown) {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((item, index): StorefrontNavigationSubItem | null => {
+      if (!isRecord(item)) {
+        return null;
+      }
+
+      const label = typeof item.label === "string" ? item.label.trim() : "";
+      const href = typeof item.href === "string" ? item.href.trim() : "";
+      if (!label || !href) {
+        return null;
+      }
+
+      return {
+        href,
+        key:
+          typeof item.key === "string" && item.key.trim()
+            ? item.key.trim()
+            : `child-${index + 1}`,
+        label,
+        sortOrder: typeof item.sortOrder === "number" ? item.sortOrder : index + 1,
+        visible: item.visible === false ? false : true,
+      };
+    })
+    .filter((item): item is StorefrontNavigationSubItem => Boolean(item))
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+}
+
+export function resolveStorefrontNavigationItems(raw: unknown) {
+  const savedItems = parseStorefrontNavigationItems(raw) || [];
+
+  return storefrontConfig.navigation.map((defaultItem, index) => {
+    const savedItem =
+      savedItems.find((item) => item.key === defaultItem.key) || savedItems[index] || null;
+
+    return {
+      ...defaultItem,
+      label: savedItem?.label || defaultItem.label,
+      href: defaultItem.href,
+      productSlugs: savedItem?.productSlugs || [],
+      sortOrder: index + 1,
+      visible: true,
+    };
+  });
+}
+
+export function resolveNavigationProducts<Product extends { slug: string; sourceSlug?: string }>(
+  products: Product[],
+  navigationItem?: StorefrontNavigationItem | null,
+) {
+  const productSlugs = navigationItem?.productSlugs?.filter(Boolean) || [];
+  if (!productSlugs.length) {
+    return products;
+  }
+
+  const productBySlug = new Map<string, Product>();
+  products.forEach((product) => {
+    productBySlug.set(product.slug, product);
+    if (product.sourceSlug) {
+      productBySlug.set(product.sourceSlug, product);
+    }
+  });
+
+  return productSlugs
+    .map((slug) => productBySlug.get(slug))
+    .filter((product): product is Product => Boolean(product));
+}
+
+export function findNavigationItemByKey(
+  navigation: ReadonlyArray<StorefrontNavigationItem>,
+  key?: string,
+) {
+  if (!key) {
+    return null;
+  }
+
+  return navigation.find((item) => item.key === key) || null;
+}
+
+export function findFirstNavigationItemByPath(
+  navigation: ReadonlyArray<StorefrontNavigationItem>,
+  pathname: string,
+) {
+  return navigation.find((item) => item.href.split("?")[0] === pathname) || null;
+}
+
+function parseNavigationJson(raw: string) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function parseStringArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
+}

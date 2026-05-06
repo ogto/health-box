@@ -329,7 +329,7 @@ function periodStartDate(period: string) {
 }
 
 async function fetchMemberOrders(session: Awaited<ReturnType<typeof getMemberSession>>) {
-  if (!session?.memberId || !session.dealerMallId || !session.sessionToken) {
+  if (!session?.memberId || session.dealerMallId == null || !session.sessionToken) {
     return {
       orders: [] as HealthBoxRecord[],
       message: session ? "로그인 정보가 오래되었습니다. 다시 로그인해주세요." : "",

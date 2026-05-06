@@ -42,7 +42,7 @@ function toFriendlyMessage(message: string) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getMemberSession();
-    if (!session?.memberId || !session.dealerMallId || !session.sessionToken) {
+    if (!session?.memberId || session.dealerMallId == null || !session.sessionToken) {
       return NextResponse.json(
         {
           ok: false,

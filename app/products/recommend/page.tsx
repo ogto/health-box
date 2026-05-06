@@ -1,14 +1,11 @@
 import { Breadcrumbs, ProductCard, StoreShell } from "../../_components/store-ui";
+import { getMemberSession } from "../../_lib/member-auth";
 import { fetchStoreProducts } from "../../_lib/storefront-content";
 
-const recommendationTags = ["루틴 추천", "면역 케어", "활력 보충", "시즌 픽"] as const;
-
 export default async function RecommendedProductsPage() {
-  const products = await fetchStoreProducts();
-  const recommendedList = products.slice(0, 4).map((product, index) => ({
-    product,
-    tag: recommendationTags[index] || product.category,
-  }));
+  const [products, session] = await Promise.all([fetchStoreProducts(), getMemberSession()]);
+  const showPrice = Boolean(session);
+  const recommendedList = products.slice(0, 4);
 
   return (
     <StoreShell activeKey="recommend">
@@ -41,8 +38,8 @@ export default async function RecommendedProductsPage() {
           </div>
 
           <div className="product-grid">
-            {recommendedList.map(({ product, tag }) => (
-              <ProductCard key={product.slug} label={tag} light product={product} showMeta={false} />
+            {recommendedList.map((product) => (
+              <ProductCard key={product.slug} product={product} showMeta={false} showPrice={showPrice} />
             ))}
             {!recommendedList.length ? (
               <div className="content-panel">

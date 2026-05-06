@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { NoticeRow, ProductCard, StoreShell } from "./_components/store-ui";
+import { getMemberSession } from "./_lib/member-auth";
 import { fetchStoreNotices, fetchStoreProducts } from "./_lib/storefront-content";
 import { getStorefrontRuntime } from "./_lib/storefront-runtime";
 
@@ -16,10 +17,12 @@ export default async function Home() {
     redirect("/dashboard");
   }
 
-  const [storeProducts, storeNotices] = await Promise.all([
+  const [storeProducts, storeNotices, session] = await Promise.all([
     fetchStoreProducts(),
     fetchStoreNotices(),
+    getMemberSession(),
   ]);
+  const showPrice = Boolean(session);
   const featuredProducts = storeProducts.slice(0, 4);
   const routineProducts = storeProducts.slice(4, 8).length
     ? storeProducts.slice(4, 8)
@@ -30,13 +33,13 @@ export default async function Home() {
     ? `${runtime.dealer.displayName} 회원을 위한 건강 셀렉션`
     : "오늘 필요한 건강 상품을 한눈에";
   const heroDescription = runtime.dealer
-    ? `${runtime.dealer.mallName}에서 추천하는 상품을 빠르게 확인하고 회원가로 만나보세요.`
+    ? `${runtime.dealer.mallName}에서 추천하는 상품을 빠르게 확인하세요.`
     : "건강창고가 고른 상품을 카테고리별로 둘러보고 나에게 맞는 루틴을 시작하세요.";
 
   return (
     <StoreShell activeKey="best">
       <section className="shop-hero">
-        <Link className="shop-hero-visual" href={heroProduct ? `/product/${heroProduct.slug}` : "/products/best"}>
+        <Link className="shop-hero-visual" href={heroProduct ? `/product/${heroProduct.slug}` : "/products/best?menu=best"}>
           <Image
             alt={heroProduct?.title || runtime.assets.heroAlt}
             className="object-cover"
@@ -64,8 +67,8 @@ export default async function Home() {
           </div>
           <div className="shop-benefit-grid">
             <div>
-              <strong>회원가</strong>
-              <span>로그인 후 전용가 확인</span>
+              <strong>회원 가격</strong>
+              <span>로그인 후 가격 확인</span>
             </div>
             <div>
               <strong>빠른 배송</strong>
@@ -80,7 +83,7 @@ export default async function Home() {
       </section>
 
       <section className="shop-strip">
-        <span>회원 전용가</span>
+        <span>회원 가격 확인</span>
         <span>추천 루틴</span>
         <span>상품별 상세 이미지</span>
         <span>공지/배송 안내</span>
@@ -91,14 +94,14 @@ export default async function Home() {
           <div>
             <h3>{runtime.dealer ? `${runtime.dealer.displayName} 베스트 상품` : "지금 많이 보는 상품"}</h3>
           </div>
-          <Link className="more-link" href="/products/best">
+          <Link className="more-link" href="/products/best?menu=best">
             전체보기
           </Link>
         </div>
 
         <div className="product-grid shop-product-grid">
-          {featuredProducts.map((product, index) => (
-            <ProductCard key={product.slug} label={index === 0 ? "인기" : product.badge} product={product} />
+          {featuredProducts.map((product) => (
+            <ProductCard key={product.slug} product={product} showPrice={showPrice} />
           ))}
           {!featuredProducts.length ? (
             <div className="content-panel">
@@ -114,7 +117,7 @@ export default async function Home() {
           <strong>함께 찾는 건강 상품을 묶어서 확인하세요</strong>
           <p>가격, 배송, 상세 이미지를 한 번에 비교하고 필요한 상품만 빠르게 담을 수 있습니다.</p>
         </div>
-        <Link className="button-primary" href="/promotion">
+        <Link className="button-primary" href="/promotion?menu=coupon">
           기획전 보기
         </Link>
       </section>
@@ -131,7 +134,7 @@ export default async function Home() {
 
         <div className="product-grid shop-product-grid is-compact">
           {routineProducts.map((product) => (
-            <ProductCard key={`routine-${product.slug}`} label={product.category} light product={product} />
+            <ProductCard key={`routine-${product.slug}`} product={product} showPrice={showPrice} />
           ))}
           {!routineProducts.length ? (
             <div className="content-panel">
@@ -152,10 +155,9 @@ export default async function Home() {
           {allProducts.map((product) => (
             <ProductCard
               key={`all-${product.slug}`}
-              label="상품"
-              light
               product={product}
               showMeta={false}
+              showPrice={showPrice}
             />
           ))}
         </div>

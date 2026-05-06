@@ -89,9 +89,11 @@ function ConfirmDialog({
 export function AdminMemberApprovalActions({
   applicationId,
   memberName,
+  returnPath = "/admin/members",
 }: {
   applicationId: number;
   memberName: string;
+  returnPath?: string;
 }) {
   const approveFormId = useId();
   const rejectFormId = useId();
@@ -143,6 +145,7 @@ export function AdminMemberApprovalActions({
     <div className="admin-inline-actions admin-cell-center">
       <form action={approveBuyerSignupApplicationAction} id={approveFormId}>
         <input name="applicationId" type="hidden" value={String(applicationId)} />
+        <input name="redirectTo" type="hidden" value={returnPath} />
       </form>
       <button className="admin-button small" onClick={openApproveConfirm} type="button">
         승인

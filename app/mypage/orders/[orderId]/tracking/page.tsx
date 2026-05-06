@@ -206,7 +206,7 @@ function trackingSourceText(order: HealthBoxRecord, deliveryTracking: DeliveryTr
 }
 
 async function fetchOrder(orderId: string, session: Awaited<ReturnType<typeof getMemberSession>>) {
-  if (!session?.memberId || !session.dealerMallId || !session.sessionToken) {
+  if (!session?.memberId || session.dealerMallId == null || !session.sessionToken) {
     return null;
   }
 

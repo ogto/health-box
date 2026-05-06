@@ -5,16 +5,24 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 import type { CreateDealerMallDialogState } from "../../_actions/health-box-admin";
+import { AdminDealerDomainField } from "./admin-dealer-domain-field";
 import { AdminSubmitButton } from "./admin-submit-button";
+
+type DealerDomainOption = {
+  id: number;
+  slug: string;
+};
 
 export function AdminDealerCreateDialog({
   action,
+  dealerDomains,
   hasApi,
 }: {
   action: (
     previousState: CreateDealerMallDialogState,
     formData: FormData,
   ) => CreateDealerMallDialogState | Promise<CreateDealerMallDialogState>;
+  dealerDomains: DealerDomainOption[];
   hasApi: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -80,6 +88,7 @@ export function AdminDealerCreateDialog({
                 <div className="admin-info-dialog-body">
                   <AdminDealerCreateDialogForm
                     action={action}
+                    dealerDomains={dealerDomains}
                     hasApi={hasApi}
                     onCancel={() => setOpen(false)}
                     onSuccess={() => setOpen(false)}
@@ -101,6 +110,7 @@ const INITIAL_STATE: CreateDealerMallDialogState = {
 
 function AdminDealerCreateDialogForm({
   action,
+  dealerDomains,
   hasApi,
   onCancel,
   onSuccess,
@@ -109,6 +119,7 @@ function AdminDealerCreateDialogForm({
     previousState: CreateDealerMallDialogState,
     formData: FormData,
   ) => CreateDealerMallDialogState | Promise<CreateDealerMallDialogState>;
+  dealerDomains: DealerDomainOption[];
   hasApi: boolean;
   onCancel: () => void;
   onSuccess: () => void;
@@ -136,18 +147,13 @@ function AdminDealerCreateDialogForm({
         </label>
       </div>
 
+      <AdminDealerDomainField dealerDomains={dealerDomains} />
+
       <div className="admin-field-grid two">
-        <label className="admin-field">
-          <span>slug</span>
-          <input className="admin-input" name="slug" placeholder="예: gangnam-wellness" type="text" />
-        </label>
         <label className="admin-field">
           <span>담당자 이름</span>
           <input className="admin-input" name="applicantName" placeholder="담당자명 입력" type="text" />
         </label>
-      </div>
-
-      <div className="admin-field-grid two">
         <label className="admin-field">
           <span>로그인 이메일</span>
           <input className="admin-input" name="email" placeholder="login@example.com" type="email" />

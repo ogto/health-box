@@ -4,6 +4,7 @@ import Link from "next/link";
 import { saveStorefrontConfigAction } from "../../_actions/health-box-admin";
 import { BrandLogo } from "../../_components/brand-logo";
 import { AdminHeader } from "../../_components/admin/admin-header";
+import { AdminStorefrontMenuEditor } from "../../_components/admin/admin-storefront-menu-editor";
 import { AdminSubmitButton } from "../../_components/admin/admin-submit-button";
 import { AdminBadge, AdminMetrics, AdminPanel } from "../../_components/admin/admin-ui";
 import type { AdminMetric } from "../../_lib/admin-data";
@@ -14,20 +15,20 @@ import {
   hasHealthBoxApi,
 } from "../../_lib/health-box-api";
 import { mapNoticeRows, mapProductRows } from "../../_lib/health-box-presenters";
-import { storefrontConfig } from "../../_lib/storefront-config";
+import { resolveStorefrontNavigationItems, storefrontConfig } from "../../_lib/storefront-config";
 
 const previewTabs = ["베스트", "균형있는", "건강하게", "체중조절"] as const;
-const previewNav = ["식품/간식", "영양제/보조제", "드링크", "기타", "공지사항"] as const;
 
 export default async function AdminStorefrontPage() {
   const [remoteConfig, remoteProductPage, remoteNotices] = hasHealthBoxApi()
     ? await Promise.all([
         fetchAdminPublicSiteConfig(),
-        fetchAdminProducts({ page: 1, size: 4 }),
+        fetchAdminProducts({ page: 1, size: 200 }),
         fetchAdminNotices(),
       ])
     : [null, null, null];
-  const previewProducts = mapProductRows(remoteProductPage).items.slice(0, 4);
+  const productOptions = mapProductRows(remoteProductPage).items;
+  const previewProducts = productOptions.slice(0, 4);
   const previewNotices = mapNoticeRows(remoteNotices).slice(0, 3);
 
   const pageConfig = {
@@ -48,6 +49,9 @@ export default async function AdminStorefrontPage() {
       shareImage: remoteConfig?.shareThumbnailUrl || storefrontConfig.assets.shareImage,
       faviconPath: remoteConfig?.faviconUrl || storefrontConfig.assets.faviconPath,
     },
+    navigation: resolveStorefrontNavigationItems(
+      remoteConfig?.mainNavigationJson || remoteConfig?.navigationJson || remoteConfig?.menuJson,
+    ),
     supportText: remoteConfig?.customerCenterText || storefrontConfig.home.supportItems[0]?.value || "",
     syncTargets: storefrontConfig.syncTargets,
   };
@@ -123,6 +127,10 @@ export default async function AdminStorefrontPage() {
                 />
               </label>
             </div>
+          </AdminPanel>
+
+          <AdminPanel title="상단 메뉴">
+            <AdminStorefrontMenuEditor items={pageConfig.navigation} products={productOptions} />
           </AdminPanel>
 
           <AdminPanel title="메타 / 공유 설정">
@@ -213,8 +221,13 @@ export default async function AdminStorefrontPage() {
                   </div>
 
                   <div className="admin-storefront-mini-nav">
-                    {previewNav.map((item) => (
-                      <span key={item}>{item}</span>
+                    {pageConfig.navigation.filter((item) => item.visible !== false).map((item) => (
+                      <span
+                        className={item.style === "category" ? "is-category" : undefined}
+                        key={item.key}
+                      >
+                        {item.label}
+                      </span>
                     ))}
                   </div>
                 </div>

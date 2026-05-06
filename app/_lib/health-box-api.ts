@@ -34,6 +34,9 @@ export type HealthBoxPublicSiteConfig = {
   shareThumbnailUrl?: string;
   metaTitle?: string;
   metaDescription?: string;
+  mainNavigationJson?: string;
+  menuJson?: string;
+  navigationJson?: string;
   searchPlaceholder?: string;
   policyText?: string;
   customerCenterText?: string;

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   fetchAdminBuyerSignupApplications,
   fetchAdminDealerMallMembers,
+  fetchAdminMembers,
   fetchDealerPublicBySlug,
   healthBoxFetch,
   stringValue,
@@ -43,17 +44,18 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const requestedDealerMallId = Number(body.dealerMallId);
     const hqMall = Boolean(body.hqMall);
-    const dealerSlug = hqMall ? "head" : String(body.dealerSlug || "").trim() || undefined;
+    const dealerSlug = hqMall ? undefined : String(body.dealerSlug || "").trim() || undefined;
     const name = String(body.name || "").trim();
     const email = String(body.email || "").trim();
     const phone = normalizePhone(body.phone);
     const password = String(body.password || "");
     const resolvedDealerMallId =
+      hqMall ? 0 :
       requestedDealerMallId ||
       Number((await fetchDealerPublicBySlug(dealerSlug || ""))?.dealerMallId || 0) ||
       0;
 
-    if (!resolvedDealerMallId && !dealerSlug) {
+    if (!hqMall && !resolvedDealerMallId && !dealerSlug) {
       return NextResponse.json(
         { ok: false, message: "딜러몰 정보가 없습니다. 딜러몰에서 다시 접속해주세요." },
         { status: 400 },
@@ -74,15 +76,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!resolvedDealerMallId) {
+    if (!hqMall && !resolvedDealerMallId) {
       return NextResponse.json(
-        { ok: false, message: "딜러몰 정보를 확인할 수 없습니다. 다시 시도해주세요." },
+        {
+          ok: false,
+          message: "딜러몰 정보를 확인할 수 없습니다. 다시 시도해주세요.",
+        },
         { status: 400 },
       );
     }
 
     const normalizedName = normalizeName(name);
-    const members = (await fetchAdminDealerMallMembers(resolvedDealerMallId)) || [];
+    const members = hqMall
+      ? ((await fetchAdminMembers()) || []).filter((member) => Number(member.dealerMallId ?? 0) === 0)
+      : (await fetchAdminDealerMallMembers(resolvedDealerMallId)) || [];
     const existingMember = members.find((member) => {
       const memberPhone = normalizePhone(stringValue(member, "phone"));
       const memberName = normalizeName(stringValue(member, "name"));
@@ -126,7 +133,7 @@ export async function POST(request: NextRequest) {
         email,
         password,
         inboundChannel: hqMall ? "hq-public" : "dealer-public",
-        slug: buildSignupSlug(name, dealerSlug),
+        slug: hqMall ? undefined : buildSignupSlug(name, dealerSlug),
       },
     });
 

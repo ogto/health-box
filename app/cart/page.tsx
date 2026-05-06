@@ -7,6 +7,7 @@ import { getStorefrontRuntime } from "../_lib/storefront-runtime";
 
 export default async function CartPage() {
   const [runtime, session, products] = await Promise.all([getStorefrontRuntime(), getMemberSession(), fetchStoreProducts()]);
+  const showPrice = Boolean(session);
 
   const cartContent = (
     <>
@@ -29,7 +30,7 @@ export default async function CartPage() {
 
         <div className="product-grid product-grid-three">
           {products.slice(0, 3).map((product) => (
-            <ProductCard key={product.slug} label={product.badge} product={product} />
+            <ProductCard key={product.slug} product={product} showPrice={showPrice} />
           ))}
         </div>
       </section>

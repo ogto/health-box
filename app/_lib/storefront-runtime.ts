@@ -8,7 +8,11 @@ import {
   fetchPublicSiteConfig,
   hasHealthBoxApi,
 } from "./health-box-api";
-import { storefrontConfig } from "./storefront-config";
+import {
+  resolveStorefrontNavigationItems,
+  storefrontConfig,
+  type StorefrontNavigationItem,
+} from "./storefront-config";
 
 type DealerPreset = {
   displayName: string;
@@ -39,6 +43,7 @@ type StorefrontConfigShape = {
     faviconPath: string;
     logoType: string;
   };
+  navigation: ReadonlyArray<StorefrontNavigationItem>;
   home: {
     hero: {
       kicker: string;
@@ -211,6 +216,11 @@ export const getStorefrontRuntime = cache(async (): Promise<StorefrontRuntime> =
       shareImage: publicSiteConfig?.shareThumbnailUrl || storefrontConfig.assets.shareImage,
       faviconPath: publicSiteConfig?.faviconUrl || storefrontConfig.assets.faviconPath,
     },
+    navigation: resolveStorefrontNavigationItems(
+      publicSiteConfig?.mainNavigationJson ||
+        publicSiteConfig?.navigationJson ||
+        publicSiteConfig?.menuJson,
+    ),
     home: {
       ...storefrontConfig.home,
       supportItems: [

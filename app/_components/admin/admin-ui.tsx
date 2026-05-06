@@ -32,6 +32,7 @@ export function AdminPanel({
   action,
   children,
   className,
+  id,
 }: {
   kicker?: string;
   title: string;
@@ -39,9 +40,10 @@ export function AdminPanel({
   action?: ReactNode;
   children: ReactNode;
   className?: string;
+  id?: string;
 }) {
   return (
-    <section className={`admin-panel${className ? ` ${className}` : ""}`}>
+    <section className={`admin-panel${className ? ` ${className}` : ""}`} id={id}>
       <div className="admin-panel-head">
         <div className="admin-panel-copy">
           {kicker ? <p className="admin-panel-kicker">{kicker}</p> : null}

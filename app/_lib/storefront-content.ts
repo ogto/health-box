@@ -3,6 +3,7 @@ import { cache } from "react";
 import {
   fetchDealerMallProduct,
   fetchDealerMallProductPage,
+  fetchAdminCategories,
   fetchStorefrontNotice,
   fetchStorefrontNotices,
   fetchStorefrontProduct,
@@ -27,6 +28,9 @@ import { getStorefrontRuntime } from "./storefront-runtime";
 
 type StoreProductRow = ReturnType<typeof mapProductRows>["items"][number];
 type StoreNoticeRow = ReturnType<typeof mapNoticeRows>[number];
+type PublicStoreProductRow = StoreProductRow & {
+  routeSlug?: string;
+};
 
 const fallbackImage = fallbackProducts[0]?.image || "";
 
@@ -67,7 +71,7 @@ function decodeRouteSlug(slug: string) {
   }
 }
 
-function toStoreProduct(row: StoreProductRow): Product {
+function toStoreProduct(row: PublicStoreProductRow): Product {
   const image = row.image || row.gallery[0] || fallbackImage;
   const gallery = Array.from(new Set([image, ...row.gallery].filter(Boolean)));
   const summary = row.summary || row.subtitle || "";
@@ -91,6 +95,7 @@ function toStoreProduct(row: StoreProductRow): Product {
 
   return {
     slug: row.slug,
+    sourceSlug: row.routeSlug || row.sourceSlug,
     badge: row.badge || row.publishStatus || row.category || "상품",
     brand: row.brand || "건강창고",
     title: row.title,
@@ -120,6 +125,7 @@ function toStoreProduct(row: StoreProductRow): Product {
 function mapStorefrontProductRows(page: HealthBoxPageResponse<HealthBoxRecord> | null) {
   return mapProductRows(page).items.map((row) => ({
     ...row,
+    routeSlug: row.slug,
     slug: row.sourceSlug || row.slug,
   }));
 }
@@ -136,17 +142,59 @@ function toStoreNotice(row: StoreNoticeRow): Notice {
   };
 }
 
-export const fetchStoreProducts = cache(async () => {
+export const fetchStoreProducts = cache(async (query?: { q?: string; size?: number }) => {
   if (!hasHealthBoxApi()) {
-    return fallbackProducts;
+    const keyword = query?.q?.trim().toLowerCase();
+    if (!keyword) {
+      return fallbackProducts;
+    }
+
+    return fallbackProducts.filter((product) =>
+      [
+        product.title,
+        product.subtitle,
+        product.summary,
+        product.brand,
+        product.category,
+        product.badge,
+      ]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(keyword)),
+    );
   }
 
+  const keyword = query?.q?.trim();
   const runtime = await getStorefrontRuntime();
+  const size = query?.size || 40;
   const page = runtime.dealer
-    ? await fetchDealerMallProductPage(runtime.dealer.slug, { page: 1, size: 40 })
-    : await fetchStorefrontProductPage({ page: 1, size: 40 });
+    ? await fetchDealerMallProductPage(runtime.dealer.slug, { q: keyword, page: 1, size })
+    : await fetchStorefrontProductPage({ q: keyword, page: 1, size });
 
   return mapStorefrontProductRows(page).map(toStoreProduct);
+});
+
+export const fetchStoreCategories = cache(async () => {
+  if (!hasHealthBoxApi()) {
+    return Array.from(new Set(fallbackProducts.map((product) => product.category).filter(Boolean)))
+      .map((name, index) => ({
+        href: `/products/best?menu=category&category=${encodeURIComponent(name)}`,
+        key: `fallback-${index + 1}`,
+        label: name,
+      }));
+  }
+
+  const categories = await fetchAdminCategories({ revalidate: 60 });
+  return (categories || [])
+    .filter((category) => category.status !== "INACTIVE")
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+    .map((category, index) => {
+      const label = category.name || category.categoryCode || `카테고리 ${index + 1}`;
+      return {
+        href: `/products/best?menu=category&category=${encodeURIComponent(label)}`,
+        key: String(category.id || category.slug || category.categoryCode || index),
+        label,
+      };
+    });
 });
 
 export const fetchStoreProductBySlug = cache(async (slug: string) => {

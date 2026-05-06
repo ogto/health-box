@@ -179,6 +179,7 @@ export function ProductPurchaseBox({
   brand,
   title,
   price,
+  isMember = false,
   productImage,
   productSlug,
   highlights,
@@ -190,6 +191,7 @@ export function ProductPurchaseBox({
   brand: string;
   title: string;
   price: string;
+  isMember?: boolean;
   productImage: string;
   productSlug: string;
   highlights: string[];
@@ -201,6 +203,7 @@ export function ProductPurchaseBox({
   const router = useRouter();
   const { quantity, selectedItems, selectedValues, setQuantity, setSelectedItems, setSelectedValues } = usePurchaseContext();
   const [purchaseMessage, setPurchaseMessage] = useState("");
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const optionId = useId();
   const dropdownRefs = useRef<Array<ProductOptionDropdownHandle | null>>([]);
   const activeGroups = (optionGroups || []).filter((group) => group.groupName && group.values?.length);
@@ -352,6 +355,12 @@ export function ProductPurchaseBox({
 
   function handleCartAction(nextPath?: string) {
     setPurchaseMessage("");
+
+    if (!isMember) {
+      setShowLoginPrompt(true);
+      return;
+    }
+
     const cartItems = getCartItems();
 
     if (!cartItems.length) {
@@ -383,10 +392,14 @@ export function ProductPurchaseBox({
 
       <div className="price-panel shop-price-panel">
         <div>
-          <p className="price-label">회원 전용가</p>
-          <p className="price-value">{price}</p>
+          <p className="price-label">상품 가격</p>
+          <p className="price-value">{isMember ? price : "로그인 후 확인"}</p>
         </div>
-        <p className="price-note">로그인 후 회원 조건에 맞는 가격과 구매 기능을 확인할 수 있습니다.</p>
+        <p className="price-note">
+          {isMember
+            ? "회원 계정으로 구매와 장바구니 담기가 가능합니다."
+            : "아직 회원이 아니신가요? 가입 후 가격 확인과 구매를 진행할 수 있습니다."}
+        </p>
       </div>
 
       {hasGroupedOptions ? (
@@ -562,6 +575,26 @@ export function ProductPurchaseBox({
         </button>
       </div>
       {purchaseMessage ? <div className="member-auth-alert is-muted">{purchaseMessage}</div> : null}
+      {showLoginPrompt ? (
+        <div className="shop-login-modal-backdrop" role="presentation">
+          <div aria-modal="true" className="shop-login-modal" role="dialog">
+            <strong>아직 회원이 아니신가요?</strong>
+            <p>가입 후 가격을 확인하고 구매할 수 있습니다.</p>
+            <div className="shop-login-modal-actions">
+              <button className="button-secondary" onClick={() => setShowLoginPrompt(false)} type="button">
+                취소
+              </button>
+              <button
+                className="button-primary"
+                onClick={() => router.push(`/login?next=${encodeURIComponent(`/product/${productSlug}`)}`)}
+                type="button"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

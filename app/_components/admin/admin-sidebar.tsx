@@ -1,30 +1,44 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSelectedLayoutSegment } from "next/navigation";
 import type { SVGProps } from "react";
 
 import { BrandLogo } from "../brand-logo";
 import { AdminLogoutButton } from "./admin-logout-button";
 
 const navItems = [
-  { href: "/admin/dashboard", label: "대시보드", icon: DashboardIcon },
-  { href: "/admin/orders", label: "주문관리", icon: OrderIcon },
-  { href: "/admin/products", label: "상품관리", icon: ProductIcon },
-  { href: "/admin/categories", label: "카테고리", icon: CategoryIcon },
-  { href: "/admin/sales", label: "매출/정산", icon: SalesIcon },
-  { href: "/admin/members", label: "회원관리", icon: MemberIcon },
-  { href: "/admin/dealers", label: "딜러관리", icon: DealerIcon },
-  { href: "/admin/storefront", label: "홈페이지관리", icon: StorefrontIcon },
-  { href: "/admin/notices", label: "공지관리", icon: NoticeIcon },
+  { href: "/admin/dashboard", label: "대시보드", icon: DashboardIcon, keys: ["", "dashboard"] },
+  { href: "/admin/orders", label: "주문관리", icon: OrderIcon, keys: ["orders"] },
+  { href: "/admin/products", label: "상품관리", icon: ProductIcon, keys: ["products", "product"] },
+  { href: "/admin/categories", label: "카테고리", icon: CategoryIcon, keys: ["categories"] },
+  { href: "/admin/sales", label: "매출/정산", icon: SalesIcon, keys: ["sales", "settlements"] },
+  { href: "/admin/members", label: "회원관리", icon: MemberIcon, keys: ["members"] },
+  { href: "/admin/dealers", label: "딜러관리", icon: DealerIcon, keys: ["dealers"] },
+  {
+    href: "/admin/storefront",
+    label: "홈페이지관리",
+    icon: StorefrontIcon,
+    keys: ["storefront", "settings", "operation-settings"],
+  },
+  { href: "/admin/notices", label: "공지관리", icon: NoticeIcon, keys: ["notices", "notice"] },
 ] as const;
 
-function isActive(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(`${href}/`);
+function getAdminMenuKeyFromPath(pathname: string | null) {
+  const normalizedPath = (pathname || "").split("?")[0].replace(/\/+$/, "");
+  const segments = normalizedPath.split("/").filter(Boolean);
+
+  if (segments[0] !== "admin") {
+    return "";
+  }
+
+  return segments[1] || "";
 }
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const selectedSegment = useSelectedLayoutSegment();
+  const activeMenuKey = selectedSegment || getAdminMenuKeyFromPath(pathname);
 
   return (
     <div className="admin-sidebar-inner">
@@ -38,12 +52,14 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       <nav className="admin-sidebar-nav" aria-label="관리자 메뉴">
         {navItems.map((item) => {
-          const active = isActive(pathname, item.href);
+          const active = (item.keys as readonly string[]).includes(activeMenuKey);
           const Icon = item.icon;
 
           return (
             <Link
+              aria-current={active ? "page" : undefined}
               className={`admin-sidebar-link${active ? " is-active" : ""}`}
+              data-active={active ? "true" : undefined}
               href={item.href}
               key={item.href}
               onClick={onNavigate}

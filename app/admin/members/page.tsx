@@ -22,7 +22,20 @@ import {
 
 type MembersSearchParams = {
   dealerMallId?: string;
+  memberApprovalError?: string;
 };
+
+function buildMembersReturnPath(dealerMallId: number | null) {
+  if (!dealerMallId) {
+    return "/admin/members";
+  }
+
+  return `/admin/members?dealerMallId=${dealerMallId}`;
+}
+
+function isHqBuyerApplication(application: Record<string, unknown>) {
+  return /^hq-public$/i.test(stringValue(application, "inboundChannel"));
+}
 
 export default async function AdminMembersPage({
   searchParams,
@@ -41,6 +54,7 @@ export default async function AdminMembersPage({
   const dealerRows = mapDealerRows(dealers);
   const selectedDealerId = Number(params.dealerMallId) || null;
   const selectedDealer = dealerRows.find((dealer) => dealer.id === selectedDealerId) || null;
+  const membersReturnPath = buildMembersReturnPath(selectedDealerId);
 
   const scopedMembers =
     hasHealthBoxApi() && selectedDealer?.id
@@ -49,6 +63,29 @@ export default async function AdminMembersPage({
 
   const metrics = buildMemberMetrics(scopedMembers, dealers, buyerApplications);
   const rawMemberRows = mapMemberRows(scopedMembers);
+  const dealerNameById = new Map(dealerRows.map((dealer) => [dealer.id, dealer.name]));
+  const hqBuyerMemberIds = new Set(
+    (buyerApplications ?? [])
+      .filter(isHqBuyerApplication)
+      .map((application) => idValue(application, "buyerMemberId"))
+      .filter((buyerMemberId): buyerMemberId is number => Boolean(buyerMemberId)),
+  );
+  const memberRows = rawMemberRows.map((member) => {
+    const hqMember = member.dealerId === 0 || (Boolean(member.id) && hqBuyerMemberIds.has(member.id ?? 0));
+    const dealerName =
+      hqMember
+        ? "본사몰"
+        : member.dealer !== "-"
+          ? member.dealer
+          : member.dealerId
+            ? dealerNameById.get(member.dealerId) || selectedDealer?.name || "-"
+            : selectedDealer?.name || "-";
+    return {
+      ...member,
+      dealer: dealerName,
+    };
+  });
+
   const pendingBuyerApplications = (buyerApplications ?? []).filter((application) => {
     const dealerMallId = idValue(application, "dealerMallId");
     const status = stringValue(application, "status");
@@ -63,23 +100,37 @@ export default async function AdminMembersPage({
 
     return true;
   });
-  const dealerNameById = new Map(dealerRows.map((dealer) => [dealer.id, dealer.name]));
-  const memberRows = rawMemberRows.map((member) => {
+  const pendingBuyerRows = pendingBuyerApplications.map((application, index) => {
+    const applicationId = idValue(application, "id", "applicationId") ?? index + 1;
+    const dealerMallId = idValue(application, "dealerMallId");
     const dealerName =
-      member.dealer !== "-"
-        ? member.dealer
-        : member.dealerId
-          ? dealerNameById.get(member.dealerId) || selectedDealer?.name || "-"
-          : selectedDealer?.name || "-";
+      isHqBuyerApplication(application) || dealerMallId === 0
+        ? "본사몰"
+        : stringValue(application, "dealerMallName", "mallName", "dealer") ||
+          (dealerMallId ? dealerNameById.get(dealerMallId) : "") ||
+          "-";
+    const phone = stringValue(application, "phone");
+    const email = stringValue(application, "email");
+    const contact = [phone, email].filter(Boolean).join(" / ") || "-";
+    const submittedAt =
+      dateTimeValue(application, "appliedAt", "createdAt", "submittedAt", "requestedAt") || "-";
+
     return {
-      ...member,
-      dealer: dealerName,
+      applicationId,
+      contact,
+      dealerName,
+      memberName: stringValue(application, "name", "buyerName") || "이름 없음",
+      submittedAt,
     };
   });
 
   return (
     <div className="admin-page">
       <AdminHeader title="회원관리" />
+
+      {params.memberApprovalError ? (
+        <div className="admin-feedback is-error">{params.memberApprovalError}</div>
+      ) : null}
 
       <AdminMetrics items={metrics} />
 
@@ -122,33 +173,22 @@ export default async function AdminMembersPage({
               ? "선택한 딜러몰에 승인 대기 회원이 없습니다."
               : "승인 대기 회원 신청이 없습니다."
           }
-          headers={["이름", "딜러몰", "연락처", "신청일", "상태", "처리"]}
-          isEmpty={!pendingBuyerApplications.length}
+          headers={["이름", "가입 경로", "연락처", "신청일", "상태", "처리"]}
+          isEmpty={!pendingBuyerRows.length}
         >
-          {pendingBuyerApplications.map((application, index) => {
-            const applicationId = idValue(application, "id", "applicationId") ?? index + 1;
-            const dealerMallId = idValue(application, "dealerMallId");
-            const dealerName =
-              stringValue(application, "dealerMallName", "mallName", "dealer") ||
-              (dealerMallId ? dealerNameById.get(dealerMallId) : "") ||
-              "-";
-            const phone = stringValue(application, "phone");
-            const email = stringValue(application, "email");
-            const contact = [phone, email].filter(Boolean).join(" / ") || "-";
-            const submittedAt =
-              dateTimeValue(application, "appliedAt", "createdAt", "submittedAt", "requestedAt") || "-";
-
+          {pendingBuyerRows.map((application) => {
             return (
-              <div className="admin-table-row" key={applicationId}>
-                <strong>{stringValue(application, "name", "buyerName") || "이름 없음"}</strong>
-                <span className="admin-row-muted">{dealerName}</span>
-                <span className="admin-row-muted" title={contact}>{contact}</span>
-                <span className="admin-row-muted">{submittedAt}</span>
+              <div className="admin-table-row" key={application.applicationId}>
+                <strong>{application.memberName}</strong>
+                <span className="admin-row-muted">{application.dealerName}</span>
+                <span className="admin-row-muted" title={application.contact}>{application.contact}</span>
+                <span className="admin-row-muted">{application.submittedAt}</span>
                 <AdminBadge tone="gold">승인 대기</AdminBadge>
                 {hasHealthBoxApi() ? (
                   <AdminMemberApprovalActions
-                    applicationId={applicationId}
-                    memberName={stringValue(application, "name", "buyerName") || "해당"}
+                    applicationId={application.applicationId}
+                    memberName={application.memberName || "해당"}
+                    returnPath={membersReturnPath}
                   />
                 ) : (
                   <span className="admin-row-muted">API 미연결</span>
@@ -171,7 +211,7 @@ export default async function AdminMembersPage({
               ? "선택한 딜러몰에 속한 회원이 없습니다."
               : "조회 가능한 회원 데이터가 없습니다."
           }
-          headers={["이름", "연락처", "딜러몰", "가입일", "주문", "누적 구매", "상태"]}
+          headers={["이름", "연락처", "가입 경로", "가입일", "주문", "누적 구매", "상태"]}
           isEmpty={!memberRows.length}
         >
           {memberRows.map((member, index) => (

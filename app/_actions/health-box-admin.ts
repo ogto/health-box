@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  fetchAdminDealerMalls,
   fetchAdminProducts,
   hasHealthBoxApi,
   healthBoxFetch,
@@ -40,6 +41,39 @@ function optionalNumber(formData: FormData, key: string) {
 
   const number = Number(value);
   return Number.isFinite(number) ? number : undefined;
+}
+
+function collectStorefrontNavigationItems(formData: FormData) {
+  const jsonValue = optionalString(formData, "mainNavigationJson");
+  if (jsonValue) {
+    return jsonValue;
+  }
+
+  const count = optionalNumber(formData, "navigationCount") ?? 0;
+  const items = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const label = optionalString(formData, `navigationLabel_${index}`);
+    const href = optionalString(formData, `navigationHref_${index}`);
+    if (!label || !href) {
+      continue;
+    }
+
+    const key = optionalString(formData, `navigationKey_${index}`) || `custom-${index + 1}`;
+    const style = optionalString(formData, `navigationStyle_${index}`) === "category" ? "category" : "link";
+    const visible = formData.get(`navigationVisible_${index}`) === "on";
+
+    items.push({
+      href,
+      key,
+      label,
+      sortOrder: index + 1,
+      style,
+      visible,
+    });
+  }
+
+  return JSON.stringify(items);
 }
 
 function optionalJsonArray<T>(formData: FormData, key: string): T[] | undefined {
@@ -114,6 +148,55 @@ function buildSafeSlug(value: string, fallbackPrefix: string) {
     .slice(0, 48);
 
   return base || `${fallbackPrefix}-${Date.now()}`;
+}
+
+function normalizeDealerDomainToSlug(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\.everybuy\.co\.kr\/?$/, "")
+    .split("/")[0]
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48);
+}
+
+function numberFromRecord(record: HealthBoxRecord | null | undefined, ...keys: string[]) {
+  if (!record) {
+    return undefined;
+  }
+
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === "string" && value.trim()) {
+      const number = Number(value);
+      if (Number.isFinite(number)) {
+        return number;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+async function findDealerMallWithSlug(slug: string, currentDealerMallId?: number) {
+  const dealerMalls = await fetchAdminDealerMalls();
+
+  return (dealerMalls || []).find((dealerMall) => {
+    const dealerMallId = numberFromRecord(dealerMall, "id", "dealerMallId");
+    const isSameDealerMall = currentDealerMallId && dealerMallId === currentDealerMallId;
+    const existingSlug = normalizeDealerDomainToSlug(
+      typeof dealerMall.slug === "string" ? dealerMall.slug : "",
+    );
+
+    return !isSameDealerMall && existingSlug === slug;
+  });
 }
 
 function redirectIfRequested(formData: FormData) {
@@ -386,7 +469,7 @@ async function submitDealerMall(formData: FormData): Promise<CreateDealerMallDia
   ensureApiConfigured();
 
   const mallName = requiredString(formData, "mallName");
-  const slug = requiredString(formData, "slug");
+  const slug = normalizeDealerDomainToSlug(requiredString(formData, "slug"));
   const applicantName = requiredString(formData, "applicantName");
   const email = requiredString(formData, "email");
   const phone = requiredString(formData, "phone");
@@ -394,6 +477,14 @@ async function submitDealerMall(formData: FormData): Promise<CreateDealerMallDia
   if (!mallName || !slug || !applicantName || !email || !phone) {
     return {
       message: "필수 항목을 모두 입력해주세요.",
+      status: "error",
+    };
+  }
+
+  const duplicatedDealerMall = await findDealerMallWithSlug(slug);
+  if (duplicatedDealerMall) {
+    return {
+      message: "이미 사용 중인 도메인입니다. 다른 도메인을 입력해주세요.",
       status: "error",
     };
   }
@@ -459,6 +550,7 @@ export async function saveStorefrontConfigAction(formData: FormData) {
       shareThumbnailUrl: optionalString(formData, "shareThumbnailUrl"),
       metaTitle: optionalString(formData, "metaTitle"),
       metaDescription: optionalString(formData, "metaDescription"),
+      mainNavigationJson: collectStorefrontNavigationItems(formData),
       searchPlaceholder: optionalString(formData, "searchPlaceholder"),
       policyText: optionalString(formData, "policyText"),
       customerCenterText: optionalString(formData, "customerCenterText"),
@@ -479,15 +571,40 @@ export async function saveDealerMallPublicConfigAction(formData: FormData) {
   if (!dealerMallId) {
     throw new Error("dealerMallId is required");
   }
+  const numericDealerMallId = Number(dealerMallId);
+  const redirectTo = optionalString(formData, "redirectTo");
+  const slug = normalizeDealerDomainToSlug(optionalString(formData, "slug") || "");
+  if (!slug) {
+    if (redirectTo) {
+      redirect(buildRedirectWithMessage(redirectTo, "toastError", "도메인을 입력해주세요."));
+    }
+
+    throw new Error("도메인을 입력해주세요.");
+  }
+
+  const duplicatedDealerMall = await findDealerMallWithSlug(slug, numericDealerMallId);
+  if (duplicatedDealerMall) {
+    if (redirectTo) {
+      redirect(
+        buildRedirectWithMessage(
+          redirectTo,
+          "toastError",
+          "이미 사용 중인 도메인입니다. 다른 도메인을 입력해주세요.",
+        ),
+      );
+    }
+
+    throw new Error("이미 사용 중인 도메인입니다. 다른 도메인을 입력해주세요.");
+  }
 
   await healthBoxFetch(`/health-box/admin/dealer-malls/${dealerMallId}/public-config`, {
     method: "PUT",
     body: {
       id: optionalNumber(formData, "id") ?? 0,
-      dealerMallId: Number(dealerMallId),
+      dealerMallId: numericDealerMallId,
       mallName: optionalString(formData, "mallName"),
       displayName: optionalString(formData, "displayName"),
-      slug: optionalString(formData, "slug"),
+      slug,
       supportEmail: optionalString(formData, "supportEmail"),
       supportPhone: optionalString(formData, "supportPhone"),
       activeYn: optionalString(formData, "activeYn"),
@@ -562,16 +679,32 @@ export async function rejectDealerApplicationAction(formData: FormData) {
 export async function approveBuyerSignupApplicationAction(formData: FormData) {
   ensureApiConfigured();
   const applicationId = requiredString(formData, "applicationId");
+  const redirectTo = optionalString(formData, "redirectTo") || "/admin/members";
   if (!applicationId) {
     throw new Error("applicationId is required");
   }
 
-  await healthBoxFetch(`/health-box/admin/buyer-signup-applications/${applicationId}/approve`, {
-    method: "POST",
-    body: {
-      reviewMemo: optionalString(formData, "reviewMemo"),
-    },
-  });
+  let approvalError = "";
+  try {
+    await healthBoxFetch(`/health-box/admin/buyer-signup-applications/${applicationId}/approve`, {
+      method: "POST",
+      body: {
+        reviewMemo: optionalString(formData, "reviewMemo"),
+      },
+    });
+  } catch (error) {
+    const message = actionErrorMessage(error, "회원 승인 중 오류가 발생했습니다.");
+    approvalError = /existing buyer account belongs to different dealer mall/i.test(message)
+      ? "기존 구매자 계정이 다른 딜러몰에 연결되어 있어 승인하지 못했습니다. 백엔드 수정 반영 후 다시 승인해주세요."
+      : message
+          .replace(/^HealthBox API \d+:\s*/, "")
+          .replace(/^Error:\s*/, "")
+          .trim() || "회원 승인 중 오류가 발생했습니다.";
+  }
+
+  if (approvalError) {
+    redirect(buildRedirectWithMessage(redirectTo, "memberApprovalError", approvalError));
+  }
 
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/members");

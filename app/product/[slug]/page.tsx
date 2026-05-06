@@ -6,6 +6,7 @@ import { ProductDetailAnchorTabs, type ProductDetailAnchorTab } from "../../_com
 import { ProductDetailGallery } from "../../_components/product-detail-gallery";
 import { ProductPurchaseBox, ProductPurchaseProvider } from "../../_components/product-purchase-controls";
 import { Breadcrumbs, ProductCard, StoreShell } from "../../_components/store-ui";
+import { getMemberSession } from "../../_lib/member-auth";
 import {
   fetchStoreProductBySlug,
   fetchStoreProducts,
@@ -40,6 +41,8 @@ function uniqueTexts(values: Array<string | null | undefined>) {
   }, []);
 }
 
+const hiddenBadgeTexts = new Set(["best", "인기", "추천", "신상품", "정상판매", "상품", "공개", "판매중"]);
+
 function sanitizeProductHtml(value: string) {
   return value
     .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
@@ -62,15 +65,17 @@ export default async function ProductDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [product, products] = await Promise.all([
+  const [product, products, session] = await Promise.all([
     fetchStoreProductBySlug(slug),
     fetchStoreProducts(),
+    getMemberSession(),
   ]);
 
   if (!product) {
     notFound();
   }
 
+  const showPrice = Boolean(session);
   const relatedProducts = products.filter((entry) => entry.slug !== product.slug).slice(0, 4);
   const salesPolicyText = meaningfulText(product.salesPolicyText);
   const deliveryPolicyText = meaningfulText(product.deliveryPolicyText) || meaningfulText(product.shipping);
@@ -78,8 +83,8 @@ export default async function ProductDetailPage({
   const policyTextKeys = new Set(
     [salesPolicyText, deliveryPolicyText, product.shipping].map((text) => normalizeText(text || "")).filter(Boolean),
   );
-  const highlights = uniqueTexts([product.category, product.badge, ...product.highlights])
-    .filter((highlight) => !policyTextKeys.has(normalizeText(highlight)))
+  const highlights = uniqueTexts([product.category, ...product.highlights])
+    .filter((highlight) => !policyTextKeys.has(normalizeText(highlight)) && !hiddenBadgeTexts.has(normalizeText(highlight)))
     .slice(0, 3);
   const rawDetailSections = product.detailSections.length
     ? product.detailSections
@@ -140,6 +145,7 @@ export default async function ProductDetailPage({
               brand={product.brand}
               displaySubtitle={displaySubtitle}
               highlights={highlights}
+              isMember={Boolean(session)}
               optionGroups={product.optionGroups}
               price={product.price}
               productImage={product.image}
@@ -204,7 +210,7 @@ export default async function ProductDetailPage({
               </div>
               <button type="button">담기</button>
               <h3>{bundleProduct.title}</h3>
-              <p>{bundleProduct.price}</p>
+              <p>{showPrice ? bundleProduct.price : "로그인 후 확인"}</p>
             </article>
           ))}
         </div>
@@ -312,6 +318,7 @@ export default async function ProductDetailPage({
               className="is-compact"
               displaySubtitle=""
               highlights={highlights}
+              isMember={Boolean(session)}
               optionGroups={product.optionGroups}
               price={product.price}
               productImage={product.image}
@@ -337,8 +344,8 @@ export default async function ProductDetailPage({
           {relatedProducts.map((relatedProduct) => (
             <ProductCard
               key={relatedProduct.slug}
-              label={relatedProduct.badge}
               product={relatedProduct}
+              showPrice={showPrice}
             />
           ))}
         </div>

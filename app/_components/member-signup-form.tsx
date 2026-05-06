@@ -77,7 +77,7 @@ export function MemberSignupForm({
         credentials: "same-origin",
         body: JSON.stringify({
           dealerMallId: hqMall ? undefined : dealerMallId,
-          dealerSlug: hqMall ? "head" : dealerSlug,
+          dealerSlug: hqMall ? undefined : dealerSlug,
           name,
           phone,
           email,

@@ -63,7 +63,7 @@ function decodePayload(value: string): MemberSession | null {
       return null;
     }
 
-    if (!parsed.dealerMallId) {
+    if (!Number.isFinite(Number(parsed.dealerMallId))) {
       return null;
     }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import {
+  fetchAdminBuyerSignupApplications,
   fetchDealerPublicBySlug,
   type HealthBoxRecord,
   stringValue,
@@ -22,6 +23,50 @@ function extractErrorMessage(payload: string) {
   } catch {
     return payload;
   }
+}
+
+function normalizePhone(value: unknown) {
+  return String(value || "").replace(/[^0-9]/g, "");
+}
+
+function normalizeLoginId(value: string) {
+  return value.trim().toLowerCase();
+}
+
+async function findPendingSignupMessage({
+  dealerMallId,
+  hqMall,
+  loginId,
+}: {
+  dealerMallId: number;
+  hqMall: boolean;
+  loginId: string;
+}) {
+  const normalizedLoginId = normalizeLoginId(loginId);
+  const normalizedPhone = normalizePhone(loginId);
+  const applications = (await fetchAdminBuyerSignupApplications()) || [];
+  const pendingApplication = applications.find((application) => {
+    const applicationStatus = stringValue(application, "status");
+    const applicationDealerMallId = Number(application.dealerMallId ?? 0);
+    const applicationChannel = stringValue(application, "inboundChannel");
+    const applicationEmail = normalizeLoginId(stringValue(application, "email"));
+    const applicationPhone = normalizePhone(stringValue(application, "phone"));
+    const isPending = !applicationStatus || /^PENDING$/i.test(applicationStatus);
+    const isSameLogin =
+      (Boolean(applicationEmail) && applicationEmail === normalizedLoginId) ||
+      (Boolean(applicationPhone) && Boolean(normalizedPhone) && applicationPhone === normalizedPhone);
+    const isSameMall = hqMall
+      ? /^hq-public$/i.test(applicationChannel)
+      : Boolean(dealerMallId) && applicationDealerMallId === dealerMallId;
+
+    return isPending && isSameLogin && isSameMall;
+  });
+
+  if (!pendingApplication) {
+    return null;
+  }
+
+  return "가입 신청이 접수되어 승인 대기 중입니다. 관리자 승인 후 로그인해주세요.";
 }
 
 function normalizeBuyerLoginError(message: string) {
@@ -116,9 +161,19 @@ export async function POST(request: NextRequest) {
 
     if (!backendResponse.ok) {
       const normalizedError = normalizeBuyerLoginError(extractErrorMessage(rawText) || "");
+      const fallbackDealerMallId =
+        requestedDealerMallId ||
+        Number((await fetchDealerPublicBySlug(dealerSlug || ""))?.dealerMallId || 0) ||
+        0;
+      const pendingSignupMessage = await findPendingSignupMessage({
+        dealerMallId: fallbackDealerMallId,
+        hqMall,
+        loginId,
+      });
+
       return NextResponse.json(
-        { ok: false, message: normalizedError.message },
-        { status: normalizedError.status },
+        { ok: false, message: pendingSignupMessage || normalizedError.message },
+        { status: pendingSignupMessage ? 403 : normalizedError.status },
       );
     }
 
@@ -142,10 +197,10 @@ export async function POST(request: NextRequest) {
       requestedDealerMallId ||
       Number((await fetchDealerPublicBySlug(dealerSlug || ""))?.dealerMallId || 0) ||
       0;
-    const finalDealerMallId = responseDealerMallId || fallbackDealerMallId;
+    const finalDealerMallId = hqMall ? responseDealerMallId : responseDealerMallId || fallbackDealerMallId;
     const responseDealerSlug = stringValue(memberPayload, "slug", "dealerSlug");
 
-    if (!finalDealerMallId) {
+    if (!hqMall && !finalDealerMallId) {
       return NextResponse.json(
         { ok: false, message: "딜러몰 정보를 확인할 수 없습니다. 다시 시도해주세요." },
         { status: 500 },
