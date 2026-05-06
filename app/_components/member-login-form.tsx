@@ -16,14 +16,20 @@ export function MemberLoginForm({
   dealerMallId,
   dealerName,
   dealerSlug,
+  host,
+  hqMall = false,
   nextPath,
   signupSuccess = false,
+  passwordResetSuccess = false,
 }: {
   dealerMallId?: number;
   dealerName?: string;
   dealerSlug?: string;
+  host?: string;
+  hqMall?: boolean;
   nextPath?: string;
   signupSuccess?: boolean;
+  passwordResetSuccess?: boolean;
 }) {
   const router = useRouter();
   const safeNextPath = useMemo(() => resolveNextPath(nextPath), [nextPath]);
@@ -43,8 +49,10 @@ export function MemberLoginForm({
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
         body: JSON.stringify({
-          dealerMallId,
-          dealerSlug,
+          dealerMallId: hqMall ? undefined : dealerMallId,
+          dealerSlug: hqMall ? undefined : dealerSlug,
+          host,
+          hqMall,
           loginId,
           password,
         }),
@@ -69,10 +77,13 @@ export function MemberLoginForm({
   return (
     <div className="member-auth-card content-panel">
       <div className="member-auth-head">
-        <p className="section-kicker">Member Login</p>
         <h1 className="section-panel-title">회원 로그인</h1>
         <p className="member-auth-copy">
-          {dealerName ? `${dealerName} 회원만 로그인할 수 있습니다.` : "승인된 회원만 로그인할 수 있습니다."}
+          {hqMall
+            ? "승인된 구매 회원은 본사몰에 로그인할 수 있습니다."
+            : dealerName
+              ? `${dealerName} 회원만 로그인할 수 있습니다.`
+              : "승인된 회원만 로그인할 수 있습니다."}
         </p>
       </div>
 
@@ -80,6 +91,10 @@ export function MemberLoginForm({
         <div className="member-auth-alert is-success">
           가입 신청이 접수되었습니다. 승인 후 같은 정보로 로그인해주세요.
         </div>
+      ) : null}
+
+      {passwordResetSuccess ? (
+        <div className="member-auth-alert is-success">비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요.</div>
       ) : null}
 
       <div className="member-auth-form">
@@ -116,9 +131,13 @@ export function MemberLoginForm({
           <button className="button-primary" disabled={loading} onClick={() => void handleSubmit()} type="button">
             {loading ? "확인 중..." : "로그인"}
           </button>
-          <Link className="button-secondary" href="/signup">
+          <Link className="button-secondary" href={`/signup?next=${encodeURIComponent(safeNextPath)}`}>
             회원가입
           </Link>
+        </div>
+
+        <div className="member-auth-helper-actions">
+          <Link href={`/password-reset?next=${encodeURIComponent(safeNextPath)}`}>비밀번호 찾기</Link>
         </div>
       </div>
     </div>

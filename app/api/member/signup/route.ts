@@ -42,7 +42,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     const requestedDealerMallId = Number(body.dealerMallId);
-    const dealerSlug = String(body.dealerSlug || "").trim() || undefined;
+    const hqMall = Boolean(body.hqMall);
+    const dealerSlug = hqMall ? "head" : String(body.dealerSlug || "").trim() || undefined;
     const name = String(body.name || "").trim();
     const email = String(body.email || "").trim();
     const phone = normalizePhone(body.phone);
@@ -59,9 +60,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!name || !phone) {
+    if (!name || !phone || !email) {
       return NextResponse.json(
-        { ok: false, message: "이름과 휴대폰 번호를 입력해주세요." },
+        { ok: false, message: "이름, 휴대폰 번호, 이메일을 입력해주세요." },
         { status: 400 },
       );
     }
@@ -100,7 +101,9 @@ export async function POST(request: NextRequest) {
       const applicationDealerMallId = Number(application.dealerMallId ?? 0);
       const applicationPhone = normalizePhone(stringValue(application, "phone"));
       const applicationName = normalizeName(stringValue(application, "name"));
+      const applicationStatus = stringValue(application, "status");
       return (
+        (!applicationStatus || /^PENDING$/i.test(applicationStatus)) &&
         applicationDealerMallId === resolvedDealerMallId &&
         applicationPhone === phone &&
         applicationName === normalizedName
@@ -120,9 +123,9 @@ export async function POST(request: NextRequest) {
         dealerMallId: resolvedDealerMallId,
         name,
         phone,
-        email: email || undefined,
+        email,
         password,
-        inboundChannel: dealerSlug ? `${dealerSlug}-public` : "public-web",
+        inboundChannel: hqMall ? "hq-public" : "dealer-public",
         slug: buildSignupSlug(name, dealerSlug),
       },
     });

@@ -44,13 +44,10 @@ export default async function SignupPage({
               nextPath={resolveNextPath(params.next)}
             />
           ) : (
-            <div className="member-auth-card content-panel">
-              <div className="member-auth-head">
-                <p className="section-kicker">Member Signup</p>
-                <h1 className="section-panel-title">회원가입</h1>
-                <p className="member-auth-copy">딜러몰에서 접속한 뒤 회원가입을 진행해주세요.</p>
-              </div>
-            </div>
+            <MemberSignupForm
+              hqMall
+              nextPath={resolveNextPath(params.next)}
+            />
           )}
         </div>
       </section>

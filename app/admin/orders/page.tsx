@@ -1,77 +1,126 @@
 import Link from "next/link";
 
-import { cancelOrderAction, partialCancelOrderAction, updateShipmentStatusAction } from "../../_actions/health-box-admin";
-import { AdminConfirmSubmitButton } from "../../_components/admin/admin-confirm-submit-button";
+import { bulkPrepareShipmentsAction } from "../../_actions/health-box-admin";
+import { AdminComingSoonButton } from "../../_components/admin/admin-coming-soon-button";
 import { AdminHeader } from "../../_components/admin/admin-header";
-import { AdminSubmitButton } from "../../_components/admin/admin-submit-button";
-import { AdminBadge, AdminMetrics, AdminPanel, AdminTable } from "../../_components/admin/admin-ui";
+import { AdminOrderBulkActions } from "../../_components/admin/admin-order-bulk-actions";
+import { AdminOrderExcelDownloadButton } from "../../_components/admin/admin-order-excel-download-button";
+import { AdminTableScrollMirror } from "../../_components/admin/admin-table-scroll-mirror";
+import { AdminBadge, AdminPanel, AdminTable } from "../../_components/admin/admin-ui";
 import {
   fetchAdminDealerMallOrders,
   fetchAdminDealerMalls,
-  fetchAdminOrder,
   fetchAdminOrders,
   hasHealthBoxApi,
-  idValue,
-  numberValue,
-  stringValue,
 } from "../../_lib/health-box-api";
-import { buildOrderMetrics, mapDealerRows, mapOrderRows } from "../../_lib/health-box-presenters";
+import { mapDealerRows, mapOrderRows } from "../../_lib/health-box-presenters";
 
 type OrdersSearchParams = {
+  dateFrom?: string;
+  dateTo?: string;
   dealerMallId?: string;
-  orderId?: string;
+  status?: string;
 };
 
-function buildOrderHref(orderId: string | number | null | undefined, dealerMallId?: number | null) {
+const bulkPrepareFormId = "admin-order-bulk-prepare-form";
+const orderTableScrollerId = "admin-order-table-scroller";
+
+function buildOrdersHref({
+  dateFrom,
+  dateTo,
+  dealerMallId,
+  status,
+}: {
+  dateFrom?: string;
+  dateTo?: string;
+  dealerMallId?: number | null;
+  status?: string;
+} = {}) {
   const params = new URLSearchParams();
 
   if (dealerMallId) {
     params.set("dealerMallId", String(dealerMallId));
   }
 
-  if (orderId !== null && orderId !== undefined && orderId !== "") {
-    params.set("orderId", String(orderId));
+  if (dateFrom) {
+    params.set("dateFrom", dateFrom);
+  }
+
+  if (dateTo) {
+    params.set("dateTo", dateTo);
+  }
+
+  if (status) {
+    params.set("status", status);
   }
 
   const query = params.toString();
   return query ? `/admin/orders?${query}` : "/admin/orders";
 }
 
-function buildCompanySummary(rows: ReturnType<typeof mapOrderRows>) {
-  const grouped = new Map<
-    string,
-    {
-      company: string;
-      type: string;
-      amount: number;
-      orders: number;
-    }
-  >();
+function canBulkPrepareShipment(order: ReturnType<typeof mapOrderRows>[number]) {
+  const shipmentStatus = String(order.shipmentStatus || "").toUpperCase();
+  return Boolean(order.shipmentId) && (!shipmentStatus || /PENDING|ORDERED|주문\s*접수/.test(shipmentStatus));
+}
 
-  for (const row of rows) {
-    const current = grouped.get(row.company) || {
-      company: row.company,
-      type: row.companyType,
-      amount: 0,
-      orders: 0,
-    };
+function orderDateText(value: string) {
+  return value && value !== "-" ? value : "일시 없음";
+}
 
-    current.amount += Number(row.amount.replace(/[^0-9]/g, "")) || 0;
-    current.orders += 1;
-    grouped.set(row.company, current);
+function formatDateInput(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function dateBefore(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return formatDateInput(date);
+}
+
+function dateMonthsBefore(months: number) {
+  const date = new Date();
+  date.setMonth(date.getMonth() - months);
+  return formatDateInput(date);
+}
+
+function rowDateKey(value: string) {
+  const normalized = value.replace(/\./g, "-").replace(/\//g, "-");
+  const match = normalized.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!match) {
+    return "";
   }
 
-  return Array.from(grouped.values())
-    .sort((left, right) => right.amount - left.amount)
-    .slice(0, 4)
-    .map((item) => ({
-      company: item.company,
-      type: item.type,
-      orders: `${item.orders}건`,
-      amount: `${item.amount.toLocaleString("ko-KR")}원`,
-      note: `${item.type} 주문 기준 집계`,
-      tone: "blue" as const,
-    }));
+  return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+}
+
+function matchesStatus(row: ReturnType<typeof mapOrderRows>[number], status: string) {
+  if (!status) {
+    return true;
+  }
+
+  const text = `${row.orderStatus} ${row.shipmentStatus} ${row.status}`.toUpperCase();
+  if (status === "CANCELED") {
+    return /CANCELED|취소/.test(text);
+  }
+
+  return text.includes(status);
+}
+
+function AdminOptionDisplay({
+  option,
+  optionPairs,
+}: {
+  option: string;
+  optionPairs?: Array<{ name: string; value: string }>;
+}) {
+  if (!optionPairs?.length) {
+    return <span className="admin-option-empty">없음</span>;
+  }
+
+  return <span className="admin-option-inline-text">{optionPairs.map((item) => `${item.name}: ${item.value}`).join(", ") || option}</span>;
 }
 
 export default async function AdminOrdersPage({
@@ -81,6 +130,10 @@ export default async function AdminOrdersPage({
 }) {
   const params = await searchParams;
   const selectedDealerId = Number(params.dealerMallId) || null;
+  const today = formatDateInput(new Date());
+  const dateFrom = params.dateFrom || dateMonthsBefore(3);
+  const dateTo = params.dateTo || today;
+  const selectedStatus = params.status || "";
   const [dealers, allOrders] = hasHealthBoxApi()
     ? await Promise.all([fetchAdminDealerMalls(), fetchAdminOrders()])
     : [null, null];
@@ -92,235 +145,210 @@ export default async function AdminOrdersPage({
       ? await fetchAdminDealerMallOrders(selectedDealer.id)
       : allOrders;
 
-  const metrics = buildOrderMetrics(orders);
   const orderRows = mapOrderRows(orders);
-  const companyRows = buildCompanySummary(orderRows);
-  const selectedOrder =
-    orderRows.find(
-      (order) =>
-        String(order.id ?? "") === params.orderId || order.number === params.orderId,
-    ) ||
-    orderRows.find((order) => order.shipmentId) ||
-    orderRows[0] ||
-    null;
-  const selectedOrderDetail =
-    hasHealthBoxApi() && selectedOrder?.id
-      ? await fetchAdminOrder(selectedOrder.id)
-      : null;
-  const selectedOrderItems = Array.isArray(selectedOrderDetail?.items)
-    ? (selectedOrderDetail.items as Array<Record<string, unknown>>)
-    : [];
+  const filteredOrderRows = orderRows.filter((order) => {
+    const key = rowDateKey(order.placedAt);
+    const inDateRange = !key || ((!dateFrom || key >= dateFrom) && (!dateTo || key <= dateTo));
+    return inDateRange && matchesStatus(order, selectedStatus);
+  });
+  const exportRows = filteredOrderRows.map((order) => {
+    const firstItem = order.itemDetails[0];
+    const extraCount = Math.max(0, order.itemDetails.length - 1);
+    const totalQuantity = order.itemDetails.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+
+    return {
+      amount: order.amount,
+      claimStatus: /취소|CANCELED/i.test(`${order.orderStatus} ${order.shipmentStatus} ${order.status}`) ? "취소" : "-",
+      company: order.company,
+      deliveryType: "일반배송",
+      option: firstItem?.option || "없음",
+      orderAt: orderDateText(order.placedAt),
+      orderNo: order.number,
+      productName: firstItem ? `${firstItem.productName}${extraCount ? ` 외 ${extraCount}개` : ""}` : order.items,
+      quantity: `${totalQuantity || firstItem?.quantity || 0}개`,
+      status: order.status,
+    };
+  });
 
   return (
     <div className="admin-page">
       <AdminHeader title="주문관리" />
 
-      <AdminMetrics items={metrics} />
-
-      <AdminPanel title="조회 범위">
-        <div className="admin-filter-chip-set">
-          <Link
-            className={`admin-button secondary small${selectedDealer ? "" : " is-active"}`}
-            href="/admin/orders"
-          >
-            전체 주문
-          </Link>
-          {dealerRows.map((dealer) => (
+      <AdminPanel title="조회 조건">
+        <div className="admin-order-search-panel">
+          <div className="admin-filter-chip-set">
             <Link
-              className={`admin-button secondary small${selectedDealer?.id === dealer.id ? " is-active" : ""}`}
-              href={buildOrderHref(null, dealer.id)}
-              key={dealer.id}
+              className={`admin-button secondary small${selectedDealer ? "" : " is-active"}`}
+              href={buildOrdersHref({ dateFrom, dateTo, status: selectedStatus })}
             >
-              {dealer.name}
+              전체 주문
             </Link>
-          ))}
+            {dealerRows.map((dealer) => (
+              <Link
+                className={`admin-button secondary small${selectedDealer?.id === dealer.id ? " is-active" : ""}`}
+                href={buildOrdersHref({ dateFrom, dateTo, dealerMallId: dealer.id, status: selectedStatus })}
+                key={dealer.id}
+              >
+                {dealer.name}
+              </Link>
+            ))}
+          </div>
+          <form action="/admin/orders" className="admin-order-filter-form">
+            {selectedDealer?.id ? <input name="dealerMallId" type="hidden" value={String(selectedDealer.id)} /> : null}
+            <label className="admin-order-filter-field">
+              <span>조회기간</span>
+              <select className="admin-select" name="dateType" defaultValue="paymentDate">
+                <option value="paymentDate">결제일</option>
+                <option value="orderDate">주문일</option>
+              </select>
+            </label>
+            <div className="admin-order-period-shortcuts">
+              <Link className="admin-button secondary small" href={buildOrdersHref({ dateFrom: today, dateTo: today, dealerMallId: selectedDealer?.id, status: selectedStatus })}>
+                오늘
+              </Link>
+              <Link className="admin-button secondary small" href={buildOrdersHref({ dateFrom: dateBefore(7), dateTo: today, dealerMallId: selectedDealer?.id, status: selectedStatus })}>
+                1주일
+              </Link>
+              <Link className="admin-button secondary small" href={buildOrdersHref({ dateFrom: dateMonthsBefore(1), dateTo: today, dealerMallId: selectedDealer?.id, status: selectedStatus })}>
+                1개월
+              </Link>
+              <Link className="admin-button secondary small" href={buildOrdersHref({ dateFrom: dateMonthsBefore(3), dateTo: today, dealerMallId: selectedDealer?.id, status: selectedStatus })}>
+                3개월
+              </Link>
+            </div>
+            <div className="admin-order-date-range">
+              <input className="admin-input" defaultValue={dateFrom} name="dateFrom" type="date" />
+              <span>~</span>
+              <input className="admin-input" defaultValue={dateTo} name="dateTo" type="date" />
+            </div>
+            <label className="admin-order-filter-field">
+              <span>상세조건</span>
+              <select className="admin-select" defaultValue={selectedStatus} name="status">
+                <option value="">전체</option>
+                <option value="PENDING">주문 접수</option>
+                <option value="PREPARING">상품 준비중</option>
+                <option value="SHIPPED">배송중</option>
+                <option value="DELIVERED">배송완료</option>
+                <option value="CANCELED">취소완료</option>
+              </select>
+            </label>
+            <button className="admin-button admin-order-search-button" type="submit">
+              검색
+            </button>
+          </form>
         </div>
       </AdminPanel>
 
-      <div className="admin-grid-side">
-        <AdminPanel title="주문 리스트">
+      <AdminPanel
+        action={
+          <div className="admin-order-list-actions">
+            <div className="admin-order-list-actions-left">
+              <AdminOrderExcelDownloadButton rows={exportRows} />
+            </div>
+            <AdminOrderBulkActions formId={bulkPrepareFormId} />
+          </div>
+        }
+        title={`목록 (총 ${filteredOrderRows.length.toLocaleString("ko-KR")}건)`}
+      >
+        <form action={bulkPrepareShipmentsAction} id={bulkPrepareFormId}>
+          <input name="redirectTo" type="hidden" value={buildOrdersHref({ dateFrom, dateTo, dealerMallId: selectedDealer?.id, status: selectedStatus })} />
           <AdminTable
-            columns="minmax(130px, 0.8fr) minmax(190px, 1.05fr) minmax(0, 1.2fr) minmax(115px, 0.72fr) 96px 82px"
+            alignments={["center", "left", "left", "center", "center", "left", "left", "left", "center", "right", "center"]}
+            className="admin-order-thin-table"
+            columns="64px 170px 180px 130px 130px 170px 280px 180px 90px 130px 120px"
             emptyDescription={
               selectedDealer
                 ? "선택한 딜러몰의 주문 데이터가 없습니다."
                 : "조회 가능한 주문 데이터가 없습니다."
             }
-            headers={["주문번호", "회원사 / 주문자", "주문상품", "결제금액", "상태", "관리"]}
-            isEmpty={!orderRows.length}
+            headers={["선택", "주문번호", "주문일시", "주문상태", "배송속성", "회원사", "상품명", "옵션정보", "수량", "결제금액", "클레임상태"]}
+            isEmpty={!filteredOrderRows.length}
+            scrollerId={orderTableScrollerId}
           >
-            {orderRows.map((order) => (
-              <div className="admin-table-row" key={order.number}>
-                <div className="admin-row-stack">
-                  <strong>{order.number}</strong>
-                  <span>{order.placedAt}</span>
+            {filteredOrderRows.map((order) => {
+              const selectable = canBulkPrepareShipment(order);
+              const firstItem = order.itemDetails[0];
+              const extraCount = Math.max(0, order.itemDetails.length - 1);
+              const totalQuantity = order.itemDetails.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+
+              return (
+                <div className="admin-table-row admin-order-table-row" key={order.number}>
+                  <label className="admin-order-check-cell" title={selectable ? "상품 준비 처리 대상 선택" : "상품 준비 처리 대상이 아닙니다."}>
+                    <input
+                      aria-label={`${order.number} 선택`}
+                      disabled={!selectable}
+                      name="shipmentId"
+                      type="checkbox"
+                      value={String(order.shipmentId || "")}
+                    />
+                  </label>
+                  <div className="admin-row-stack">
+                    <Link className="admin-order-number-link" href={`/admin/orders/${order.id ?? order.number}`}>
+                      {order.number}
+                    </Link>
+                  </div>
+                  <div className="admin-row-stack">
+                    <span>{orderDateText(order.placedAt)}</span>
+                  </div>
+                  <div className="admin-order-status-cell">
+                    <AdminBadge tone={order.tone}>{order.status}</AdminBadge>
+                    {order.pendingAgeLabel ? (
+                      <AdminBadge className="admin-order-age-badge" tone={order.pendingAgeTone}>
+                        {order.pendingAgeLabel}
+                      </AdminBadge>
+                    ) : null}
+                  </div>
+                  <div className="admin-row-stack">
+                    <span>일반배송</span>
+                  </div>
+                  <div className="admin-row-stack">
+                    <strong>{order.company}</strong>
+                  </div>
+                  <div className="admin-row-stack">
+                    <strong>{firstItem ? `${firstItem.productName}${extraCount ? ` 외 ${extraCount}개` : ""}` : order.items}</strong>
+                  </div>
+                  <div className="admin-row-stack">
+                    <AdminOptionDisplay option={firstItem?.option || "없음"} optionPairs={firstItem?.optionPairs} />
+                  </div>
+                  <div className="admin-row-stack admin-order-quantity-cell">
+                    <span>{totalQuantity || firstItem?.quantity || 0}개</span>
+                  </div>
+                  <div className="admin-row-stack admin-order-price-cell">
+                    <strong className="admin-row-price">{order.amount}</strong>
+                  </div>
+                  <div className="admin-row-stack">
+                    <span>{/취소|CANCELED/i.test(`${order.orderStatus} ${order.shipmentStatus} ${order.status}`) ? "취소" : "-"}</span>
+                  </div>
                 </div>
-                <div className="admin-row-stack">
-                  <strong>
-                    {order.company} · {order.companyType}
-                  </strong>
-                  <p>
-                    {order.buyer} · {order.buyerType}
-                  </p>
-                </div>
-                <div className="admin-row-stack">
-                  <strong>{order.items}</strong>
-                  <span>정산 귀속 회원사: {order.company}</span>
-                </div>
-                <strong className="admin-row-price">{order.amount}</strong>
-                <AdminBadge tone={order.tone}>{order.status}</AdminBadge>
-                <Link
-                  className="admin-button secondary small"
-                  href={buildOrderHref(order.id ?? order.number, selectedDealer?.id)}
-                >
-                  보기
-                </Link>
-              </div>
-            ))}
+              );
+            })}
           </AdminTable>
-        </AdminPanel>
+          <AdminTableScrollMirror targetId={orderTableScrollerId} />
+        </form>
+      </AdminPanel>
 
-        <div className="admin-stack">
-          <AdminPanel title="주문 상세 / 취소">
-            {selectedOrder ? (
-              <div className="admin-status-stack">
-                <div className="admin-list-row">
-                  <div className="admin-row-stack">
-                    <strong>{selectedOrder.number}</strong>
-                    <p>
-                      {stringValue(selectedOrderDetail, "receiverName") || selectedOrder.buyer} ·{" "}
-                      {stringValue(selectedOrderDetail, "receiverPhone", "ordererPhone") || "-"}
-                    </p>
-                    <span>
-                      {[stringValue(selectedOrderDetail, "zipCode"), stringValue(selectedOrderDetail, "baseAddress"), stringValue(selectedOrderDetail, "detailAddress")]
-                        .filter(Boolean)
-                        .join(" ")}
-                    </span>
-                  </div>
-                  <AdminBadge tone={selectedOrder.tone}>{selectedOrder.status}</AdminBadge>
-                </div>
-                <form action={cancelOrderAction} id="admin-order-cancel-form">
-                  <input name="orderId" type="hidden" value={String(selectedOrder.id ?? "")} />
-                  <input name="redirectTo" type="hidden" value={buildOrderHref(selectedOrder.id ?? selectedOrder.number, selectedDealer?.id)} />
-                </form>
-                {selectedOrder.id ? (
-                  <AdminConfirmSubmitButton
-                    className="admin-button danger"
-                    confirmMessage="이 주문을 전체 취소할까요? 남은 수량 기준으로 SKU 재고가 복구됩니다."
-                    confirmTitle="주문 전체 취소"
-                    form="admin-order-cancel-form"
-                    pendingLabel="취소중..."
-                    tone="danger"
-                  >
-                    주문 전체 취소
-                  </AdminConfirmSubmitButton>
-                ) : null}
-              </div>
-            ) : (
-              <p className="admin-row-muted">조회된 주문이 없습니다.</p>
-            )}
-          </AdminPanel>
-          <AdminPanel title="회원사 요약">
-            <div className="admin-list">
-              {companyRows.map((company) => (
-                <div className="admin-list-row" key={company.company}>
-                  <div className="admin-row-stack">
-                    <strong>
-                      {company.company} · {company.type}
-                    </strong>
-                    <p>{company.note}</p>
-                  </div>
-                  <div className="admin-list-meta">
-                    <AdminBadge tone={company.tone}>{company.orders}</AdminBadge>
-                    <span>{company.amount}</span>
-                  </div>
-                </div>
-              ))}
-              {!companyRows.length ? <p className="admin-row-muted">회원사별 주문 집계가 없습니다.</p> : null}
-            </div>
-          </AdminPanel>
-
-          <AdminPanel title="배송 상태 변경">
-            {selectedOrder ? (
-              selectedOrder.shipmentId && hasHealthBoxApi() ? (
-                <form action={updateShipmentStatusAction} className="admin-status-stack">
-                  <input name="shipmentId" type="hidden" value={String(selectedOrder.shipmentId)} />
-                  <input
-                    name="redirectTo"
-                    type="hidden"
-                    value={buildOrderHref(selectedOrder.id ?? selectedOrder.number, selectedDealer?.id)}
-                  />
-                  <div className="admin-list-row">
-                    <div className="admin-row-stack">
-                      <strong>{selectedOrder.number}</strong>
-                      <p>
-                        {selectedOrder.company} · {selectedOrder.buyer}
-                      </p>
-                    </div>
-                    <AdminBadge tone={selectedOrder.tone}>{selectedOrder.status}</AdminBadge>
-                  </div>
-                  <label className="admin-field">
-                    <span>배송 상태</span>
-                    <select className="admin-select" defaultValue={selectedOrder.status} name="shipmentStatus">
-                      <option value="결제 완료">결제 완료</option>
-                      <option value="배송 준비">배송 준비</option>
-                      <option value="송장 입력 완료">송장 입력 완료</option>
-                      <option value="출고 완료">출고 완료</option>
-                      <option value="배송 완료">배송 완료</option>
-                      <option value="취소">취소</option>
-                    </select>
-                  </label>
-                  <label className="admin-field">
-                    <span>택배사</span>
-                    <input className="admin-input" name="courierCompany" placeholder="예: CJ대한통운" type="text" />
-                  </label>
-                  <label className="admin-field">
-                    <span>송장 번호</span>
-                    <input className="admin-input" name="trackingNo" placeholder="송장 번호를 입력하세요" type="text" />
-                  </label>
-                  <label className="admin-field">
-                    <span>출고일시</span>
-                    <input className="admin-input" name="shippedAt" type="datetime-local" />
-                  </label>
-                  <label className="admin-field">
-                    <span>배송완료일시</span>
-                    <input className="admin-input" name="deliveredAt" type="datetime-local" />
-                  </label>
-                  <AdminSubmitButton className="admin-button" pendingLabel="저장중...">
-                    배송 상태 저장
-                  </AdminSubmitButton>
-                </form>
-              ) : (
-                <div className="admin-row-stack">
-                  <strong>{selectedOrder.number}</strong>
-                  <p>이 주문은 연결된 배송 레코드가 없어 상태 변경 UI를 노출하지 않았습니다.</p>
-                </div>
-              )
-            ) : (
-              <p className="admin-row-muted">조회할 주문이 없습니다.</p>
-            )}
-          </AdminPanel>
-
-          <AdminPanel title="처리 필요">
-            <div className="admin-list">
-              <div className="admin-list-row">
-                <div className="admin-row-stack">
-                  <strong>딜러 회원사 출고 우선</strong>
-                  <p>배송 준비 상태의 딜러 주문부터 송장 입력</p>
-                </div>
-                <AdminBadge tone="blue">출고 우선</AdminBadge>
-              </div>
-              <div className="admin-list-row">
-                <div className="admin-row-stack">
-                  <strong>반품 주문 확인</strong>
-                  <p>정산 반영 전 검수 메모와 차감 여부 확인</p>
-                </div>
-                <AdminBadge tone="rose">차감 예정</AdminBadge>
-              </div>
-            </div>
-          </AdminPanel>
+      <section className="admin-order-management-guide" aria-label="주문 처리 안내">
+        <div className="admin-order-management-row">
+          <strong>주문관리</strong>
+          <AdminComingSoonButton>발주 확인</AdminComingSoonButton>
+          <AdminComingSoonButton>발송 처리</AdminComingSoonButton>
+          <AdminComingSoonButton>발송 지연 처리</AdminComingSoonButton>
+          <AdminComingSoonButton>배송지 정보 수정</AdminComingSoonButton>
+          <AdminComingSoonButton>미결제 확인</AdminComingSoonButton>
         </div>
-      </div>
+        <div className="admin-order-management-row">
+          <strong>취소관리</strong>
+          <AdminComingSoonButton>판매자 직접취소 처리</AdminComingSoonButton>
+          <AdminComingSoonButton>취소 승인처리</AdminComingSoonButton>
+          <AdminComingSoonButton>구매확정 후 취소처리</AdminComingSoonButton>
+        </div>
+        <div className="admin-order-management-row">
+          <strong>반품교환관리</strong>
+          <AdminComingSoonButton>반품 및 교환접수</AdminComingSoonButton>
+          <AdminComingSoonButton>반품접수 후 처리</AdminComingSoonButton>
+          <AdminComingSoonButton>교환접수 후 처리</AdminComingSoonButton>
+        </div>
+      </section>
     </div>
   );
 }

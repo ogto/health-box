@@ -21,7 +21,6 @@ export default async function RecommendedProductsPage() {
         />
 
         <div className="content-panel">
-          <p className="section-kicker">Recommended Picks</p>
           <h2 className="detail-title">추천상품</h2>
           <p className="detail-copy">
             건강 루틴과 고객 성향에 맞춰 지금 우선적으로 제안하는 상품입니다. 기본 루틴,
@@ -37,7 +36,6 @@ export default async function RecommendedProductsPage() {
         <section className="subpage-section">
           <div className="section-head">
             <div>
-              <p className="section-kicker">Recommended List</p>
               <h3>지금 추천하는 상품</h3>
             </div>
           </div>

@@ -9,14 +9,14 @@ import { AdminLogoutButton } from "./admin-logout-button";
 
 const navItems = [
   { href: "/admin/dashboard", label: "대시보드", icon: DashboardIcon },
-  { href: "/admin/storefront", label: "홈페이지", icon: StorefrontIcon },
-  { href: "/admin/products", label: "상품", icon: ProductIcon },
+  { href: "/admin/orders", label: "주문관리", icon: OrderIcon },
+  { href: "/admin/products", label: "상품관리", icon: ProductIcon },
   { href: "/admin/categories", label: "카테고리", icon: CategoryIcon },
-  { href: "/admin/orders", label: "주문", icon: OrderIcon },
   { href: "/admin/sales", label: "매출/정산", icon: SalesIcon },
-  { href: "/admin/members", label: "회원", icon: MemberIcon },
-  { href: "/admin/notices", label: "공지", icon: NoticeIcon },
-  { href: "/admin/dealers", label: "딜러/조직", icon: DealerIcon },
+  { href: "/admin/members", label: "회원관리", icon: MemberIcon },
+  { href: "/admin/dealers", label: "딜러관리", icon: DealerIcon },
+  { href: "/admin/storefront", label: "홈페이지관리", icon: StorefrontIcon },
+  { href: "/admin/notices", label: "공지관리", icon: NoticeIcon },
 ] as const;
 
 function isActive(pathname: string, href: string) {
@@ -57,9 +57,6 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       <div className="admin-sidebar-footer">
         <div className="admin-sidebar-footer-actions">
-          <Link className="admin-sidebar-home-link" href="/" onClick={onNavigate}>
-            쇼핑몰
-          </Link>
           <AdminLogoutButton onDone={onNavigate} />
         </div>
       </div>

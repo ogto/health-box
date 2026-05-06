@@ -994,17 +994,59 @@ export async function updateShipmentStatusAction(formData: FormData) {
     throw new Error("shipmentId is required");
   }
 
+  const shipmentStatus = optionalString(formData, "shipmentStatus");
+  const courierCompany = optionalString(formData, "courierCompany");
+  const trackingNo = optionalString(formData, "trackingNo");
+  const redirectTo = optionalString(formData, "redirectTo") || "/admin/orders";
+  const normalizedStatus = (shipmentStatus || "").toUpperCase();
+
+  if (normalizedStatus === "SHIPPED" && (!courierCompany || !trackingNo)) {
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", "배송중 처리 시 택배사와 송장번호를 입력해주세요."));
+  }
+
+  if (normalizedStatus === "DELIVERED" && !trackingNo) {
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", "배송완료는 송장번호가 등록된 주문만 처리할 수 있습니다."));
+  }
+
   await healthBoxFetch(`/health-box/admin/shipments/${shipmentId}/status`, {
     method: "PUT",
     body: {
-      shipmentStatus: optionalString(formData, "shipmentStatus"),
-      courierCompany: optionalString(formData, "courierCompany"),
-      trackingNo: optionalString(formData, "trackingNo"),
+      shipmentStatus,
+      courierCompany,
+      trackingNo,
       shippedAt: optionalString(formData, "shippedAt"),
       deliveredAt: optionalString(formData, "deliveredAt"),
       handlerAccountId: optionalNumber(formData, "handlerAccountId"),
     },
   });
+
+  revalidatePath("/admin/orders");
+  redirectIfRequested(formData);
+}
+
+export async function bulkPrepareShipmentsAction(formData: FormData) {
+  ensureApiConfigured();
+
+  const shipmentIds = formData
+    .getAll("shipmentId")
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter(Boolean);
+
+  if (!shipmentIds.length) {
+    const redirectTo = optionalString(formData, "redirectTo") || "/admin/orders";
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", "상품 준비 처리할 주문을 선택해주세요."));
+  }
+
+  await Promise.all(
+    shipmentIds.map((shipmentId) =>
+      healthBoxFetch(`/health-box/admin/shipments/${shipmentId}/status`, {
+        method: "PUT",
+        body: {
+          shipmentStatus: "PREPARING",
+        },
+      }),
+    ),
+  );
 
   revalidatePath("/admin/orders");
   redirectIfRequested(formData);

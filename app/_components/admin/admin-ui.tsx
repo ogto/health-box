@@ -60,6 +60,8 @@ export function AdminTable({
   columns,
   alignments,
   children,
+  className,
+  scrollerId,
   isEmpty = false,
   emptyTitle = "데이터가 없습니다.",
   emptyDescription,
@@ -69,6 +71,8 @@ export function AdminTable({
   columns: string;
   alignments?: Array<"left" | "center" | "right">;
   children: ReactNode;
+  className?: string;
+  scrollerId?: string;
   isEmpty?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
@@ -79,8 +83,8 @@ export function AdminTable({
   } as CSSProperties & { "--admin-table-columns": string };
 
   return (
-    <div className="admin-table" style={style}>
-      <div className="admin-table-scroller">
+    <div className={`admin-table${className ? ` ${className}` : ""}`} style={style}>
+      <div className="admin-table-scroller" id={scrollerId}>
         <div className="admin-table-surface">
           <div className="admin-table-head">
             {headers.map((header, index) => (

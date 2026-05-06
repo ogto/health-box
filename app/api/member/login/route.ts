@@ -68,9 +68,14 @@ export async function POST(request: NextRequest) {
     const loginId = String(body.loginId || "").trim();
     const password = String(body.password || "");
     const dealerSlug = String(body.dealerSlug || "").trim() || undefined;
+    const host = String(body.host || request.headers.get("x-forwarded-host") || request.headers.get("host") || "")
+      .trim()
+      .replace(/:\d+$/, "")
+      .toLowerCase();
+    const hqMall = Boolean(body.hqMall);
     const apiBaseUrl = getApiBaseUrl();
 
-    if (!requestedDealerMallId && !dealerSlug) {
+    if (!hqMall && !requestedDealerMallId && !dealerSlug) {
       return NextResponse.json(
         { ok: false, message: "딜러몰 정보가 없습니다. 딜러몰에서 다시 접속해주세요." },
         { status: 400 },
@@ -98,10 +103,12 @@ export async function POST(request: NextRequest) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        dealerMallId: requestedDealerMallId || undefined,
+        dealerMallId: hqMall ? undefined : requestedDealerMallId || undefined,
         loginId,
         password,
-        slug: dealerSlug,
+        slug: hqMall ? undefined : dealerSlug,
+        host: host || undefined,
+        hqMall,
       }),
     });
 
@@ -136,6 +143,7 @@ export async function POST(request: NextRequest) {
       Number((await fetchDealerPublicBySlug(dealerSlug || ""))?.dealerMallId || 0) ||
       0;
     const finalDealerMallId = responseDealerMallId || fallbackDealerMallId;
+    const responseDealerSlug = stringValue(memberPayload, "slug", "dealerSlug");
 
     if (!finalDealerMallId) {
       return NextResponse.json(
@@ -160,7 +168,8 @@ export async function POST(request: NextRequest) {
         loginId,
         phone: stringValue(memberPayload, "phone") || undefined,
         email: stringValue(memberPayload, "email") || undefined,
-        dealerSlug,
+        dealerSlug: responseDealerSlug || dealerSlug,
+        sessionToken: stringValue(memberPayload, "sessionToken") || undefined,
       }),
       httpOnly: true,
       sameSite: "lax",

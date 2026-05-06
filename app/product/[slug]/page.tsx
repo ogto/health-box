@@ -142,6 +142,8 @@ export default async function ProductDetailPage({
               highlights={highlights}
               optionGroups={product.optionGroups}
               price={product.price}
+              productImage={product.image}
+              productSlug={product.slug}
               skus={product.skus}
               title={product.title}
             />
@@ -312,6 +314,8 @@ export default async function ProductDetailPage({
               highlights={highlights}
               optionGroups={product.optionGroups}
               price={product.price}
+              productImage={product.image}
+              productSlug={product.slug}
               skus={product.skus}
               title={product.title}
             />

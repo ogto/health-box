@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   createContext,
   forwardRef,
@@ -13,6 +13,7 @@ import {
 } from "react";
 
 import type { Product } from "../_lib/store-data";
+import { addMemberCartItems, type MemberCartItem } from "../_lib/member-cart";
 
 type DropdownOption = {
   disabled?: boolean;
@@ -24,6 +25,7 @@ type SelectedPurchaseItem = {
   key: string;
   label: string;
   quantity: number;
+  skuId?: number;
   soldOut: boolean;
   stockQuantity?: number;
   unitPrice: number;
@@ -89,11 +91,12 @@ function formatAdditionalPrice(additionalPrice: number) {
 
 function stripProductName(label: string | undefined, productName: string) {
   if (!label) {
-    return productName;
+    return "없음";
   }
 
   const prefix = `${productName} /`;
-  return label.startsWith(prefix) ? label.slice(prefix.length).trim() || label : label;
+  const stripped = label.startsWith(prefix) ? label.slice(prefix.length).trim() : label.trim();
+  return !stripped || stripped === productName || stripped === "상품" ? "없음" : stripped;
 }
 
 type ProductOptionDropdownHandle = {
@@ -176,6 +179,8 @@ export function ProductPurchaseBox({
   brand,
   title,
   price,
+  productImage,
+  productSlug,
   highlights,
   displaySubtitle,
   className = "",
@@ -185,13 +190,17 @@ export function ProductPurchaseBox({
   brand: string;
   title: string;
   price: string;
+  productImage: string;
+  productSlug: string;
   highlights: string[];
   displaySubtitle?: string;
   className?: string;
   optionGroups?: Product["optionGroups"];
   skus?: Product["skus"];
 }) {
+  const router = useRouter();
   const { quantity, selectedItems, selectedValues, setQuantity, setSelectedItems, setSelectedValues } = usePurchaseContext();
+  const [purchaseMessage, setPurchaseMessage] = useState("");
   const optionId = useId();
   const dropdownRefs = useRef<Array<ProductOptionDropdownHandle | null>>([]);
   const activeGroups = (optionGroups || []).filter((group) => group.groupName && group.values?.length);
@@ -244,7 +253,7 @@ export function ProductPurchaseBox({
         );
       }
 
-      return [...current, { key, label, quantity: Math.min(1, maxQuantity), soldOut, stockQuantity, unitPrice: resolvedUnitPrice }];
+      return [...current, { key, label, quantity: Math.min(1, maxQuantity), skuId: sku.id, soldOut, stockQuantity, unitPrice: resolvedUnitPrice }];
     });
   }
 
@@ -310,6 +319,52 @@ export function ProductPurchaseBox({
 
   function removeSelectedItem(key: string) {
     setSelectedItems((current) => current.filter((item) => item.key !== key));
+  }
+
+  function getCartItems() {
+    const items = hasGroupedOptions
+      ? selectedItems
+      : basicSku
+        ? [
+            {
+              key: skuKey(basicSku, title),
+              label: stripProductName(basicSku.skuName, title),
+              quantity: basicQuantity,
+              skuId: basicSku.id,
+              soldOut: isBasicSoldOut,
+              unitPrice: typeof basicSku.memberPrice === "number" && basicSku.memberPrice > 0 ? basicSku.memberPrice : basePrice,
+            },
+          ]
+        : [];
+
+    return items
+      .filter((item) => item.skuId && !item.soldOut && item.quantity > 0)
+      .map<MemberCartItem>((item) => ({
+        image: productImage,
+        optionLabel: item.label || "없음",
+        productSlug,
+        productTitle: title,
+        quantity: item.quantity,
+        skuId: Number(item.skuId),
+        unitPrice: item.unitPrice,
+      }));
+  }
+
+  function handleCartAction(nextPath?: string) {
+    setPurchaseMessage("");
+    const cartItems = getCartItems();
+
+    if (!cartItems.length) {
+      setPurchaseMessage(hasGroupedOptions ? "옵션을 선택해주세요." : "현재 담을 수 있는 상품이 없습니다.");
+      return;
+    }
+
+    addMemberCartItems(cartItems);
+    setPurchaseMessage("장바구니에 담았습니다.");
+
+    if (nextPath) {
+      router.push(nextPath);
+    }
   }
 
   return (
@@ -479,31 +534,34 @@ export function ProductPurchaseBox({
       ) : null}
 
       <div className="detail-action-row">
-        <Link
-          aria-disabled={!hasGroupedOptions && isBasicSoldOut}
+        <button
           className={`button-secondary${!hasGroupedOptions && isBasicSoldOut ? " is-disabled" : ""}`}
-          href="/cart"
           onClick={(event) => {
             if (!hasGroupedOptions && isBasicSoldOut) {
               event.preventDefault();
+              return;
             }
+            handleCartAction();
           }}
+          type="button"
         >
           장바구니 담기
-        </Link>
-        <Link
-          aria-disabled={!hasGroupedOptions && isBasicSoldOut}
+        </button>
+        <button
           className={`button-primary${!hasGroupedOptions && isBasicSoldOut ? " is-disabled" : ""}`}
-          href="/cart"
           onClick={(event) => {
             if (!hasGroupedOptions && isBasicSoldOut) {
               event.preventDefault();
+              return;
             }
+            handleCartAction("/cart");
           }}
+          type="button"
         >
           바로 구매하기
-        </Link>
+        </button>
       </div>
+      {purchaseMessage ? <div className="member-auth-alert is-muted">{purchaseMessage}</div> : null}
     </div>
   );
 }

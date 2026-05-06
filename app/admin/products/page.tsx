@@ -2,11 +2,13 @@ import Link from "next/link";
 
 import { AdminHeader } from "../../_components/admin/admin-header";
 import { AdminProductThumbPreview } from "../../_components/admin/admin-product-thumb-preview";
+import { AdminTableScrollMirror } from "../../_components/admin/admin-table-scroll-mirror";
 import { AdminBadge, AdminMetrics, AdminPanel, AdminTable } from "../../_components/admin/admin-ui";
 import { fetchAdminCategories, fetchAdminProducts, hasHealthBoxApi } from "../../_lib/health-box-api";
 import { buildProductMetrics, mapProductRows } from "../../_lib/health-box-presenters";
 
 const PRODUCTS_PER_PAGE = 10;
+const productTableScrollerId = "admin-product-table-scroller";
 
 type ProductSearchParams = {
   page?: string;
@@ -176,6 +178,7 @@ export default async function AdminProductsPage({
             }
             headers={["상품 ID", "상품명", "브랜드", "카테고리", "노출상태", "재고", "월 매출", "수정일", "관리"]}
             isEmpty={!visibleProducts.length}
+            scrollerId={productTableScrollerId}
           >
             {visibleProducts.map((product) => (
               <div className="admin-table-row admin-product-table-row" key={product.slug}>
@@ -216,6 +219,7 @@ export default async function AdminProductsPage({
               </div>
             ))}
           </AdminTable>
+          <AdminTableScrollMirror className="admin-table-scroll-mirror-full" targetId={productTableScrollerId} />
         </div>
 
         {visibleProducts.length > 0 ? (

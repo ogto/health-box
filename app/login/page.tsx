@@ -22,7 +22,7 @@ function resolveNextPath(nextPath?: string) {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; signup?: string }>;
+  searchParams: Promise<{ next?: string; passwordReset?: string; signup?: string }>;
 }) {
   const params = await searchParams;
   const runtime = await getStorefrontRuntime();
@@ -55,16 +55,17 @@ export default async function LoginPage({
               dealerName={runtime.dealer.displayName}
               dealerSlug={runtime.dealer.slug}
               nextPath={safeNextPath}
+              passwordResetSuccess={params.passwordReset === "success"}
               signupSuccess={params.signup === "success"}
             />
           ) : (
-            <div className="member-auth-card content-panel">
-              <div className="member-auth-head">
-                <p className="section-kicker">Member Login</p>
-                <h1 className="section-panel-title">회원 로그인</h1>
-                <p className="member-auth-copy">딜러몰에서 접속한 뒤 로그인해주세요.</p>
-              </div>
-            </div>
+            <MemberLoginForm
+              host={runtime.host.hostname}
+              hqMall
+              nextPath={safeNextPath}
+              passwordResetSuccess={params.passwordReset === "success"}
+              signupSuccess={params.signup === "success"}
+            />
           )}
         </div>
       </section>

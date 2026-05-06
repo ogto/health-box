@@ -1,7 +1,6 @@
 import Link from "next/link";
 
 import { AdminHeader } from "../../_components/admin/admin-header";
-import { AdminSubmitButton } from "../../_components/admin/admin-submit-button";
 import { AdminBadge, AdminMetrics, AdminPanel, AdminTable } from "../../_components/admin/admin-ui";
 import {
   fetchAdminBuyerSignupApplications,
@@ -12,16 +11,39 @@ import {
 } from "../../_lib/health-box-api";
 import {
   buildDashboardMetrics,
-  mapApprovalQueue,
   mapNoticeRows,
   mapRecentOrders,
 } from "../../_lib/health-box-presenters";
-import {
-  approveBuyerSignupApplicationAction,
-  approveDealerApplicationAction,
-  rejectBuyerSignupApplicationAction,
-  rejectDealerApplicationAction,
-} from "../../_actions/health-box-admin";
+
+function countPendingApplications(records: Array<Record<string, unknown>> | null) {
+  return (records ?? []).filter((record) => {
+    const status = typeof record.status === "string" ? record.status : "";
+    return !status || /^PENDING$/i.test(status);
+  }).length;
+}
+
+function textValue(record: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    if (value !== null && value !== undefined && value !== "") {
+      return String(value);
+    }
+  }
+
+  return "";
+}
+
+function countProcessingOrders(records: Array<Record<string, unknown>> | null) {
+  return (records ?? []).filter((record) => {
+    const orderStatus = textValue(record, "orderStatus", "status").toUpperCase();
+    const shipmentStatus = textValue(record, "shipmentStatus").toUpperCase();
+    if (/CANCELED|SHIPPED|DELIVERED|PREPARING|취소|배송|상품\s*준비/.test(shipmentStatus)) {
+      return false;
+    }
+
+    return /ORDERED|PENDING|주문\s*접수/.test(shipmentStatus || orderStatus);
+  }).length;
+}
 
 export default async function AdminDashboardPage() {
   const [orders, dealerApplications, buyerApplications, adminNotices] = hasHealthBoxApi()
@@ -35,7 +57,9 @@ export default async function AdminDashboardPage() {
 
   const metrics = buildDashboardMetrics(orders, dealerApplications, buyerApplications);
   const recentOrders = mapRecentOrders(orders);
-  const approvalQueue = mapApprovalQueue(dealerApplications, buyerApplications);
+  const pendingBuyerCount = countPendingApplications(buyerApplications);
+  const pendingDealerCount = countPendingApplications(dealerApplications);
+  const processingOrderCount = countProcessingOrders(orders);
   const latestNotices = mapNoticeRows(adminNotices).slice(0, 4);
 
   return (
@@ -45,7 +69,14 @@ export default async function AdminDashboardPage() {
       <AdminMetrics items={metrics} />
 
       <div className="admin-grid-main">
-        <AdminPanel title="최근 주문">
+        <AdminPanel
+          action={
+            <Link className="admin-button secondary small" href="/admin/orders">
+              주문관리
+            </Link>
+          }
+          title="최근 주문"
+        >
           <AdminTable
             columns="minmax(150px, 1fr) minmax(0, 1.5fr) minmax(110px, 0.8fr) 110px"
             emptyDescription="최근 주문 데이터가 아직 없습니다."
@@ -53,7 +84,7 @@ export default async function AdminDashboardPage() {
             isEmpty={!recentOrders.length}
           >
             {recentOrders.map((order) => (
-              <Link className="admin-table-row" href="/admin/orders" key={order.number}>
+              <Link className="admin-table-row" href={order.id ? `/admin/orders/${order.id}` : "/admin/orders"} key={order.number}>
                 <div className="admin-row-stack">
                   <strong>{order.number}</strong>
                   <span>{order.date}</span>
@@ -63,7 +94,14 @@ export default async function AdminDashboardPage() {
                   <p>{order.items}</p>
                 </div>
                 <strong className="admin-row-price">{order.amount}</strong>
-                <AdminBadge tone={order.statusTone}>{order.status}</AdminBadge>
+                <div className="admin-order-status-stack">
+                  <AdminBadge tone={order.statusTone}>{order.status}</AdminBadge>
+                  {order.pendingAgeLabel ? (
+                    <AdminBadge className="admin-order-age-badge" tone={order.pendingAgeTone}>
+                      {order.pendingAgeLabel}
+                    </AdminBadge>
+                  ) : null}
+                </div>
               </Link>
             ))}
           </AdminTable>
@@ -72,70 +110,94 @@ export default async function AdminDashboardPage() {
         <div className="admin-stack">
           <AdminPanel title="승인 대기">
             <div className="admin-list">
-              {approvalQueue.map((item) => (
-                <div className="admin-list-row" key={`${item.name}-${item.submittedAt}`}>
+              <div className="admin-list-row">
+                <div className="admin-row-stack">
+                  <strong>회원 승인 요청</strong>
+                  <p>회원관리에서 가입 정보를 확인한 뒤 승인 또는 반려하세요.</p>
+                </div>
+                <div className="admin-list-meta">
+                  <AdminBadge tone={pendingBuyerCount ? "cyan" : "green"}>
+                    {pendingBuyerCount}건
+                  </AdminBadge>
+                  <Link className="admin-button secondary small" href="/admin/members">
+                    회원관리
+                  </Link>
+                </div>
+              </div>
+              <div className="admin-list-row">
+                <div className="admin-row-stack">
+                  <strong>딜러 신청</strong>
+                  <p>딜러몰 생성과 공개 설정은 딜러몰관리에서 처리하세요.</p>
+                </div>
+                <div className="admin-list-meta">
+                  <AdminBadge tone={pendingDealerCount ? "gold" : "green"}>
+                    {pendingDealerCount}건
+                  </AdminBadge>
+                  <Link className="admin-button secondary small" href="/admin/dealers">
+                    딜러몰관리
+                  </Link>
+                </div>
+              </div>
+              {!pendingBuyerCount && !pendingDealerCount ? (
+                <div className="admin-list-row">
                   <div className="admin-row-stack">
-                    <strong>{item.name}</strong>
-                    <p>{item.note}</p>
-                  </div>
-                  <div className="admin-list-meta">
-                    <AdminBadge tone={item.type === "딜러 신청" ? "gold" : "cyan"}>
-                      {item.type}
-                    </AdminBadge>
-                    <span>{item.submittedAt}</span>
-                    {hasHealthBoxApi() ? (
-                      <div className="admin-inline-actions">
-                        <form action={item.kind === "dealer" ? approveDealerApplicationAction : approveBuyerSignupApplicationAction}>
-                          <input name="applicationId" type="hidden" value={String(item.id)} />
-                          <AdminSubmitButton className="admin-button small" pendingLabel="승인중...">
-                            승인
-                          </AdminSubmitButton>
-                        </form>
-                        <form action={item.kind === "dealer" ? rejectDealerApplicationAction : rejectBuyerSignupApplicationAction}>
-                          <input name="applicationId" type="hidden" value={String(item.id)} />
-                          <AdminSubmitButton className="admin-button secondary small" pendingLabel="반려중...">
-                            반려
-                          </AdminSubmitButton>
-                        </form>
-                      </div>
-                    ) : null}
+                    <strong>처리할 승인 요청이 없습니다.</strong>
+                    <p>새 요청이 들어오면 이 영역에 건수로 표시됩니다.</p>
                   </div>
                 </div>
-              ))}
-              {!approvalQueue.length ? <p className="admin-row-muted">승인 대기 데이터가 없습니다.</p> : null}
+              ) : null}
             </div>
           </AdminPanel>
         </div>
       </div>
 
       <div className="admin-grid-halves">
-        <AdminPanel title="연결 상태">
+        <AdminPanel title="오늘 처리할 일">
           <div className="admin-list">
-            <div className="admin-list-row">
+            <Link className="admin-list-row" href="/admin/orders">
               <div className="admin-row-stack">
-                <strong>주문 데이터</strong>
-                <p>{orders?.length ? `${orders.length}건 조회됨` : "조회된 주문이 없습니다."}</p>
+                <strong>주문 처리</strong>
+                <p>접수된 주문을 상품 준비중으로 넘기고 배송 처리까지 이어가세요.</p>
               </div>
-              <AdminBadge tone={orders?.length ? "green" : "gold"}>{orders?.length ? "연결됨" : "비어있음"}</AdminBadge>
-            </div>
-            <div className="admin-list-row">
+              <div className="admin-list-meta">
+                <AdminBadge tone={processingOrderCount ? "cyan" : "green"}>
+                  {processingOrderCount}건
+                </AdminBadge>
+              </div>
+            </Link>
+            <Link className="admin-list-row" href="/admin/members">
               <div className="admin-row-stack">
-                <strong>공지 데이터</strong>
-                <p>{adminNotices?.length ? `${adminNotices.length}건 조회됨` : "조회된 공지가 없습니다."}</p>
+                <strong>회원 승인</strong>
+                <p>구매 회원 가입 요청을 확인하고 승인 또는 반려하세요.</p>
               </div>
-              <AdminBadge tone={adminNotices?.length ? "green" : "gold"}>{adminNotices?.length ? "연결됨" : "비어있음"}</AdminBadge>
-            </div>
-            <div className="admin-list-row">
+              <div className="admin-list-meta">
+                <AdminBadge tone={pendingBuyerCount ? "gold" : "green"}>
+                  {pendingBuyerCount}건
+                </AdminBadge>
+              </div>
+            </Link>
+            <Link className="admin-list-row" href="/admin/dealers">
               <div className="admin-row-stack">
-                <strong>API 설정</strong>
-                <p>{hasHealthBoxApi() ? "HEALTH_BOX_API_BASE_URL 연결됨" : "환경변수가 아직 설정되지 않았습니다."}</p>
+                <strong>딜러 신청</strong>
+                <p>신규 딜러몰 요청과 공개 설정을 확인하세요.</p>
               </div>
-              <AdminBadge tone={hasHealthBoxApi() ? "blue" : "rose"}>{hasHealthBoxApi() ? "설정됨" : "미설정"}</AdminBadge>
-            </div>
+              <div className="admin-list-meta">
+                <AdminBadge tone={pendingDealerCount ? "violet" : "green"}>
+                  {pendingDealerCount}건
+                </AdminBadge>
+              </div>
+            </Link>
           </div>
         </AdminPanel>
 
-        <AdminPanel title="최근 공지">
+        <AdminPanel
+          action={
+            <Link className="admin-button secondary small" href="/admin/notices">
+              공지관리
+            </Link>
+          }
+          title="최근 공지"
+        >
           <div className="admin-list">
             {latestNotices.map((notice) => (
               <Link className="admin-list-row" href={notice.previewHref} key={notice.slug}>

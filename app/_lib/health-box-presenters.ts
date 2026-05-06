@@ -216,27 +216,92 @@ function countPendingApplications(records: HealthBoxRecord[] | null) {
   }).length;
 }
 
+function parseRecordDate(record: HealthBoxRecord, ...keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (Array.isArray(value)) {
+      const [year, month, day, hour = 0, minute = 0, second = 0] = value.map(Number);
+      if (year && month && day) {
+        const date = new Date(year, month - 1, day, hour, minute, second);
+        if (!Number.isNaN(date.getTime())) {
+          return date;
+        }
+      }
+    }
+
+    const text = String(value || "").trim();
+    if (text) {
+      const date = new Date(text);
+      if (!Number.isNaN(date.getTime())) {
+        return date;
+      }
+    }
+  }
+
+  return null;
+}
+
+function dateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function isTodayOrder(order: HealthBoxRecord) {
+  const date = parseRecordDate(order, "orderedAt", "orderAt", "placedAt", "createdAt");
+  return date ? dateKey(date) === dateKey(new Date()) : false;
+}
+
+function startOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function orderPendingAgeInfo(order: HealthBoxRecord, shipmentStatus: string, displayStatus: string) {
+  if (!/^PENDING$/i.test(shipmentStatus) && !/주문\s*접수/.test(displayStatus)) {
+    return null;
+  }
+
+  const orderedAt = parseRecordDate(order, "orderedAt", "orderAt", "placedAt", "createdAt");
+  if (!orderedAt) {
+    return null;
+  }
+
+  const diffMs = startOfLocalDay(new Date()).getTime() - startOfLocalDay(orderedAt).getTime();
+  const days = Math.max(0, Math.floor(diffMs / 86400000));
+  return {
+    label: `D+${days}`,
+    tone: days >= 3 ? "rose" as const : days >= 1 ? "gold" as const : "cyan" as const,
+  };
+}
+
 export function buildDashboardMetrics(orders: HealthBoxRecord[] | null, dealerApps: HealthBoxRecord[] | null, buyerApps: HealthBoxRecord[] | null) {
   if (!orders && !dealerApps && !buyerApps) {
     return [
       zeroMetric("오늘 주문", "실데이터 없음", "blue"),
-      zeroMetric("승인 대기", "실데이터 없음", "cyan"),
-      { label: "주문 회원사", value: "0곳", hint: "실데이터 없음", tone: "green" as const },
-      { label: "운영 상태", value: "데이터 없음", hint: "API 연결 후 집계", tone: "gold" as const },
+      zeroMetric("주문 처리 대기", "실데이터 없음", "cyan"),
+      zeroMetric("승인대기 회원", "실데이터 없음", "gold"),
+      zeroMetric("승인대기 딜러", "실데이터 없음", "violet"),
     ];
   }
 
-  const totalOrders = orders?.length ?? 0;
-  const shippingReady = orders?.filter((order) => /배송 준비|송장/.test(stringValue(order, "status", "shipmentStatus"))).length ?? 0;
+  const todayOrders = orders?.filter(isTodayOrder).length ?? 0;
+  const processingOrders =
+    orders?.filter((order) => {
+      const orderStatus = stringValue(order, "orderStatus", "status").toUpperCase();
+      const shipmentStatus = stringValue(order, "shipmentStatus").toUpperCase();
+      if (/CANCELED|SHIPPED|DELIVERED|PREPARING|취소|배송|상품\s*준비/.test(shipmentStatus)) {
+        return false;
+      }
+
+      return /ORDERED|PENDING|주문\s*접수/.test(shipmentStatus || orderStatus);
+    }).length ?? 0;
   const pendingDealerCount = countPendingApplications(dealerApps);
   const pendingBuyerCount = countPendingApplications(buyerApps);
-  const approvalCount = pendingDealerCount + pendingBuyerCount;
 
   return [
-    { label: "오늘 주문", value: `${totalOrders}건`, hint: `배송준비 ${shippingReady}건`, tone: "blue" as const },
-    { label: "승인 대기", value: `${approvalCount}건`, hint: `딜러 ${pendingDealerCount} · 회원 ${pendingBuyerCount}`, tone: "cyan" as const },
-    { label: "주문 회원사", value: `${new Set((orders ?? []).map((item) => stringValue(item, "dealerMallName", "mallName", "company"))).size || 0}곳`, hint: "주문 기준 집계", tone: "green" as const },
-    { label: "운영 상태", value: "API 연결", hint: "cloud-api 기준 실시간 조회", tone: "gold" as const },
+    { label: "오늘 주문", value: `${todayOrders}건`, hint: "주문일 기준", tone: "blue" as const },
+    { label: "주문 처리 대기", value: `${processingOrders}건`, hint: "접수/상품 준비 기준", tone: "cyan" as const },
+    { label: "승인대기 회원", value: `${pendingBuyerCount}건`, hint: "회원관리에서 처리", tone: "gold" as const },
+    { label: "승인대기 딜러", value: `${pendingDealerCount}건`, hint: "딜러몰관리에서 처리", tone: "violet" as const },
   ];
 }
 
@@ -287,19 +352,32 @@ export function mapRecentOrders(orders: HealthBoxRecord[] | null) {
     return [];
   }
 
-  return orders.slice(0, 5).map((order, index) => {
-    const status = textOrDash(stringValue(order, "status", "shipmentStatus"));
-    const fallbackId = idValue(order, "id", "orderId") ?? index + 1;
-    return {
-      number: textOrDash(stringValue(order, "orderNo", "number", "id"), `ORDER-${fallbackId}`),
-      member: textOrDash(stringValue(order, "dealerMallName", "mallName", "company")),
-      items: textOrDash(stringValue(order, "items", "productSummary", "productName")),
-      amount: formatWon(numberValue(order, "totalPaymentAmount", "amount", "totalAmount") ?? 0),
-      status,
-      statusTone: tone(status),
-      date: textOrDash(dateTimeValue(order, "orderAt", "placedAt", "createdAt")),
-    };
-  });
+  return [...orders]
+    .sort((first, second) => {
+      const firstDate = parseRecordDate(first, "orderedAt", "orderAt", "placedAt", "createdAt")?.getTime() ?? 0;
+      const secondDate = parseRecordDate(second, "orderedAt", "orderAt", "placedAt", "createdAt")?.getTime() ?? 0;
+      return secondDate - firstDate;
+    })
+    .slice(0, 5)
+    .map((order, index) => {
+      const orderStatus = stringValue(order, "orderStatus", "status");
+      const shipmentStatus = stringValue(order, "shipmentStatus");
+      const status = adminOrderDisplayStatus(orderStatus, shipmentStatus);
+      const pendingAge = orderPendingAgeInfo(order, shipmentStatus, status);
+      const fallbackId = idValue(order, "id", "orderId") ?? index + 1;
+      return {
+        id: idValue(order, "id", "orderId"),
+        number: textOrDash(stringValue(order, "orderNo", "number", "id"), `ORDER-${fallbackId}`),
+        member: textOrDash(stringValue(order, "dealerMallName", "mallName", "company")),
+        items: orderItemSummary(order),
+        amount: formatWon(numberValue(order, "totalPaymentAmount", "amount", "totalAmount") ?? 0),
+        status,
+        statusTone: tone(`${orderStatus} ${shipmentStatus} ${status}`),
+        pendingAgeLabel: pendingAge?.label || "",
+        pendingAgeTone: pendingAge?.tone || "cyan",
+        date: textOrDash(dateTimeValue(order, "orderedAt", "orderAt", "placedAt", "createdAt")),
+      };
+    });
 }
 
 export function mapApprovalQueue(
@@ -454,14 +532,97 @@ export function buildOrderMetrics(orders: HealthBoxRecord[] | null) {
     ];
   }
 
-  const orderStatuses = orders.map((item) => stringValue(item, "status", "shipmentStatus"));
+  const orderStatuses = orders.map((item) => stringValue(item, "orderStatus", "status"));
+  const shipmentStatuses = orders.map((item) => stringValue(item, "shipmentStatus"));
 
   return [
-    { label: "결제 완료", value: `${orderStatuses.filter((item) => /결제/.test(item)).length}건`, hint: "주문 상태 기준", tone: "blue" as const },
-    { label: "배송 준비", value: `${orderStatuses.filter((item) => /배송 준비|송장/.test(item)).length}건`, hint: "출고 대기 기준", tone: "cyan" as const },
+    { label: "주문 완료", value: `${orderStatuses.filter((item) => /ORDERED|주문/.test(item)).length}건`, hint: "결제 후 접수", tone: "blue" as const },
+    { label: "배송 준비", value: `${shipmentStatuses.filter((item) => /PENDING|PREPARING|배송 준비|송장/.test(item)).length}건`, hint: "출고 대기 기준", tone: "cyan" as const },
     { label: "주문 수", value: `${orders.length}건`, hint: "전체 주문", tone: "green" as const },
-    { label: "취소/반품", value: `${orderStatuses.filter((item) => /취소|반품/.test(item)).length}건`, hint: "차감 가능 주문", tone: "rose" as const },
+    { label: "취소/반품", value: `${orderStatuses.filter((item) => /CANCELED|취소|반품/.test(item)).length}건`, hint: "차감 가능 주문", tone: "rose" as const },
   ];
+}
+
+function orderItemSummary(order: HealthBoxRecord) {
+  const items = Array.isArray(order.items) ? (order.items as HealthBoxRecord[]) : [];
+  if (!items.length) {
+    return textOrDash(stringValue(order, "productSummary", "productName", "items"), "주문 상품 없음");
+  }
+
+  const firstName = textOrDash(stringValue(items[0], "productNameSnapshot", "productName"), "상품명 없음");
+  return items.length > 1 ? `${firstName} 외 ${items.length - 1}건` : firstName;
+}
+
+function orderItemDetailLines(order: HealthBoxRecord) {
+  const items = Array.isArray(order.items) ? (order.items as HealthBoxRecord[]) : [];
+
+  return items.map((item) => {
+    const productName = textOrDash(stringValue(item, "productNameSnapshot", "productName"), "상품명 없음");
+    const rawOptionValues = [stringValue(item, "optionSummarySnapshot"), stringValue(item, "skuNameSnapshot")]
+      .map((value) => value.trim())
+      .filter((value) => value && value !== productName && value !== "상품" && value !== "기본 상품");
+    const optionValues = rawOptionValues
+      .filter((value, index, array) => array.findIndex((itemValue) => itemValue === value || itemValue.includes(value)) === index);
+    const quantity = numberValue(item, "quantity") ?? 0;
+    const lineAmount = numberValue(item, "lineAmount") ?? 0;
+    const optionParts = optionValues.length === 1 ? optionValues[0].split(/\s*[/·,]\s*/).filter(Boolean) : optionValues;
+    const inferredNames = optionParts.length === 2 ? ["사이즈", "색상"] : optionParts.length === 3 ? ["사이즈", "색상", "옵션"] : [];
+
+    return {
+      amount: formatWon(lineAmount),
+      option: optionValues.join(" · ") || "없음",
+      optionPairs: optionParts.map((part, index) => {
+        const [name, ...rest] = part.split(/\s*[:：]\s*/);
+        return rest.length
+          ? { name: name.trim() || "옵션", value: rest.join(":").trim() || "-" }
+          : { name: inferredNames[index] || "옵션", value: part };
+      }),
+      productName,
+      quantity,
+    };
+  });
+}
+
+function adminShipmentStatusLabel(value: string) {
+  const status = value.toUpperCase();
+  const labels: Record<string, string> = {
+    PENDING: "주문 접수",
+    PREPARING: "상품 준비중",
+    SHIPPED: "배송중",
+    DELIVERED: "배송완료",
+    CANCELED: "취소완료",
+    PARTIALLY_CANCELED: "부분취소",
+  };
+  return labels[status] || value;
+}
+
+function adminOrderStatusLabel(value: string) {
+  const status = value.toUpperCase();
+  const labels: Record<string, string> = {
+    ORDERED: "주문완료",
+    PREPARING: "상품준비",
+    SHIPPED: "배송중",
+    DELIVERED: "배송완료",
+    CANCELED: "취소완료",
+    PARTIALLY_CANCELED: "부분취소",
+  };
+  return labels[status] || value;
+}
+
+function adminOrderDisplayStatus(orderStatus: string, shipmentStatus: string) {
+  if (/CANCELED|취소/i.test(orderStatus)) {
+    return adminOrderStatusLabel(orderStatus);
+  }
+
+  if (/CANCELED|취소/i.test(shipmentStatus)) {
+    return "취소완료";
+  }
+
+  if (shipmentStatus) {
+    return adminShipmentStatusLabel(shipmentStatus);
+  }
+
+  return adminOrderStatusLabel(orderStatus);
 }
 
 export function mapOrderRows(orders: HealthBoxRecord[] | null) {
@@ -470,21 +631,31 @@ export function mapOrderRows(orders: HealthBoxRecord[] | null) {
   }
 
   return orders.map((order, index) => {
-    const status = textOrDash(stringValue(order, "status", "shipmentStatus"));
+    const orderStatus = stringValue(order, "orderStatus", "status");
+    const shipmentStatus = stringValue(order, "shipmentStatus");
+    const status = adminOrderDisplayStatus(orderStatus, shipmentStatus);
+    const pendingAge = orderPendingAgeInfo(order, shipmentStatus, status);
     const fallbackId = idValue(order, "id", "orderId") ?? index + 1;
 
     return {
       id: idValue(order, "id", "orderId"),
       number: textOrDash(stringValue(order, "orderNo", "number", "id"), `ORDER-${fallbackId}`),
-      company: textOrDash(stringValue(order, "dealerMallName", "mallName", "company")),
+      company: textOrDash(stringValue(order, "dealerNameSnapshot", "dealerMallName", "mallName", "company")),
       companyType: textOrDash(stringValue(order, "companyType", "memberType")),
-      buyer: textOrDash(stringValue(order, "buyerName", "memberName", "buyer")),
+      buyer: textOrDash(stringValue(order, "ordererName", "buyerName", "memberName", "buyer")),
+      buyerPhone: textOrDash(stringValue(order, "ordererPhone", "buyerPhone", "receiverPhone")),
       buyerType: textOrDash(stringValue(order, "buyerType", "memberType")),
-      items: textOrDash(stringValue(order, "items", "productSummary", "productName")),
+      items: orderItemSummary(order),
+      itemDetails: orderItemDetailLines(order),
       amount: formatWon(numberValue(order, "totalPaymentAmount", "amount", "totalAmount") ?? 0),
       status,
-      tone: tone(status),
-      placedAt: textOrDash(dateTimeValue(order, "orderAt", "placedAt", "createdAt")),
+      orderStatus,
+      shipmentStatus,
+      paymentStatus: stringValue(order, "paymentStatus"),
+      tone: tone(`${orderStatus} ${shipmentStatus} ${status}`),
+      pendingAgeLabel: pendingAge?.label || "",
+      pendingAgeTone: pendingAge?.tone || "cyan",
+      placedAt: textOrDash(dateTimeValue(order, "orderedAt", "orderAt", "placedAt", "createdAt")),
       shipmentId: idValue(order, "shipmentId"),
     };
   });

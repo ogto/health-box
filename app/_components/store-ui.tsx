@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode, SVGProps } from "react";
 
 import { BrandLogo } from "./brand-logo";
+import { CartCountBadge } from "./cart-count-badge";
 import { HeaderPromoBar } from "./header-promo-bar";
 import type { Notice, Product } from "../_lib/store-data";
 import { getStorefrontRuntime } from "../_lib/storefront-runtime";
@@ -60,6 +61,7 @@ export async function StoreShell({
                 href="/cart"
               >
                 <CartIcon className="h-6 w-6" />
+                <CartCountBadge />
               </Link>
             </div>
 
@@ -219,7 +221,7 @@ function CartIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg fill="none" viewBox="0 0 24 24" {...props}>
       <path
-        d="M4 5h2l2.2 9.5a1 1 0 0 0 1 .8H17a1 1 0 0 0 1-.78L19.5 8H7.2M10 20a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm9 0a1 1 0 1 1-2 0 1 1 2 0Z"
+        d="M4 5h2l2.2 9.5a1 1 0 0 0 1 .8H17a1 1 0 0 0 1-.78L19.5 8H7.2M8 20h.01M17 20h.01"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"

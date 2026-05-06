@@ -11,6 +11,7 @@ export type MemberSession = {
   phone?: string;
   email?: string;
   dealerSlug?: string;
+  sessionToken?: string;
   issuedAt: number;
 };
 

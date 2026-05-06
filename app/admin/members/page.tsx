@@ -1,11 +1,7 @@
 import Link from "next/link";
 
-import {
-  approveBuyerSignupApplicationAction,
-  rejectBuyerSignupApplicationAction,
-} from "../../_actions/health-box-admin";
 import { AdminHeader } from "../../_components/admin/admin-header";
-import { AdminSubmitButton } from "../../_components/admin/admin-submit-button";
+import { AdminMemberApprovalActions } from "../../_components/admin/admin-member-approval-actions";
 import { AdminBadge, AdminMetrics, AdminPanel, AdminTable } from "../../_components/admin/admin-ui";
 import {
   dateTimeValue,
@@ -120,7 +116,7 @@ export default async function AdminMembersPage({
       >
         <AdminTable
           alignments={["left", "left", "left", "center", "center", "center"]}
-          columns="minmax(0, 0.84fr) minmax(0, 0.92fr) minmax(0, 1fr) 132px 90px 168px"
+          columns="minmax(0, 0.84fr) minmax(0, 0.92fr) minmax(0, 1fr) 132px 90px minmax(260px, 1.08fr)"
           emptyDescription={
             selectedDealer
               ? "선택한 딜러몰에 승인 대기 회원이 없습니다."
@@ -150,20 +146,10 @@ export default async function AdminMembersPage({
                 <span className="admin-row-muted">{submittedAt}</span>
                 <AdminBadge tone="gold">승인 대기</AdminBadge>
                 {hasHealthBoxApi() ? (
-                  <div className="admin-inline-actions admin-cell-center">
-                    <form action={approveBuyerSignupApplicationAction}>
-                      <input name="applicationId" type="hidden" value={String(applicationId)} />
-                      <AdminSubmitButton className="admin-button small" pendingLabel="승인중...">
-                        승인
-                      </AdminSubmitButton>
-                    </form>
-                    <form action={rejectBuyerSignupApplicationAction}>
-                      <input name="applicationId" type="hidden" value={String(applicationId)} />
-                      <AdminSubmitButton className="admin-button secondary small" pendingLabel="반려중...">
-                        반려
-                      </AdminSubmitButton>
-                    </form>
-                  </div>
+                  <AdminMemberApprovalActions
+                    applicationId={applicationId}
+                    memberName={stringValue(application, "name", "buyerName") || "해당"}
+                  />
                 ) : (
                   <span className="admin-row-muted">API 미연결</span>
                 )}

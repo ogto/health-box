@@ -15,7 +15,6 @@ export default async function BestProductsPage() {
         />
 
         <div className="content-panel">
-          <p className="section-kicker">Best Products</p>
           <h2 className="detail-title">베스트상품</h2>
           <p className="detail-copy">
             건강창고에서 가장 많이 찾는 대표 상품만 모아 둔 페이지입니다. 첫 구매가 많은
@@ -31,7 +30,6 @@ export default async function BestProductsPage() {
         <section className="subpage-section">
           <div className="section-head">
             <div>
-              <p className="section-kicker">Product List</p>
               <h3>많이 찾는 상품</h3>
             </div>
           </div>

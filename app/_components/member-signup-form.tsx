@@ -30,11 +30,13 @@ export function MemberSignupForm({
   dealerMallId,
   dealerName,
   dealerSlug,
+  hqMall = false,
   nextPath,
 }: {
   dealerMallId?: number;
   dealerName?: string;
   dealerSlug?: string;
+  hqMall?: boolean;
   nextPath?: string;
 }) {
   const router = useRouter();
@@ -61,6 +63,11 @@ export function MemberSignupForm({
       return;
     }
 
+    if (!email.trim()) {
+      setError("이메일을 입력해주세요.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -69,12 +76,13 @@ export function MemberSignupForm({
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
         body: JSON.stringify({
-          dealerMallId,
-          dealerSlug,
+          dealerMallId: hqMall ? undefined : dealerMallId,
+          dealerSlug: hqMall ? "head" : dealerSlug,
           name,
           phone,
           email,
           password,
+          hqMall,
         }),
       });
 
@@ -97,10 +105,13 @@ export function MemberSignupForm({
   return (
     <div className="member-auth-card content-panel">
       <div className="member-auth-head">
-        <p className="section-kicker">Member Signup</p>
         <h1 className="section-panel-title">회원가입</h1>
         <p className="member-auth-copy">
-          {dealerName ? `${dealerName} 딜러몰 회원가입 신청` : "구매 회원가입 신청"}
+          {hqMall
+            ? "본사몰 구매 회원가입을 신청합니다."
+            : dealerName
+              ? `${dealerName} 딜러몰 회원가입 신청`
+              : "구매 회원가입 신청"}
         </p>
       </div>
 
@@ -134,18 +145,26 @@ export function MemberSignupForm({
         </label>
 
         <label className="member-auth-field">
-          <span>이메일 (선택)</span>
+          <span>이메일</span>
           <input
             className="member-auth-input"
             onChange={(event) => setEmail(event.target.value)}
-            placeholder="선택 입력"
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                void handleSubmit();
+              }
+            }}
+            placeholder="이메일 입력"
+            required
             type="email"
             value={email}
           />
         </label>
 
         <div className="member-auth-alert is-muted">
-          승인 후 로그인할 때는 가입한 이메일 또는 휴대폰 번호를 사용합니다.
+          {hqMall
+            ? "승인 후 본사몰에서 로그인할 수 있습니다."
+            : "승인 후 로그인할 때는 가입한 이메일을 사용합니다."}
         </div>
 
         <label className="member-auth-field">

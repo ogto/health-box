@@ -504,12 +504,20 @@ export function formatWon(value: number | string | null | undefined) {
 }
 
 export function toneFromStatus(status: string) {
-  if (/(승인 대기|검수중|재고 주의|송장 입력 대기)/.test(status)) {
+  if (/(CANCELED|반품|취소|차감)/.test(status)) {
+    return "rose" as const;
+  }
+
+  if (/(PREPARING|상품 준비중|상품준비)/.test(status)) {
     return "gold" as const;
   }
 
-  if (/(반품|취소|차감)/.test(status)) {
-    return "rose" as const;
+  if (/(PENDING|ORDERED|주문 접수|주문완료)/.test(status)) {
+    return "cyan" as const;
+  }
+
+  if (/(승인 대기|검수중|재고 주의|송장 입력 대기)/.test(status)) {
+    return "gold" as const;
   }
 
   if (/(배송 준비|게시 전|정산 예정|결제 완료)/.test(status)) {

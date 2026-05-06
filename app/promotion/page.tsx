@@ -50,7 +50,6 @@ export default async function PromotionPage() {
         <section className="subpage-section">
           <div className="section-head">
             <div>
-              <p className="section-kicker">Promotion Picks</p>
               <h3>기획전 상품 모아보기</h3>
             </div>
           </div>
