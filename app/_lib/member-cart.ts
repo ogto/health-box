@@ -82,3 +82,69 @@ export function clearMemberCart() {
 
   window.localStorage.removeItem(MEMBER_CART_STORAGE_KEY);
 }
+
+async function parseCartResponse(response: Response) {
+  const data = (await response.json().catch(() => ({}))) as {
+    items?: MemberCartItem[];
+    message?: string;
+    ok?: boolean;
+  };
+
+  if (!response.ok || data.ok === false) {
+    throw new Error(data.message || "장바구니를 처리하지 못했습니다.");
+  }
+
+  return normalizeCartItems(data.items || []);
+}
+
+export async function fetchMemberCart() {
+  const response = await fetch("/api/member/cart", { credentials: "same-origin" });
+  return parseCartResponse(response);
+}
+
+export async function saveMemberCartItem(skuId: number, quantity: number) {
+  const response = await fetch("/api/member/cart", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ skuId, quantity }),
+  });
+  return parseCartResponse(response);
+}
+
+export async function addMemberCartItemsToServer(items: MemberCartItem[]) {
+  let nextItems = await fetchMemberCart().catch(() => [] as MemberCartItem[]);
+
+  for (const item of normalizeCartItems(items)) {
+    const existing = nextItems.find((entry) => entry.skuId === item.skuId);
+    nextItems = await saveMemberCartItem(item.skuId, (existing?.quantity || 0) + item.quantity);
+  }
+
+  return nextItems;
+}
+
+export async function deleteMemberCartItem(skuId: number) {
+  const response = await fetch(`/api/member/cart/items/${skuId}`, {
+    method: "DELETE",
+    credentials: "same-origin",
+  });
+  return parseCartResponse(response);
+}
+
+export async function clearMemberCartOnServer() {
+  const response = await fetch("/api/member/cart", {
+    method: "DELETE",
+    credentials: "same-origin",
+  });
+
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { message?: string };
+    throw new Error(data.message || "장바구니를 비우지 못했습니다.");
+  }
+}
+
+export function dispatchMemberCartSync() {
+  if (isBrowser()) {
+    window.dispatchEvent(new Event("health-box-cart-sync"));
+  }
+}

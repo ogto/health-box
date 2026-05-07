@@ -15,6 +15,11 @@ export type MemberSession = {
   issuedAt: number;
 };
 
+type DealerSessionScope = {
+  dealerMallId?: number | string | null;
+  slug?: string | null;
+} | null | undefined;
+
 function getMemberSessionSecret() {
   return (
     process.env.MEMBER_SESSION_SECRET?.trim() ||
@@ -85,4 +90,26 @@ export async function getMemberSession() {
   const cookieStore = await cookies();
   const raw = cookieStore.get(MEMBER_COOKIE_NAME)?.value;
   return raw ? decodePayload(raw) : null;
+}
+
+export function isMemberSessionForDealer(session: MemberSession | null | undefined, dealer: DealerSessionScope) {
+  if (!session) {
+    return false;
+  }
+
+  if (!dealer) {
+    return true;
+  }
+
+  const dealerMallId = Number(dealer.dealerMallId);
+  if (Number.isFinite(dealerMallId) && dealerMallId > 0) {
+    return Number(session.dealerMallId) === dealerMallId;
+  }
+
+  const dealerSlug = typeof dealer.slug === "string" ? dealer.slug.trim() : "";
+  if (dealerSlug && session.dealerSlug) {
+    return session.dealerSlug === dealerSlug;
+  }
+
+  return true;
 }

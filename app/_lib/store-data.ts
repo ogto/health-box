@@ -66,6 +66,7 @@ export type Notice = {
   title: string;
   date: string;
   summary: string;
+  bodyHtml?: string;
   paragraphs: string[];
   checklist: string[];
 };

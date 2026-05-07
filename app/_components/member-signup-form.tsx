@@ -26,6 +26,11 @@ function formatPhone(value: string) {
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
 }
 
+type DuplicateCheckState = {
+  message: string;
+  status: "idle" | "checking" | "error" | "success";
+};
+
 export function MemberSignupForm({
   dealerMallId,
   dealerName,
@@ -47,8 +52,48 @@ export function MemberSignupForm({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [phoneCheck, setPhoneCheck] = useState<DuplicateCheckState>({ message: "", status: "idle" });
+  const [emailCheck, setEmailCheck] = useState<DuplicateCheckState>({ message: "", status: "idle" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  async function checkDuplicate(type: "email" | "phone") {
+    const value = type === "email" ? email.trim() : phone;
+    const setCheck = type === "email" ? setEmailCheck : setPhoneCheck;
+    const emptyMessage = type === "email" ? "이메일을 입력해주세요." : "휴대폰 번호를 입력해주세요.";
+
+    if (!value.trim()) {
+      setCheck({ message: emptyMessage, status: "error" });
+      return;
+    }
+
+    setCheck({ message: "확인 중...", status: "checking" });
+
+    try {
+      const response = await fetch("/api/member/signup/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          dealerMallId: hqMall ? undefined : dealerMallId,
+          dealerSlug: hqMall ? undefined : dealerSlug,
+          hqMall,
+          type,
+          value,
+        }),
+      });
+      const data = await response.json();
+
+      if (response.ok && data.ok && data.available) {
+        setCheck({ message: data.message || "사용 가능합니다.", status: "success" });
+        return;
+      }
+
+      setCheck({ message: data?.message || "이미 사용 중입니다.", status: "error" });
+    } catch {
+      setCheck({ message: "중복확인 중 오류가 발생했습니다.", status: "error" });
+    }
+  }
 
   async function handleSubmit() {
     setError("");
@@ -129,36 +174,72 @@ export function MemberSignupForm({
 
         <label className="member-auth-field">
           <span>휴대폰 번호</span>
-          <input
-            className="member-auth-input"
-            inputMode="numeric"
-            onChange={(event) => setPhone(formatPhone(event.target.value))}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                void handleSubmit();
-              }
-            }}
-            placeholder="010-0000-0000"
-            type="tel"
-            value={phone}
-          />
+          <div className="member-auth-check-control">
+            <input
+              className="member-auth-input"
+              inputMode="numeric"
+              onChange={(event) => {
+                setPhone(formatPhone(event.target.value));
+                setPhoneCheck({ message: "", status: "idle" });
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  void handleSubmit();
+                }
+              }}
+              placeholder="010-0000-0000"
+              type="tel"
+              value={phone}
+            />
+            <button
+              className="button-secondary member-auth-check-button"
+              disabled={phoneCheck.status === "checking"}
+              onClick={() => void checkDuplicate("phone")}
+              type="button"
+            >
+              중복확인
+            </button>
+          </div>
+          {phoneCheck.message ? (
+            <p className={`member-auth-check-message is-${phoneCheck.status === "success" ? "success" : phoneCheck.status === "checking" ? "muted" : "error"}`}>
+              {phoneCheck.message}
+            </p>
+          ) : null}
         </label>
 
         <label className="member-auth-field">
           <span>이메일</span>
-          <input
-            className="member-auth-input"
-            onChange={(event) => setEmail(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                void handleSubmit();
-              }
-            }}
-            placeholder="이메일 입력"
-            required
-            type="email"
-            value={email}
-          />
+          <div className="member-auth-check-control">
+            <input
+              className="member-auth-input"
+              onChange={(event) => {
+                setEmail(event.target.value);
+                setEmailCheck({ message: "", status: "idle" });
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  void handleSubmit();
+                }
+              }}
+              placeholder="이메일 입력"
+              required
+              type="email"
+              value={email}
+            />
+            <button
+              className="button-secondary member-auth-check-button"
+              disabled={emailCheck.status === "checking"}
+              onClick={() => void checkDuplicate("email")}
+              type="button"
+            >
+              중복확인
+            </button>
+          </div>
+          {emailCheck.message ? (
+            <p className={`member-auth-check-message is-${emailCheck.status === "success" ? "success" : emailCheck.status === "checking" ? "muted" : "error"}`}>
+              {emailCheck.message}
+            </p>
+          ) : null}
         </label>
 
         <div className="member-auth-alert is-muted">

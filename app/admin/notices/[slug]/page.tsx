@@ -71,8 +71,10 @@ export default async function AdminNoticeDetailPage({
           </div>
 
           <div className="admin-notice-detail-body">
-            <div className="stack-paragraphs">
-              {notice.paragraphs.length ? (
+            <div className="notice-rich-body">
+              {notice.bodyHtml ? (
+                <div dangerouslySetInnerHTML={{ __html: notice.bodyHtml }} />
+              ) : notice.paragraphs.length ? (
                 notice.paragraphs.map((paragraph: string, index: number) => (
                   <p key={`${index}-${paragraph}`}>{paragraph}</p>
                 ))

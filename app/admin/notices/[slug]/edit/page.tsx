@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { saveNoticeAction } from "../../../../_actions/health-box-admin";
 import { AdminHeader } from "../../../../_components/admin/admin-header";
+import { AdminNoticeBodyEditor } from "../../../../_components/admin/admin-notice-body-editor";
 import { AdminSubmitButton } from "../../../../_components/admin/admin-submit-button";
 import { AdminPanel } from "../../../../_components/admin/admin-ui";
 import {
@@ -78,15 +79,10 @@ export default async function AdminNoticeEditPage({
                 <span>제목</span>
                 <input className="admin-input" defaultValue={notice.title} name="title" type="text" />
               </label>
-              <label className="admin-field">
+              <div className="admin-field">
                 <span>내용</span>
-                <textarea
-                  className="admin-textarea"
-                  defaultValue={notice.paragraphs.join("\n")}
-                  name="body"
-                  rows={14}
-                />
-              </label>
+                <AdminNoticeBodyEditor defaultBody={notice.bodyHtml || notice.paragraphs.join("\n")} />
+              </div>
             </div>
           </AdminPanel>
         </div>

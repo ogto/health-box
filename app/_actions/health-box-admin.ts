@@ -95,7 +95,7 @@ function buildNoticeSummary(body: string | undefined) {
     return undefined;
   }
 
-  const singleLine = body
+  const singleLine = noticeBodyToText(body)
     .replace(/\r\n/g, "\n")
     .split("\n")
     .map((line) => line.trim())
@@ -110,12 +110,25 @@ function buildNoticeSummary(body: string | undefined) {
 }
 
 function buildNoticeChecklist(body: string) {
-  return body
+  return noticeBodyToText(body)
     .replace(/\r\n/g, "\n")
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
     .slice(0, 5);
+}
+
+function noticeBodyToText(body: string) {
+  return body
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|h[1-6]|blockquote)>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'");
 }
 
 function buildNoticeSlug(formData: FormData, title: string, id: number | undefined) {
@@ -764,6 +777,26 @@ export async function saveNoticeAction(formData: FormData) {
 
   revalidatePath("/admin/notices");
   redirectIfRequested(formData);
+}
+
+export async function deleteNoticeAction(formData: FormData) {
+  ensureApiConfigured();
+
+  const noticeId = optionalNumber(formData, "id");
+  if (!noticeId) {
+    redirect(buildRedirectWithMessage("/admin/notices", "toastError", "삭제할 공지 ID가 없습니다."));
+  }
+
+  const slug = optionalString(formData, "slug") || `notice-${noticeId}`;
+
+  await healthBoxFetch(`/health-box/admin/notices/${noticeId}`, {
+    method: "DELETE",
+  });
+
+  revalidatePath("/admin/notices");
+  revalidatePath(`/admin/notices/${slug}`);
+  revalidatePath(`/notice/${slug}`);
+  redirect(buildRedirectWithMessage("/admin/notices", "toast", "공지가 삭제되었습니다."));
 }
 
 export async function saveProductAction(formData: FormData) {

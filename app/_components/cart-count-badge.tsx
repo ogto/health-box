@@ -2,50 +2,38 @@
 
 import { useEffect, useState } from "react";
 
-import { MEMBER_CART_STORAGE_KEY, readMemberCart } from "../_lib/member-cart";
+import { fetchMemberCart } from "../_lib/member-cart";
 
-function cartQuantity() {
-  return readMemberCart().reduce((sum, item) => sum + item.quantity, 0);
-}
-
-export function CartCountBadge() {
+export function CartCountBadge({ loggedIn }: { loggedIn: boolean }) {
   const [quantity, setQuantity] = useState(0);
 
   useEffect(() => {
-    function syncQuantity() {
-      setQuantity(cartQuantity());
+    if (!loggedIn) {
+      setQuantity(0);
+      return;
     }
 
-    syncQuantity();
-    window.addEventListener("storage", syncQuantity);
-    window.addEventListener("focus", syncQuantity);
-
-    const originalSetItem = window.localStorage.setItem;
-    const originalRemoveItem = window.localStorage.removeItem;
-
-    window.localStorage.setItem = function setItem(key, value) {
-      originalSetItem.apply(this, [key, value]);
-      if (key === MEMBER_CART_STORAGE_KEY) {
-        syncQuantity();
+    async function syncQuantity() {
+      try {
+        const items = await fetchMemberCart();
+        setQuantity(items.reduce((sum, item) => sum + item.quantity, 0));
+      } catch {
+        setQuantity(0);
       }
-    };
+    }
 
-    window.localStorage.removeItem = function removeItem(key) {
-      originalRemoveItem.apply(this, [key]);
-      if (key === MEMBER_CART_STORAGE_KEY) {
-        syncQuantity();
-      }
-    };
+    void syncQuantity();
+    const handleSync = () => void syncQuantity();
+    window.addEventListener("focus", handleSync);
+    window.addEventListener("health-box-cart-sync", handleSync);
 
     return () => {
-      window.removeEventListener("storage", syncQuantity);
-      window.removeEventListener("focus", syncQuantity);
-      window.localStorage.setItem = originalSetItem;
-      window.localStorage.removeItem = originalRemoveItem;
+      window.removeEventListener("focus", handleSync);
+      window.removeEventListener("health-box-cart-sync", handleSync);
     };
-  }, []);
+  }, [loggedIn]);
 
-  if (!quantity) {
+  if (!loggedIn || !quantity) {
     return null;
   }
 

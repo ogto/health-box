@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { Breadcrumbs, StoreShell } from "../_components/store-ui";
 import { MemberLoginForm } from "../_components/member-login-form";
-import { getMemberSession } from "../_lib/member-auth";
+import { getMemberSession, isMemberSessionForDealer } from "../_lib/member-auth";
 import { getStorefrontRuntime } from "../_lib/storefront-runtime";
 
 export const metadata: Metadata = {
@@ -29,12 +29,8 @@ export default async function LoginPage({
   const session = await getMemberSession();
   const safeNextPath = resolveNextPath(params.next);
   const currentDealer = runtime.dealer;
-  const isSameDealer =
-    !currentDealer ||
-    (Boolean(currentDealer.dealerMallId) && session?.dealerMallId === currentDealer.dealerMallId) ||
-    (Boolean(currentDealer.slug) && session?.dealerSlug === currentDealer.slug);
 
-  if (session && isSameDealer) {
+  if (session && isMemberSessionForDealer(session, currentDealer)) {
     redirect(safeNextPath);
   }
 

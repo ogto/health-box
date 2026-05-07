@@ -55,10 +55,16 @@ export default async function AdminCategoriesPage() {
             <input className="admin-input" min="0" name="sortOrder" placeholder="0" type="number" />
           </label>
           <details className="admin-category-details">
-            <summary>관리 정보</summary>
+            <summary>주소/코드 설정</summary>
             <div className="admin-category-details-grid">
-              <input className="admin-input" name="slug" placeholder="영문 주소값(비우면 자동)" type="text" />
-              <input className="admin-input" name="categoryCode" placeholder="관리 코드(비우면 자동)" type="text" />
+              <label>
+                <span>주소</span>
+                <input className="admin-input" name="slug" placeholder="비우면 자동 생성" type="text" />
+              </label>
+              <label>
+                <span>관리 코드</span>
+                <input className="admin-input" name="categoryCode" placeholder="비우면 자동 생성" type="text" />
+              </label>
             </div>
           </details>
           <button className="admin-button admin-category-add-button" type="submit">

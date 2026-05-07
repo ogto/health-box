@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  clearMemberCart,
-  readMemberCart,
-  writeMemberCart,
+  deleteMemberCartItem,
+  dispatchMemberCartSync,
+  fetchMemberCart,
+  saveMemberCartItem,
   type MemberCartItem,
 } from "../_lib/member-cart";
 import { addressAlias, addressLine, isDefaultAddress, type MemberAddress } from "../_lib/member-address";
@@ -121,10 +122,33 @@ export function MemberCartPanel({
   }
 
   useEffect(() => {
-    const nextItems = readMemberCart().map(repairCartItem);
-    setItems(nextItems);
-    writeMemberCart(nextItems);
-  }, [productCatalog]);
+    if (!loggedIn) {
+      setItems([]);
+      return;
+    }
+
+    let canceled = false;
+
+    async function loadCart() {
+      try {
+        const nextItems = (await fetchMemberCart()).map(repairCartItem);
+        if (!canceled) {
+          setItems(nextItems);
+        }
+      } catch (cartError) {
+        if (!canceled) {
+          setItems([]);
+          setError(cartError instanceof Error ? cartError.message : "장바구니를 불러오지 못했습니다.");
+        }
+      }
+    }
+
+    void loadCart();
+
+    return () => {
+      canceled = true;
+    };
+  }, [loggedIn, productCatalog]);
 
   useEffect(() => {
     let canceled = false;
@@ -167,19 +191,31 @@ export function MemberCartPanel({
 
   function commitItems(nextItems: MemberCartItem[]) {
     setItems(nextItems);
-    writeMemberCart(nextItems);
+    dispatchMemberCartSync();
   }
 
-  function updateQuantity(skuId: number, quantity: number) {
-    commitItems(
-      items.map((item) =>
-        item.skuId === skuId ? { ...item, quantity: Math.max(1, Math.min(99, quantity)) } : item,
-      ),
-    );
+  async function updateQuantity(skuId: number, quantity: number) {
+    const nextQuantity = Math.max(1, Math.min(99, quantity));
+    commitItems(items.map((item) => item.skuId === skuId ? { ...item, quantity: nextQuantity } : item));
+
+    try {
+      commitItems((await saveMemberCartItem(skuId, nextQuantity)).map(repairCartItem));
+    } catch (quantityError) {
+      setError(quantityError instanceof Error ? quantityError.message : "수량을 변경하지 못했습니다.");
+      commitItems((await fetchMemberCart().catch(() => items)).map(repairCartItem));
+    }
   }
 
-  function removeItem(skuId: number) {
+  async function removeItem(skuId: number) {
+    const previousItems = items;
     commitItems(items.filter((item) => item.skuId !== skuId));
+
+    try {
+      commitItems((await deleteMemberCartItem(skuId)).map(repairCartItem));
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : "상품을 삭제하지 못했습니다.");
+      commitItems(previousItems);
+    }
   }
 
   function applyAddress(address: MemberAddress) {
@@ -457,14 +493,14 @@ export function MemberCartPanel({
                 </Link>
 
                 <div className="cart-item-meta">
-                  <button className="text-button cart-remove-button" onClick={() => removeItem(item.skuId)} type="button">
+                  <button className="text-button cart-remove-button" onClick={() => void removeItem(item.skuId)} type="button">
                     삭제
                   </button>
                   <div className="shop-quantity-stepper" aria-label={`${item.productTitle} 수량 선택`}>
                     <button
                       aria-label="수량 감소"
                       disabled={item.quantity <= 1}
-                      onClick={() => updateQuantity(item.skuId, item.quantity - 1)}
+                      onClick={() => void updateQuantity(item.skuId, item.quantity - 1)}
                       type="button"
                     >
                       -
@@ -472,7 +508,7 @@ export function MemberCartPanel({
                     <strong aria-live="polite">{item.quantity}</strong>
                     <button
                       aria-label="수량 증가"
-                      onClick={() => updateQuantity(item.skuId, item.quantity + 1)}
+                      onClick={() => void updateQuantity(item.skuId, item.quantity + 1)}
                       type="button"
                     >
                       +

@@ -137,6 +137,7 @@ function toStoreNotice(row: StoreNoticeRow): Notice {
     title: row.title,
     date: row.date || row.updatedAt,
     summary: row.summary,
+    bodyHtml: row.bodyHtml,
     paragraphs: row.paragraphs.length ? row.paragraphs : row.summary ? [row.summary] : [],
     checklist: row.checklist,
   };

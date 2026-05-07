@@ -76,7 +76,7 @@ export function AdminCategoryTable({ categories }: { categories: HealthBoxCatego
           <span>순서</span>
           <span>카테고리명</span>
           <span>상태</span>
-          <span>관리 정보</span>
+          <span>주소/코드</span>
           <span>저장</span>
           <span>삭제</span>
         </div>
@@ -146,20 +146,26 @@ export function AdminCategoryTable({ categories }: { categories: HealthBoxCatego
                 </div>
 
                 <details className="admin-category-table-details">
-                  <summary>{item.slug || item.categoryCode || "자동 생성"}</summary>
+                  <summary>설정</summary>
                   <div className="admin-category-details-grid">
-                    <input
-                      className="admin-input"
-                      onChange={(event) => patchRow(item.localKey, { slug: event.target.value })}
-                      placeholder="영문 주소값"
-                      value={item.slug || ""}
-                    />
-                    <input
-                      className="admin-input"
-                      onChange={(event) => patchRow(item.localKey, { categoryCode: event.target.value })}
-                      placeholder="관리 코드"
-                      value={item.categoryCode || ""}
-                    />
+                    <label>
+                      <span>주소</span>
+                      <input
+                        className="admin-input"
+                        onChange={(event) => patchRow(item.localKey, { slug: event.target.value })}
+                        placeholder="영문 주소값"
+                        value={item.slug || ""}
+                      />
+                    </label>
+                    <label>
+                      <span>관리 코드</span>
+                      <input
+                        className="admin-input"
+                        onChange={(event) => patchRow(item.localKey, { categoryCode: event.target.value })}
+                        placeholder="관리 코드"
+                        value={item.categoryCode || ""}
+                      />
+                    </label>
                   </div>
                 </details>
 

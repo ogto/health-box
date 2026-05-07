@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { MemberAccountLayout } from "../../_components/member-account-layout";
 import { MemberAddressManager } from "../../_components/member-address-manager";
 import { Breadcrumbs, StoreShell } from "../../_components/store-ui";
-import { getMemberSession } from "../../_lib/member-auth";
+import { getMemberSession, isMemberSessionForDealer } from "../../_lib/member-auth";
 import { getStorefrontRuntime } from "../../_lib/storefront-runtime";
 
 export default async function MemberAddressesPage() {
@@ -13,11 +13,7 @@ export default async function MemberAddressesPage() {
     redirect("/login?next=/mypage/addresses");
   }
 
-  const dealerMismatch =
-    (runtime.dealer?.dealerMallId && session.dealerMallId !== runtime.dealer.dealerMallId) ||
-    (runtime.dealer?.slug && session.dealerSlug && session.dealerSlug !== runtime.dealer.slug);
-
-  if (dealerMismatch) {
+  if (!isMemberSessionForDealer(session, runtime.dealer)) {
     redirect("/login?next=/mypage/addresses");
   }
 

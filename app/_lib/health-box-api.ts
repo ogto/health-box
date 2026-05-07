@@ -186,7 +186,18 @@ export async function healthBoxFetch<T>(
     return undefined as T;
   }
 
-  const payload = (await response.json()) as unknown;
+  const contentType = response.headers.get("content-type") || "";
+  const rawPayload = await response.text();
+
+  if (!rawPayload.trim()) {
+    return undefined as T;
+  }
+
+  if (!contentType.includes("application/json")) {
+    return rawPayload as T;
+  }
+
+  const payload = JSON.parse(rawPayload) as unknown;
   return unwrapApiResponse<T>(payload);
 }
 

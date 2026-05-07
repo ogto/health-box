@@ -13,11 +13,8 @@ function normalizePhone(value: unknown) {
   return String(value || "").replace(/[^0-9]/g, "");
 }
 
-function normalizeName(value: unknown) {
-  return String(value || "")
-    .trim()
-    .replace(/\s+/g, "")
-    .toLowerCase();
+function normalizeEmail(value: unknown) {
+  return String(value || "").trim().toLowerCase();
 }
 
 function buildSignupSlug(name: string, dealerSlug?: string) {
@@ -46,7 +43,7 @@ export async function POST(request: NextRequest) {
     const hqMall = Boolean(body.hqMall);
     const dealerSlug = hqMall ? undefined : String(body.dealerSlug || "").trim() || undefined;
     const name = String(body.name || "").trim();
-    const email = String(body.email || "").trim();
+    const email = normalizeEmail(body.email);
     const phone = normalizePhone(body.phone);
     const password = String(body.password || "");
     const resolvedDealerMallId =
@@ -86,19 +83,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const normalizedName = normalizeName(name);
     const members = hqMall
       ? ((await fetchAdminMembers()) || []).filter((member) => Number(member.dealerMallId ?? 0) === 0)
       : (await fetchAdminDealerMallMembers(resolvedDealerMallId)) || [];
     const existingMember = members.find((member) => {
       const memberPhone = normalizePhone(stringValue(member, "phone"));
-      const memberName = normalizeName(stringValue(member, "name"));
-      return memberPhone === phone && memberName === normalizedName;
+      const memberEmail = normalizeEmail(stringValue(member, "email"));
+      return memberPhone === phone || memberEmail === email;
     });
 
     if (existingMember) {
+      const existingMemberEmail = normalizeEmail(stringValue(existingMember, "email"));
       return NextResponse.json(
-        { ok: false, message: "이미 승인된 회원입니다. 로그인 후 이용해주세요." },
+        {
+          ok: false,
+          message: existingMemberEmail === email
+            ? "이미 승인된 회원 이메일입니다. 로그인 후 이용해주세요."
+            : "이미 승인된 회원 휴대폰 번호입니다. 로그인 후 이용해주세요.",
+        },
         { status: 409 },
       );
     }
@@ -107,19 +109,24 @@ export async function POST(request: NextRequest) {
     const existingApplication = applications.find((application) => {
       const applicationDealerMallId = Number(application.dealerMallId ?? 0);
       const applicationPhone = normalizePhone(stringValue(application, "phone"));
-      const applicationName = normalizeName(stringValue(application, "name"));
+      const applicationEmail = normalizeEmail(stringValue(application, "email"));
       const applicationStatus = stringValue(application, "status");
       return (
         (!applicationStatus || /^PENDING$/i.test(applicationStatus)) &&
         applicationDealerMallId === resolvedDealerMallId &&
-        applicationPhone === phone &&
-        applicationName === normalizedName
+        (applicationPhone === phone || applicationEmail === email)
       );
     });
 
     if (existingApplication) {
+      const existingApplicationEmail = normalizeEmail(stringValue(existingApplication, "email"));
       return NextResponse.json(
-        { ok: false, message: "이미 가입 신청이 접수되어 있습니다. 승인 후 로그인해주세요." },
+        {
+          ok: false,
+          message: existingApplicationEmail === email
+            ? "이미 가입 신청된 이메일입니다. 승인 후 로그인해주세요."
+            : "이미 가입 신청된 휴대폰 번호입니다. 승인 후 로그인해주세요.",
+        },
         { status: 409 },
       );
     }

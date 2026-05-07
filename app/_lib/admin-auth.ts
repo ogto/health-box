@@ -11,4 +11,3 @@ export function getAdminSessionToken() {
 export function getAdminPassword() {
   return process.env.ADMIN_PASSWORD?.trim() || "";
 }
-

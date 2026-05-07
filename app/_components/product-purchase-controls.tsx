@@ -13,7 +13,7 @@ import {
 } from "react";
 
 import type { Product } from "../_lib/store-data";
-import { addMemberCartItems, type MemberCartItem } from "../_lib/member-cart";
+import { addMemberCartItemsToServer, dispatchMemberCartSync, type MemberCartItem } from "../_lib/member-cart";
 
 type DropdownOption = {
   disabled?: boolean;
@@ -353,7 +353,7 @@ export function ProductPurchaseBox({
       }));
   }
 
-  function handleCartAction(nextPath?: string) {
+  async function handleCartAction(nextPath?: string) {
     setPurchaseMessage("");
 
     if (!isMember) {
@@ -368,11 +368,16 @@ export function ProductPurchaseBox({
       return;
     }
 
-    addMemberCartItems(cartItems);
-    setPurchaseMessage("장바구니에 담았습니다.");
+    try {
+      await addMemberCartItemsToServer(cartItems);
+      dispatchMemberCartSync();
+      setPurchaseMessage("장바구니에 담았습니다.");
 
-    if (nextPath) {
-      router.push(nextPath);
+      if (nextPath) {
+        router.push(nextPath);
+      }
+    } catch (error) {
+      setPurchaseMessage(error instanceof Error ? error.message : "장바구니에 담지 못했습니다.");
     }
   }
 
@@ -554,7 +559,7 @@ export function ProductPurchaseBox({
               event.preventDefault();
               return;
             }
-            handleCartAction();
+            void handleCartAction();
           }}
           type="button"
         >
@@ -567,7 +572,7 @@ export function ProductPurchaseBox({
               event.preventDefault();
               return;
             }
-            handleCartAction("/cart");
+            void handleCartAction("/cart");
           }}
           type="button"
         >

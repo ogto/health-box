@@ -6,7 +6,7 @@ import { Breadcrumbs, StoreShell } from "../_components/store-ui";
 import { MemberAccountLayout } from "../_components/member-account-layout";
 import { MemberOrderComingSoonButton, MemberReorderButton } from "../_components/member-reorder-button";
 import { healthBoxFetch, type HealthBoxRecord } from "../_lib/health-box-api";
-import { getMemberSession } from "../_lib/member-auth";
+import { getMemberSession, isMemberSessionForDealer } from "../_lib/member-auth";
 import { getStorefrontRuntime } from "../_lib/storefront-runtime";
 
 function formatDate(value: unknown) {
@@ -365,11 +365,7 @@ export default async function MyPage({
     redirect("/login?next=/mypage");
   }
 
-  const dealerMismatch =
-    (dealer?.dealerMallId && session.dealerMallId !== dealer.dealerMallId) ||
-    (dealer?.slug && session.dealerSlug && session.dealerSlug !== dealer.slug);
-
-  if (dealerMismatch) {
+  if (!isMemberSessionForDealer(session, dealer)) {
     redirect("/login?next=/mypage");
   }
 

@@ -37,7 +37,7 @@ export default async function Home() {
     : "건강창고가 고른 상품을 카테고리별로 둘러보고 나에게 맞는 루틴을 시작하세요.";
 
   return (
-    <StoreShell activeKey="best">
+    <StoreShell>
       <section className="shop-hero">
         <Link className="shop-hero-visual" href={heroProduct ? `/product/${heroProduct.slug}` : "/products/best?menu=best"}>
           <Image

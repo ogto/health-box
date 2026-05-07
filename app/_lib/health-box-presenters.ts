@@ -49,7 +49,7 @@ function splitNoticeParagraphs(record: HealthBoxRecord) {
 
   const source = stringValue(record, "content", "body");
   if (source) {
-    return source
+    return noticeBodyToText(source)
       .replace(/\r\n/g, "\n")
       .split("\n")
       .map((line) => line.trim())
@@ -57,6 +57,28 @@ function splitNoticeParagraphs(record: HealthBoxRecord) {
   }
 
   return [];
+}
+
+function noticeBodyHtml(record: HealthBoxRecord) {
+  const source = stringValue(record, "content", "body");
+  if (!source || !/<\/?[a-z][\s\S]*>/i.test(source)) {
+    return "";
+  }
+
+  return source;
+}
+
+function noticeBodyToText(body: string) {
+  return body
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|h[1-6]|blockquote)>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'");
 }
 
 function noticeSummaryValue(record: HealthBoxRecord) {
@@ -712,6 +734,7 @@ export function mapNoticeRows(notices: HealthBoxRecord[] | null) {
       previewHref: `/notice/${routeSlug}`,
       adminHref: `/admin/notices/${routeSlug}`,
       editHref: `/admin/notices/${routeSlug}/edit`,
+      bodyHtml: noticeBodyHtml(notice),
       paragraphs: splitNoticeParagraphs(notice),
       checklist: Array.isArray(notice.checklist) ? (notice.checklist as string[]) : [],
     };

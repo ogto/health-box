@@ -9,6 +9,7 @@ import { HeaderPromoBar } from "./header-promo-bar";
 import { StoreNavigation } from "./store-navigation";
 import type { Notice, Product } from "../_lib/store-data";
 import { fetchStoreCategories } from "../_lib/storefront-content";
+import { getMemberSession } from "../_lib/member-auth";
 import { getStorefrontRuntime } from "../_lib/storefront-runtime";
 
 type ActiveKey = string | null;
@@ -20,9 +21,10 @@ export async function StoreShell({
   children: ReactNode;
   activeKey?: ActiveKey;
 }) {
-  const [{ assets, brand, dealer, host, navigation }, categories] = await Promise.all([
+  const [{ assets, brand, dealer, host, navigation }, categories, session] = await Promise.all([
     getStorefrontRuntime(),
     fetchStoreCategories(),
+    getMemberSession(),
   ]);
 
   if (host.requestedDealerSlug && !dealer) {
@@ -54,7 +56,7 @@ export async function StoreShell({
                 href="/cart"
               >
                 <CartIcon className="h-6 w-6" />
-                <CartCountBadge />
+                <CartCountBadge loggedIn={Boolean(session)} />
               </Link>
             </div>
 

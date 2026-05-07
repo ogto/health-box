@@ -5,7 +5,7 @@ import { MemberAccountLayout } from "../../../../_components/member-account-layo
 import { Breadcrumbs, StoreShell } from "../../../../_components/store-ui";
 import { fetchDeliveryApiTracking, type DeliveryTrackingResult } from "../../../../_lib/delivery-api";
 import { healthBoxFetch, type HealthBoxRecord } from "../../../../_lib/health-box-api";
-import { getMemberSession } from "../../../../_lib/member-auth";
+import { getMemberSession, isMemberSessionForDealer } from "../../../../_lib/member-auth";
 import { getStorefrontRuntime } from "../../../../_lib/storefront-runtime";
 
 function formatDate(value: unknown) {
@@ -234,11 +234,7 @@ export default async function MemberOrderTrackingPage({
     redirect(`/login?next=/mypage/orders/${orderId}/tracking`);
   }
 
-  const dealerMismatch =
-    (runtime.dealer?.dealerMallId && session.dealerMallId !== runtime.dealer.dealerMallId) ||
-    (runtime.dealer?.slug && session.dealerSlug && session.dealerSlug !== runtime.dealer.slug);
-
-  if (dealerMismatch) {
+  if (!isMemberSessionForDealer(session, runtime.dealer)) {
     redirect(`/login?next=/mypage/orders/${orderId}/tracking`);
   }
 
