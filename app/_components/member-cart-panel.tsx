@@ -489,7 +489,6 @@ export function MemberCartPanel({
                 <Link className="cart-item-copy" href={`/product/${item.productSlug}`}>
                   <h4>{item.productTitle}</h4>
                   <p className="product-subtitle">옵션: {displayOptionLabel(item.optionLabel)}</p>
-                  <strong>{formatWon(item.unitPrice)}</strong>
                 </Link>
 
                 <div className="cart-item-meta">
