@@ -138,6 +138,14 @@ function findStorefrontProductBySlug(products: PublicStoreProductRow[], slug: st
   );
 }
 
+function findStorefrontProductById(products: PublicStoreProductRow[], productId: number | null) {
+  if (!productId) {
+    return undefined;
+  }
+
+  return products.find((product) => product.recordId === productId);
+}
+
 function toStoreNotice(row: StoreNoticeRow): Notice {
   return {
     slug: row.slug,
@@ -218,7 +226,16 @@ export const fetchStoreProductBySlug = cache(async (slug: string) => {
   const page = runtime.dealer
     ? await fetchDealerMallProductPage(runtime.dealer.slug, { q: decodedSlug, page: 1, size: 20 })
     : await fetchStorefrontProductPage({ q: decodedSlug, page: 1, size: 20 });
-  const listedProduct = findStorefrontProductBySlug(mapStorefrontProductRows(page), decodedSlug);
+  const listedProducts = mapStorefrontProductRows(page);
+  const listedProduct =
+    findStorefrontProductBySlug(listedProducts, decodedSlug) ||
+    findStorefrontProductById(listedProducts, fallbackProductId) ||
+    (runtime.dealer && fallbackProductId
+      ? findStorefrontProductById(
+          mapStorefrontProductRows(await fetchDealerMallProductPage(runtime.dealer.slug, { page: 1, size: 100 })),
+          fallbackProductId,
+        )
+      : undefined);
   const detailedProduct = runtime.dealer
     ? toProductPage(await fetchDealerMallProduct(runtime.dealer.slug, listedProduct?.sourceSlug || decodedSlug))
     : listedProduct?.recordId || fallbackProductId
