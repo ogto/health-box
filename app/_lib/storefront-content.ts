@@ -14,7 +14,6 @@ import {
 } from "./health-box-api";
 import {
   findNoticeBySlug,
-  findProductBySlug,
   mapNoticeRows,
   mapProductRows,
 } from "./health-box-presenters";
@@ -130,6 +129,15 @@ function mapStorefrontProductRows(page: HealthBoxPageResponse<HealthBoxRecord> |
   }));
 }
 
+function findStorefrontProductBySlug(products: PublicStoreProductRow[], slug: string) {
+  return products.find(
+    (product) =>
+      product.slug === slug ||
+      product.sourceSlug === slug ||
+      product.routeSlug === slug,
+  );
+}
+
 function toStoreNotice(row: StoreNoticeRow): Notice {
   return {
     slug: row.slug,
@@ -210,7 +218,7 @@ export const fetchStoreProductBySlug = cache(async (slug: string) => {
   const page = runtime.dealer
     ? await fetchDealerMallProductPage(runtime.dealer.slug, { q: decodedSlug, page: 1, size: 20 })
     : await fetchStorefrontProductPage({ q: decodedSlug, page: 1, size: 20 });
-  const listedProduct = findProductBySlug(mapStorefrontProductRows(page), decodedSlug);
+  const listedProduct = findStorefrontProductBySlug(mapStorefrontProductRows(page), decodedSlug);
   const detailedProduct = runtime.dealer
     ? toProductPage(await fetchDealerMallProduct(runtime.dealer.slug, listedProduct?.sourceSlug || decodedSlug))
     : listedProduct?.recordId || fallbackProductId
