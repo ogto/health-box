@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import type { CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { StorefrontNavigationItem, StorefrontNavigationSubItem } from "../_lib/storefront-config";
 
@@ -19,6 +20,44 @@ export function StoreNavigation({
   navigation: ReadonlyArray<StorefrontNavigationItem>;
 }) {
   const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
+  const [mobileMenuPosition, setMobileMenuPosition] = useState({ left: 16, top: 0 });
+  const menuOpenScrollYRef = useRef(0);
+
+  useEffect(() => {
+    if (!openMenuKey) {
+      return;
+    }
+
+    const closeMenuOnScroll = () => {
+      if (Math.abs(window.scrollY - menuOpenScrollYRef.current) > 8) {
+        setOpenMenuKey(null);
+      }
+    };
+    const closeMenu = () => setOpenMenuKey(null);
+
+    window.addEventListener("scroll", closeMenuOnScroll, { passive: true });
+    window.addEventListener("resize", closeMenu);
+
+    return () => {
+      window.removeEventListener("scroll", closeMenuOnScroll);
+      window.removeEventListener("resize", closeMenu);
+    };
+  }, [openMenuKey]);
+
+  const toggleCategoryMenu = (key: string, button: HTMLButtonElement) => {
+    if (openMenuKey === key) {
+      setOpenMenuKey(null);
+      return;
+    }
+
+    const rect = button.getBoundingClientRect();
+    setMobileMenuPosition({
+      left: Math.max(12, Math.min(rect.left, window.innerWidth - 292)),
+      top: rect.bottom + 1,
+    });
+    menuOpenScrollYRef.current = window.scrollY;
+    setOpenMenuKey(key);
+  };
 
   return (
     <nav className="main-nav">
@@ -54,8 +93,9 @@ export function StoreNavigation({
           >
             {isCategory ? (
               <button
+                aria-expanded={isOpen}
                 className="main-nav-category-trigger"
-                onFocus={() => setOpenMenuKey(item.key)}
+                onClick={(event) => toggleCategoryMenu(item.key, event.currentTarget)}
                 type="button"
               >
                 {item.label}
@@ -66,7 +106,17 @@ export function StoreNavigation({
               </Link>
             )}
             {isCategory ? (
-              <div className="category-mega-menu">
+              <div
+                className="category-mega-menu"
+                style={
+                  isOpen
+                    ? ({
+                        "--category-menu-left": `${mobileMenuPosition.left}px`,
+                        "--category-menu-top": `${mobileMenuPosition.top}px`,
+                      } as CSSProperties)
+                    : undefined
+                }
+              >
                 <div className="category-mega-inner">
                   {(item.children?.length ? item.children : categories)
                     .filter((category) => ("visible" in category ? category.visible !== false : true))
