@@ -63,6 +63,19 @@ export function AdminStorefrontMenuEditor({
     );
   }
 
+  function removeMenu(key: string, label: string) {
+    if (!window.confirm(`"${label}" 메뉴를 삭제할까요?\n저장 후에는 연결된 상품 설정도 복구할 수 없습니다.`)) {
+      return;
+    }
+
+    setRows((current) => current.filter((row) => row.key !== key));
+    setSelectedProducts((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
   function patchSelectedProduct(key: string, slug: string) {
     setSelectedProducts((current) => ({ ...current, [key]: slug }));
   }
@@ -131,14 +144,24 @@ export function AdminStorefrontMenuEditor({
               <span>링크</span>
               <strong>{item.href}</strong>
             </div>
-            <button
-              aria-label={`${item.label} 메뉴 ${item.visible === false ? "다시 노출" : "숨기기"}`}
-              className={`admin-button small ${item.visible === false ? "secondary" : "danger"}`}
-              onClick={() => toggleVisible(item.key)}
-              type="button"
-            >
-              {item.visible === false ? "다시 노출" : "메뉴 숨기기"}
-            </button>
+            <div className="admin-storefront-menu-actions">
+              <button
+                aria-label={`${item.label} 메뉴 ${item.visible === false ? "다시 노출" : "숨기기"}`}
+                className="admin-button secondary small"
+                onClick={() => toggleVisible(item.key)}
+                type="button"
+              >
+                {item.visible === false ? "다시 노출" : "숨기기"}
+              </button>
+              <button
+                aria-label={`${item.label} 메뉴 삭제`}
+                className="admin-button danger small"
+                onClick={() => removeMenu(item.key, item.label)}
+                type="button"
+              >
+                메뉴 삭제
+              </button>
+            </div>
           </div>
           {item.visible === false ? (
             <p className="admin-storefront-menu-hidden-note">

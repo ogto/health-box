@@ -8816,7 +8816,13 @@ a.admin-list-row:hover {
   grid-template-columns: 42px minmax(180px, 1fr) 140px minmax(180px, 1fr) auto;
 }
 
-.admin-storefront-menu-row.is-fixed > .admin-button {
+.admin-storefront-menu-actions {
+  display: flex;
+  align-self: center;
+  gap: 6px;
+}
+
+.admin-storefront-menu-actions .admin-button {
   align-self: center;
   white-space: nowrap;
 }

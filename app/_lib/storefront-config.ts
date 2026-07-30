@@ -130,7 +130,7 @@ export function parseStorefrontNavigationItems(raw: unknown) {
     .filter((item): item is StorefrontNavigationItem => Boolean(item))
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 
-  return items.length ? items : null;
+  return items;
 }
 
 function parseStorefrontNavigationChildren(raw: unknown) {
@@ -166,19 +166,24 @@ function parseStorefrontNavigationChildren(raw: unknown) {
 }
 
 export function resolveStorefrontNavigationItems(raw: unknown) {
-  const savedItems = parseStorefrontNavigationItems(raw) || [];
+  const savedItems = parseStorefrontNavigationItems(raw);
 
-  return storefrontConfig.navigation.map((defaultItem, index) => {
-    const savedItem =
-      savedItems.find((item) => item.key === defaultItem.key) || savedItems[index] || null;
-
-    return {
+  if (savedItems === null) {
+    return storefrontConfig.navigation.map((defaultItem, index) => ({
       ...defaultItem,
-      label: savedItem?.label || defaultItem.label,
-      href: defaultItem.href,
-      productSlugs: savedItem?.productSlugs || [],
+      productSlugs: [],
       sortOrder: index + 1,
-      visible: savedItem?.visible !== false,
+    }));
+  }
+
+  return savedItems.map((savedItem, index) => {
+    const defaultItem = storefrontConfig.navigation.find((item) => item.key === savedItem.key);
+    return {
+      ...savedItem,
+      href: defaultItem?.href || savedItem.href,
+      sortOrder: index + 1,
+      style: defaultItem?.style || savedItem.style || "link",
+      visible: savedItem.visible !== false,
     };
   });
 }
