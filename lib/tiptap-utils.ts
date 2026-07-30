@@ -13,7 +13,9 @@ import {
   type NodeWithPos,
 } from "@tiptap/react"
 
-export const MAX_FILE_SIZE = 30 * 1024 * 1024 // 30MB
+import { MAX_IMAGE_FILE_SIZE } from "@/lib/image-upload-limits"
+
+export const MAX_FILE_SIZE = MAX_IMAGE_FILE_SIZE
 
 export const MAC_SYMBOLS: Record<string, string> = {
   mod: "⌘",

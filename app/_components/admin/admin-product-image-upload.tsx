@@ -2,6 +2,13 @@
 
 import { useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 
+import {
+  MAX_IMAGE_FILE_COUNT,
+  MAX_IMAGE_FILE_SIZE,
+  MAX_IMAGE_FILE_SIZE_MB,
+  MAX_IMAGE_TOTAL_SIZE_MB,
+} from "@/lib/image-upload-limits";
+
 type ExistingProductImage = {
   kind: "existing";
   url: string;
@@ -67,11 +74,9 @@ function imageIdentity(image: ProductImageItem) {
   return image.kind === "local" ? image.id : image.url;
 }
 
-async function uploadImages(files: File[]) {
+async function uploadImage(file: File) {
   const formData = new FormData();
-  for (const file of files) {
-    formData.append("files", file);
-  }
+  formData.append("files", file);
 
   const response = await fetch("/api/admin/product-images", {
     method: "POST",
@@ -112,7 +117,9 @@ export function AdminProductImageUpload({
   const mainImageUrl = imageUrls[0] || "";
   const mainImage = images[0];
   const mainPreviewUrl = mainImage?.kind === "existing" ? mainImage.url : mainImage?.previewUrl;
-  const isErrorMessage = message.includes("실패") || message.includes("없습니다");
+  const isErrorMessage = ["실패", "없습니다", "최대", "초과", "아닙니다", "중단"].some((word) =>
+    message.includes(word),
+  );
 
   function captureImagePositions() {
     const nextRects = new Map<string, DOMRect>();
@@ -167,6 +174,23 @@ export function AdminProductImageUpload({
       return;
     }
 
+    if (images.length + selected.length > MAX_IMAGE_FILE_COUNT) {
+      setMessage(`상품 이미지는 최대 ${MAX_IMAGE_FILE_COUNT}개까지 등록할 수 있습니다.`);
+      return;
+    }
+
+    const invalidType = selected.find((file) => !file.type.startsWith("image/"));
+    if (invalidType) {
+      setMessage(`${invalidType.name} 파일은 이미지 형식이 아닙니다.`);
+      return;
+    }
+
+    const oversizedFile = selected.find((file) => file.size > MAX_IMAGE_FILE_SIZE);
+    if (oversizedFile) {
+      setMessage(`${oversizedFile.name} 파일은 ${MAX_IMAGE_FILE_SIZE_MB}MB를 초과합니다.`);
+      return;
+    }
+
     const localImages = selected.map((file) => ({
       fileName: file.name,
       id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
@@ -179,35 +203,61 @@ export function AdminProductImageUpload({
     setMessage(`${localImages.length}개 이미지 업로드 중입니다.`);
     setIsUploading(true);
 
-    try {
-      const uploaded = await uploadImages(selected);
-      const uploadedImages = uploaded
-        .map((file) => normalizeImageUrl(file.fileDownloadUri || ""))
-        .filter(Boolean)
-        .map((url) => ({ kind: "existing", url }) satisfies ExistingProductImage);
+    let uploadedCount = 0;
+    let uploadError: unknown;
 
-      if (!uploadedImages.length) {
-        throw new Error("업로드 응답에 이미지 URL이 없습니다.");
-      }
+    for (const [index, file] of selected.entries()) {
+      const localImage = localImages[index];
 
-      setImages((current) => {
-        const localIds = new Set(localImages.map((image) => image.id));
-        const withoutLocal = current.filter((image) => image.kind !== "local" || !localIds.has(image.id));
-        const existingUrls = new Set(
-          withoutLocal.filter((image): image is ExistingProductImage => image.kind === "existing").map((image) => image.url),
+      try {
+        const uploaded = await uploadImage(file);
+        const uploadedUrl = uploaded
+          .map((item) => normalizeImageUrl(item.fileDownloadUri || ""))
+          .find(Boolean);
+
+        if (!uploadedUrl) {
+          throw new Error("업로드 응답에 이미지 URL이 없습니다.");
+        }
+
+        setImages((current) => {
+          const existingUrls = new Set(
+            current
+              .filter((image): image is ExistingProductImage => image.kind === "existing")
+              .map((image) => image.url),
+          );
+
+          return current.flatMap((image) => {
+            if (imageIdentity(image) !== localImage.id) {
+              return [image];
+            }
+
+            return existingUrls.has(uploadedUrl)
+              ? []
+              : [{ kind: "existing", url: uploadedUrl } satisfies ExistingProductImage];
+          });
+        });
+        uploadedCount += 1;
+      } catch (error) {
+        uploadError = error;
+        const pendingIds = new Set(localImages.slice(index).map((image) => image.id));
+        setImages((current) =>
+          current.filter((image) => image.kind !== "local" || !pendingIds.has(image.id)),
         );
-        return [...withoutLocal, ...uploadedImages.filter((image) => !existingUrls.has(image.url))];
-      });
-      setMessage(`${uploadedImages.length}개 이미지 업로드 완료`);
-    } catch (error) {
-      setImages((current) => current.filter((image) => !localImages.some((localImage) => localImage.id === imageIdentity(image))));
-      setMessage(error instanceof Error ? error.message : "이미지 업로드에 실패했습니다.");
-    } finally {
-      for (const image of localImages) {
-        URL.revokeObjectURL(image.previewUrl);
+        break;
       }
-      setIsUploading(false);
     }
+
+    if (uploadError) {
+      const detail = uploadError instanceof Error ? uploadError.message : "이미지 업로드에 실패했습니다.";
+      setMessage(uploadedCount ? `${uploadedCount}개 업로드 후 중단되었습니다. ${detail}` : detail);
+    } else {
+      setMessage(`${uploadedCount}개 이미지 업로드 완료`);
+    }
+
+    for (const image of localImages) {
+      URL.revokeObjectURL(image.previewUrl);
+    }
+    setIsUploading(false);
   }
 
   function removeImage(index: number) {
@@ -276,11 +326,23 @@ export function AdminProductImageUpload({
       </div>
 
       <div className="admin-product-image-actions">
-        <label className="admin-product-image-add-button">
+        <label
+          aria-disabled={isUploading || images.length >= MAX_IMAGE_FILE_COUNT}
+          className="admin-product-image-add-button"
+        >
           {isUploading ? "업로드 중..." : "이미지 추가"}
-          <input accept="image/*" disabled={isUploading} multiple onChange={selectFiles} type="file" />
+          <input
+            accept="image/*"
+            disabled={isUploading || images.length >= MAX_IMAGE_FILE_COUNT}
+            multiple
+            onChange={selectFiles}
+            type="file"
+          />
         </label>
-        <span>썸네일을 드래그하거나 버튼으로 대표 이미지와 갤러리 순서를 바꿀 수 있습니다.</span>
+        <span>
+          최대 {MAX_IMAGE_FILE_COUNT}개, 파일당 {MAX_IMAGE_FILE_SIZE_MB}MB, 총{" "}
+          {MAX_IMAGE_TOTAL_SIZE_MB}MB까지 등록할 수 있습니다.
+        </span>
       </div>
 
       {message ? (

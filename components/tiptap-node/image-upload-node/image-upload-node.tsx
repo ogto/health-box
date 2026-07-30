@@ -171,9 +171,10 @@ function useFileUpload(options: UploadOptions) {
       return []
     }
 
-    // Upload all files concurrently
-    const uploadPromises = files.map((file) => uploadFile(file))
-    const results = await Promise.all(uploadPromises)
+    const results: Array<string | null> = []
+    for (const file of files) {
+      results.push(await uploadFile(file))
+    }
 
     // Filter out null results (failed uploads)
     return results.filter((url): url is string => url !== null)

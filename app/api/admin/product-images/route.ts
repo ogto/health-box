@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { ADMIN_COOKIE_NAME, getAdminSessionToken } from "../../../_lib/admin-auth";
+import {
+  MAX_IMAGE_FILE_COUNT,
+  MAX_IMAGE_FILE_SIZE,
+  MAX_IMAGE_FILE_SIZE_MB,
+} from "@/lib/image-upload-limits";
 
 const DEFAULT_MEMBER_NO = "505";
 const DEFAULT_UPLOAD_BASE_URL = "https://cloud.1472.ai:18443";
@@ -102,6 +107,29 @@ export async function POST(request: NextRequest) {
 
     if (!files.length) {
       return NextResponse.json({ message: "No image file selected." }, { status: 400 });
+    }
+
+    if (files.length > MAX_IMAGE_FILE_COUNT) {
+      return NextResponse.json(
+        { message: `이미지는 한 번에 최대 ${MAX_IMAGE_FILE_COUNT}개까지 업로드할 수 있습니다.` },
+        { status: 400 },
+      );
+    }
+
+    const invalidType = files.find((file) => !file.type.startsWith("image/"));
+    if (invalidType) {
+      return NextResponse.json(
+        { message: `${invalidType.name} 파일은 지원하는 이미지 형식이 아닙니다.` },
+        { status: 400 },
+      );
+    }
+
+    const oversizedFile = files.find((file) => file.size > MAX_IMAGE_FILE_SIZE);
+    if (oversizedFile) {
+      return NextResponse.json(
+        { message: `${oversizedFile.name} 파일은 ${MAX_IMAGE_FILE_SIZE_MB}MB를 초과합니다.` },
+        { status: 413 },
+      );
     }
 
     const uploadBaseUrl = getUploadBaseUrl();

@@ -69,7 +69,7 @@ export function ProductDetailGallery({
               alt={title}
               className="object-cover"
               fill
-              priority
+              loading="eager"
               sizes="(max-width: 1120px) 100vw, 46vw"
               src={activeImage}
             />

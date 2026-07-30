@@ -70,6 +70,7 @@ import { useCursorVisibility } from "@/hooks/use-cursor-visibility"
 
 // --- Lib ---
 import { handleImageUpload, MAX_FILE_SIZE } from "@/lib/tiptap-utils"
+import { MAX_IMAGE_FILE_COUNT } from "@/lib/image-upload-limits"
 
 // --- Styles ---
 import "@/components/tiptap-templates/simple/simple-editor.scss"
@@ -111,32 +112,42 @@ const ImageDropUpload = Extension.create<{
             })
             const insertPosition = coords?.pos ?? view.state.selection.from
 
-            files.forEach(async (file, index) => {
-              try {
-                const imageUrl = await this.options.upload(file)
-                const imageNode = view.state.schema.nodes.image?.create({
-                  alt: file.name,
-                  src: imageUrl,
-                  title: file.name,
-                })
+            if (files.length > MAX_IMAGE_FILE_COUNT) {
+              this.options.onError?.(
+                new Error(`이미지는 한 번에 최대 ${MAX_IMAGE_FILE_COUNT}개까지 업로드할 수 있습니다.`)
+              )
+              return true
+            }
 
-                if (!imageNode) {
-                  return
+            void (async () => {
+              for (const [index, file] of files.entries()) {
+                try {
+                  const imageUrl = await this.options.upload(file)
+                  const imageNode = view.state.schema.nodes.image?.create({
+                    alt: file.name,
+                    src: imageUrl,
+                    title: file.name,
+                  })
+
+                  if (!imageNode) {
+                    continue
+                  }
+
+                  const position = Math.min(
+                    insertPosition + index,
+                    view.state.doc.content.size
+                  )
+                  view.dispatch(
+                    view.state.tr.insert(position, imageNode).scrollIntoView()
+                  )
+                } catch (error) {
+                  this.options.onError?.(
+                    error instanceof Error ? error : new Error("이미지 업로드에 실패했습니다.")
+                  )
+                  break
                 }
-
-                const position = Math.min(
-                  insertPosition + index,
-                  view.state.doc.content.size
-                )
-                view.dispatch(
-                  view.state.tr.insert(position, imageNode).scrollIntoView()
-                )
-              } catch (error) {
-                this.options.onError?.(
-                  error instanceof Error ? error : new Error("이미지 업로드에 실패했습니다.")
-                )
               }
-            })
+            })()
 
             return true
           },
@@ -310,7 +321,7 @@ export function SimpleEditor({
       ImageUploadNode.configure({
         accept: "image/*",
         maxSize: MAX_FILE_SIZE,
-        limit: 3,
+        limit: MAX_IMAGE_FILE_COUNT,
         upload: handleImageUpload,
         onError: showUploadError,
       }),

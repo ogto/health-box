@@ -44,7 +44,7 @@ export default async function Home() {
             alt={heroProduct?.title || runtime.assets.heroAlt}
             className="object-cover"
             fill
-            priority
+            loading="eager"
             sizes="(max-width: 1024px) 100vw, 64vw"
             src={heroProduct?.image || runtime.assets.heroImage}
           />
