@@ -10,6 +10,14 @@ type StoreCategoryItem = StorefrontNavigationSubItem & {
   visible?: boolean;
 };
 
+const allProductsNavigationItem: StorefrontNavigationItem = {
+  href: "/products/all",
+  key: "all-products",
+  label: "전체상품",
+  style: "link",
+  visible: true,
+};
+
 export function StoreNavigation({
   activeKey,
   categories,
@@ -59,9 +67,14 @@ export function StoreNavigation({
     setOpenMenuKey(key);
   };
 
+  const visibleNavigation = navigation.filter((item) => item.visible !== false);
+  const navigationWithAllProducts = visibleNavigation.flatMap((item) =>
+    item.style === "category" ? [item, allProductsNavigationItem] : [item],
+  );
+
   return (
     <nav className="main-nav">
-      {navigation.filter((item) => item.visible !== false).map((item) => {
+      {navigationWithAllProducts.map((item) => {
         const isCategory = item.style === "category";
         const isOpen = isCategory && openMenuKey === item.key;
 

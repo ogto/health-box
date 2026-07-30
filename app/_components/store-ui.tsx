@@ -101,12 +101,14 @@ export function ProductCard({
   product,
   showMeta = true,
   showPrice = true,
+  eager = false,
 }: {
   product: Product;
   label?: string;
   light?: boolean;
   showMeta?: boolean;
   showPrice?: boolean;
+  eager?: boolean;
 }) {
   return (
     <Link className="product-card" href={`/product/${product.slug}`}>
@@ -115,6 +117,7 @@ export function ProductCard({
           alt={product.title}
           className="object-cover"
           fill
+          loading={eager ? "eager" : "lazy"}
           sizes="(max-width: 720px) 100vw, (max-width: 1180px) 50vw, 25vw"
           src={product.image}
         />

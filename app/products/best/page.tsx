@@ -1,22 +1,33 @@
 import { Breadcrumbs, ProductCard, StoreShell } from "../../_components/store-ui";
+import { StoreProductPagination } from "../../_components/store-product-pagination";
 import { getMemberSession } from "../../_lib/member-auth";
 import { findNavigationItemByKey, resolveNavigationProducts } from "../../_lib/storefront-config";
-import { fetchStoreProducts } from "../../_lib/storefront-content";
+import { fetchStoreProductPage, fetchStoreProducts } from "../../_lib/storefront-content";
 import { getStorefrontRuntime } from "../../_lib/storefront-runtime";
+
+const PRODUCT_PAGE_SIZE = 20;
 
 export default async function BestProductsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ category?: string; menu?: string }>;
+  searchParams?: Promise<{ category?: string; menu?: string; page?: string }>;
 }) {
   const params = await searchParams;
   const selectedCategory = params?.category?.trim() || "";
   const selectedMenu = selectedCategory ? "category" : params?.menu?.trim() || "best";
-  const [runtime, bestProducts, session] = await Promise.all([
+  const requestedPage = Math.max(1, Number(params?.page) || 1);
+  const [runtime, productResult, session] = await Promise.all([
     getStorefrontRuntime(),
-    fetchStoreProducts(),
+    selectedCategory
+      ? fetchStoreProductPage({
+          category: selectedCategory,
+          page: requestedPage,
+          size: PRODUCT_PAGE_SIZE,
+        })
+      : fetchStoreProducts(),
     getMemberSession(),
   ]);
+  const bestProducts = Array.isArray(productResult) ? productResult : productResult.items;
   const showPrice = Boolean(session);
   const activeNavigationItem = findNavigationItemByKey(runtime.navigation, selectedMenu);
   const activeKey = activeNavigationItem?.key || (selectedCategory ? "category" : "best");
@@ -26,8 +37,9 @@ export default async function BestProductsPage({
     activeNavigationItem?.style === "category" ? null : activeNavigationItem,
   );
   const filteredProducts = selectedCategory
-    ? bestProducts.filter((product) => product.category === selectedCategory)
+    ? bestProducts
     : menuProducts;
+  const categoryPage = Array.isArray(productResult) ? null : productResult;
 
   return (
     <StoreShell activeKey={activeKey}>
@@ -62,7 +74,12 @@ export default async function BestProductsPage({
 
           <div className="product-grid">
             {filteredProducts.map((product, index) => (
-              <ProductCard key={`${product.slug}-${index}`} product={product} showPrice={showPrice} />
+              <ProductCard
+                eager={index === 0}
+                key={`${product.slug}-${index}`}
+                product={product}
+                showPrice={showPrice}
+              />
             ))}
             {!filteredProducts.length ? (
               <div className="content-panel">
@@ -70,6 +87,13 @@ export default async function BestProductsPage({
               </div>
             ) : null}
           </div>
+          {categoryPage ? (
+            <StoreProductPagination
+              baseHref={`/products/best?menu=category&category=${encodeURIComponent(selectedCategory)}`}
+              currentPage={categoryPage.page}
+              totalPages={categoryPage.totalPages}
+            />
+          ) : null}
         </section>
       </section>
     </StoreShell>

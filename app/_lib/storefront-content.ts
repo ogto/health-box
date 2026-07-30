@@ -31,6 +31,14 @@ type PublicStoreProductRow = StoreProductRow & {
   routeSlug?: string;
 };
 
+export type StoreProductPage = {
+  items: Product[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};
+
 const fallbackImage = fallbackProducts[0]?.image || "";
 
 function toProductPage(record: HealthBoxRecord | null) {
@@ -189,6 +197,71 @@ export const fetchStoreProducts = cache(async (query?: { q?: string; size?: numb
 
   return mapStorefrontProductRows(page).map(toStoreProduct);
 });
+
+export const fetchStoreProductPage = cache(
+  async (query?: { category?: string; page?: number; q?: string; size?: number }): Promise<StoreProductPage> => {
+    const requestedPage = Math.max(1, query?.page || 1);
+    const size = Math.max(1, query?.size || 20);
+    const keyword = query?.q?.trim();
+    const category = query?.category?.trim();
+
+    if (!hasHealthBoxApi()) {
+      const filteredProducts = fallbackProducts.filter((product) => {
+        const matchesCategory = !category || product.category === category;
+        const normalizedKeyword = keyword?.toLowerCase();
+        const matchesKeyword =
+          !normalizedKeyword ||
+          [
+            product.title,
+            product.subtitle,
+            product.summary,
+            product.brand,
+            product.category,
+            product.badge,
+          ]
+            .filter(Boolean)
+            .some((value) => value.toLowerCase().includes(normalizedKeyword));
+
+        return matchesCategory && matchesKeyword;
+      });
+      const totalElements = filteredProducts.length;
+      const totalPages = Math.ceil(totalElements / size);
+      const start = (requestedPage - 1) * size;
+
+      return {
+        items: filteredProducts.slice(start, start + size),
+        page: requestedPage,
+        size,
+        totalElements,
+        totalPages,
+      };
+    }
+
+    const runtime = await getStorefrontRuntime();
+    const page = runtime.dealer
+      ? await fetchDealerMallProductPage(runtime.dealer.slug, {
+          category,
+          page: requestedPage,
+          q: keyword,
+          size,
+        })
+      : await fetchStorefrontProductPage({
+          category,
+          page: requestedPage,
+          q: keyword,
+          size,
+        });
+    const mappedPage = mapProductRows(page);
+
+    return {
+      items: mapStorefrontProductRows(page).map(toStoreProduct),
+      page: requestedPage,
+      size,
+      totalElements: mappedPage.totalElements,
+      totalPages: mappedPage.totalPages,
+    };
+  },
+);
 
 export const fetchStoreCategories = cache(async () => {
   if (!hasHealthBoxApi()) {
