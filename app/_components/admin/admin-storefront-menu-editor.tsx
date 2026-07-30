@@ -28,7 +28,7 @@ export function AdminStorefrontMenuEditor({
       label: item.label || `메뉴 ${index + 1}`,
       productSlugs: item.productSlugs || [],
       sortOrder: index + 1,
-      visible: true,
+      visible: item.visible !== false,
     })),
   );
   const [selectedProducts, setSelectedProducts] = useState<Record<string, string>>(() =>
@@ -45,7 +45,7 @@ export function AdminStorefrontMenuEditor({
           productSlugs: row.style === "category" ? [] : row.productSlugs,
           sortOrder: index + 1,
           style: row.style || "link",
-          visible: true,
+          visible: row.visible !== false,
         })),
       ),
     [rows],
@@ -53,6 +53,14 @@ export function AdminStorefrontMenuEditor({
 
   function patchLabel(key: string, label: string) {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, label } : row)));
+  }
+
+  function toggleVisible(key: string) {
+    setRows((current) =>
+      current.map((row) =>
+        row.key === key ? { ...row, visible: row.visible === false } : row,
+      ),
+    );
   }
 
   function patchSelectedProduct(key: string, slug: string) {
@@ -100,7 +108,10 @@ export function AdminStorefrontMenuEditor({
       </div>
 
       {rows.map((item, index) => (
-        <div className="admin-storefront-menu-card" key={item.key}>
+        <div
+          className={`admin-storefront-menu-card${item.visible === false ? " is-hidden" : ""}`}
+          key={item.key}
+        >
           <div className="admin-storefront-menu-row is-fixed">
             <span className="admin-storefront-menu-index">{index + 1}</span>
             <label className="admin-field">
@@ -120,7 +131,20 @@ export function AdminStorefrontMenuEditor({
               <span>링크</span>
               <strong>{item.href}</strong>
             </div>
+            <button
+              aria-label={`${item.label} 메뉴 ${item.visible === false ? "다시 노출" : "숨기기"}`}
+              className={`admin-button small ${item.visible === false ? "secondary" : "danger"}`}
+              onClick={() => toggleVisible(item.key)}
+              type="button"
+            >
+              {item.visible === false ? "다시 노출" : "메뉴 숨기기"}
+            </button>
           </div>
+          {item.visible === false ? (
+            <p className="admin-storefront-menu-hidden-note">
+              현재 홈페이지 상단 메뉴에서 숨겨져 있습니다. 하단 저장 버튼을 눌러 반영하세요.
+            </p>
+          ) : null}
           {item.style === "category" ? (
             <p className="admin-storefront-menu-product-empty is-category">
               카테고리 메뉴는 상품을 직접 연결하지 않고 카테고리별 등록 상품을 자동으로 표시합니다.

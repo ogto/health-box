@@ -8800,6 +8800,11 @@ a.admin-list-row:hover {
   background: #fbfdff;
 }
 
+.admin-storefront-menu-card.is-hidden {
+  border-color: rgba(237, 174, 174, 0.9);
+  background: #fffafa;
+}
+
 .admin-storefront-menu-row {
   display: grid;
   grid-template-columns: 42px minmax(130px, 0.85fr) minmax(160px, 1.1fr) 128px 74px auto;
@@ -8808,7 +8813,22 @@ a.admin-list-row:hover {
 }
 
 .admin-storefront-menu-row.is-fixed {
-  grid-template-columns: 42px minmax(180px, 1fr) 140px minmax(180px, 1fr);
+  grid-template-columns: 42px minmax(180px, 1fr) 140px minmax(180px, 1fr) auto;
+}
+
+.admin-storefront-menu-row.is-fixed > .admin-button {
+  align-self: center;
+  white-space: nowrap;
+}
+
+.admin-storefront-menu-hidden-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff0f0;
+  color: #b34141;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .admin-storefront-menu-index {

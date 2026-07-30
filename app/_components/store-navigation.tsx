@@ -68,9 +68,12 @@ export function StoreNavigation({
   };
 
   const visibleNavigation = navigation.filter((item) => item.visible !== false);
-  const navigationWithAllProducts = visibleNavigation.flatMap((item) =>
-    item.style === "category" ? [item, allProductsNavigationItem] : [item],
-  );
+  const hasVisibleCategoryMenu = visibleNavigation.some((item) => item.style === "category");
+  const navigationWithAllProducts = hasVisibleCategoryMenu
+    ? visibleNavigation.flatMap((item) =>
+        item.style === "category" ? [item, allProductsNavigationItem] : [item],
+      )
+    : [allProductsNavigationItem, ...visibleNavigation];
 
   return (
     <nav className="main-nav">

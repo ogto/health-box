@@ -178,7 +178,7 @@ export function resolveStorefrontNavigationItems(raw: unknown) {
       href: defaultItem.href,
       productSlugs: savedItem?.productSlugs || [],
       sortOrder: index + 1,
-      visible: true,
+      visible: savedItem?.visible !== false,
     };
   });
 }
