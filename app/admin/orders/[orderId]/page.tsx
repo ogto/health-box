@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { randomUUID } from "node:crypto";
 
 import {
   cancelOrderAction,
@@ -18,13 +19,6 @@ import {
   stringValue,
   toneFromStatus,
 } from "../../../_lib/health-box-api";
-
-const shipmentStatusOptions = [
-  { value: "PENDING", label: "주문 접수" },
-  { value: "PREPARING", label: "상품 준비중" },
-  { value: "SHIPPED", label: "배송중" },
-  { value: "DELIVERED", label: "배송완료" },
-];
 
 function formatWon(value: unknown) {
   const amount = Number(value || 0);
@@ -118,20 +112,6 @@ function shipmentStatusLabel(value: unknown) {
   return labels[status] || String(value || "-");
 }
 
-function orderStatusLabel(value: unknown) {
-  const status = String(value || "ORDERED").toUpperCase();
-  const labels: Record<string, string> = {
-    ORDERED: "주문완료",
-    PENDING: "주문 접수",
-    PREPARING: "상품 준비중",
-    SHIPPED: "배송중",
-    DELIVERED: "배송완료",
-    CANCELED: "취소완료",
-    PARTIALLY_CANCELED: "부분취소",
-  };
-  return labels[status] || String(value || "-");
-}
-
 function paymentStatusLabel(value: unknown) {
   const status = String(value || "PAID").toUpperCase();
   const labels: Record<string, string> = {
@@ -207,6 +187,8 @@ export default async function AdminOrderDetailPage({
     .filter(Boolean)
     .join(" ");
   const detailHref = `/admin/orders/${numericOrderId}`;
+  const fullCancellationRequestId = randomUUID();
+  const partialCancellationRequestId = randomUUID();
 
   return (
     <div className="admin-page">
@@ -321,6 +303,7 @@ export default async function AdminOrderDetailPage({
           <AdminPanel title="취소 처리">
             <div className="admin-status-stack">
               <form action={cancelOrderAction} id="admin-order-cancel-form">
+                <input name="cancellationRequestId" type="hidden" value={fullCancellationRequestId} />
                 <input name="orderId" type="hidden" value={String(numericOrderId)} />
                 <input name="redirectTo" type="hidden" value={detailHref} />
               </form>
@@ -338,6 +321,7 @@ export default async function AdminOrderDetailPage({
               {cancelableItems.length ? (
                 <>
                   <form action={partialCancelOrderAction} className="admin-status-stack" id="admin-order-partial-cancel-form">
+                    <input name="cancellationRequestId" type="hidden" value={partialCancellationRequestId} />
                     <input name="orderId" type="hidden" value={String(numericOrderId)} />
                     <input name="redirectTo" type="hidden" value={detailHref} />
                     <label className="admin-field">

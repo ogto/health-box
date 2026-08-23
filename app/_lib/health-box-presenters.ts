@@ -9,6 +9,7 @@ import {
   type HealthBoxPageResponse,
   type HealthBoxRecord,
 } from "./health-box-api";
+import { parseProductCommercePolicy } from "./product-commerce";
 
 type AdminTone = "blue" | "cyan" | "green" | "gold" | "violet" | "rose";
 const CDN_BASE_URL = "https://cdn.1472.ai";
@@ -29,6 +30,10 @@ function normalizeProductImageUrl(value: string) {
 
   if (/^https?:\/\/cloud\.1472\.ai\/downloadFile\//i.test(trimmed)) {
     return trimmed.replace(/^https?:\/\/cloud\.1472\.ai\/downloadFile\//i, `${CDN_BASE_URL}/`);
+  }
+
+  if (/^http:\/\/api\.everybuy\.co\.kr(?=\/|$)/i.test(trimmed)) {
+    return trimmed.replace(/^http:/i, "https:");
   }
 
   if (/^https?:\/\//i.test(trimmed)) {
@@ -768,6 +773,7 @@ export function mapProductRows(page: HealthBoxPageResponse<HealthBoxRecord> | nu
     const supplyPrice = numberValue(product, "supplyPrice");
     const settlementBasePrice = numberValue(product, "settlementBasePrice");
     const plainPrice = stringValue(product, "price");
+    const productPolicy = parseProductCommercePolicy(stringValue(product, "salesPolicyText"));
     const mediaUrls = productMediaUrls(product);
     const stockQuantity = productStockQuantity(product);
 
@@ -793,8 +799,19 @@ export function mapProductRows(page: HealthBoxPageResponse<HealthBoxRecord> | nu
       supplyPrice,
       settlementBasePrice,
       priceExposurePolicy: stringValue(product, "priceExposurePolicy"),
-      salesPolicyText: stringValue(product, "salesPolicyText"),
+      salesPolicyText: productPolicy.salesPolicyText,
       deliveryPolicyText: stringValue(product, "deliveryPolicyText"),
+      exchangeReturnGuide: productPolicy.exchangeReturnGuide,
+      cautions: productPolicy.cautions,
+      safetyTip: productPolicy.safetyTip,
+      disclosureSource: productPolicy.disclosureSource,
+      disclosureType: productPolicy.disclosureType,
+      disclosureItems: productPolicy.disclosureItems,
+      purchaseInformation: productPolicy.purchaseInformation,
+      categoryIds: productPolicy.categoryIds.length
+        ? productPolicy.categoryIds
+        : [idValue(product, "categoryId")].filter((value): value is number => value !== null),
+      bundleProductSlugs: productPolicy.bundleProductSlugs,
       sortOrder: numberValue(product, "sortOrder"),
       badge,
       publishStatus,

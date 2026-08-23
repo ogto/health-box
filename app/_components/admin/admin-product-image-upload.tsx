@@ -43,6 +43,10 @@ function normalizeImageUrl(value: string) {
     return trimmed.replace(/^https?:\/\/cloud\.1472\.ai(?::\d+)?\/downloadFile\//i, `${DEFAULT_IMAGE_BASE_URL}/`);
   }
 
+  if (/^http:\/\/api\.everybuy\.co\.kr(?=\/|$)/i.test(trimmed)) {
+    return trimmed.replace(/^http:/i, "https:");
+  }
+
   if (/^(blob:|data:)/i.test(trimmed) || /^https?:\/\//i.test(trimmed)) {
     return trimmed;
   }

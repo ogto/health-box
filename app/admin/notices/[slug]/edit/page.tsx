@@ -68,6 +68,7 @@ export default async function AdminNoticeEditPage({
       <form action={saveNoticeAction} className="admin-form-layout">
         <input name="id" type="hidden" value={String(notice.recordId ?? "")} />
         <input name="redirectTo" type="hidden" value={`/admin/notices/${notice.slug}`} />
+        <input name="errorRedirectTo" type="hidden" value={`/admin/notices/${notice.slug}/edit`} />
         <input name="slug" type="hidden" value={notice.sourceSlug} />
         <input name="category" type="hidden" value={notice.category} />
         <input name="visibility" type="hidden" value={notice.visibility} />
@@ -76,11 +77,17 @@ export default async function AdminNoticeEditPage({
           <AdminPanel title="공지 내용">
             <div className="admin-field-grid">
               <label className="admin-field">
-                <span>제목</span>
-                <input className="admin-input" defaultValue={notice.title} name="title" type="text" />
+                <span>
+                  제목
+                  <em className="admin-required-mark">필수</em>
+                </span>
+                <input className="admin-input" defaultValue={notice.title} name="title" required type="text" />
               </label>
               <div className="admin-field">
-                <span>내용</span>
+                <span>
+                  내용
+                  <em className="admin-required-mark">필수</em>
+                </span>
                 <AdminNoticeBodyEditor defaultBody={notice.bodyHtml || notice.paragraphs.join("\n")} />
               </div>
             </div>

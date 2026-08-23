@@ -1,4 +1,5 @@
 export type Product = {
+  id?: number;
   slug: string;
   sourceSlug?: string;
   badge: string;
@@ -6,7 +7,19 @@ export type Product = {
   title: string;
   subtitle: string;
   category: string;
+  categoryIds?: number[];
+  consumerPrice?: number;
+  memberPrice?: number;
+  priceExposurePolicy?: string;
   deliveryPolicyText?: string;
+  exchangeReturnGuide?: string;
+  cautions?: string;
+  safetyTip?: string;
+  disclosureSource?: "DETAIL_HTML" | "STRUCTURED";
+  disclosureType?: "GENERAL" | "HEALTH_FUNCTIONAL_FOOD" | "PROCESSED_FOOD";
+  disclosureItems?: Array<{ label: string; value: string }>;
+  purchaseInformation?: Array<{ label: string; value: string }>;
+  bundleProductSlugs?: string[];
   review: string;
   salesPolicyText?: string;
   shipping: string;

@@ -13,6 +13,11 @@ import {
   storefrontConfig,
   type StorefrontNavigationItem,
 } from "./storefront-config";
+import {
+  parseStorefrontPolicyBundle,
+  type StorefrontCommercePolicy,
+  type StorefrontSellerInfo,
+} from "./storefront-policy";
 
 type DealerPreset = {
   displayName: string;
@@ -21,6 +26,7 @@ type DealerPreset = {
 };
 
 type StorefrontConfigShape = {
+  commerce: StorefrontCommercePolicy;
   metadata: {
     title: string;
     description: string;
@@ -44,6 +50,7 @@ type StorefrontConfigShape = {
     logoType: string;
   };
   navigation: ReadonlyArray<StorefrontNavigationItem>;
+  seller: StorefrontSellerInfo;
   home: {
     hero: {
       kicker: string;
@@ -195,6 +202,7 @@ export const getStorefrontRuntime = cache(async (): Promise<StorefrontRuntime> =
         fetchDealerPublicBySlug(resolvedSlug),
       ])
     : [null, null];
+  const policyBundle = parseStorefrontPolicyBundle(publicSiteConfig?.policyText);
 
   const mergedConfig: StorefrontConfigShape = {
     ...storefrontConfig,
@@ -206,8 +214,9 @@ export const getStorefrontRuntime = cache(async (): Promise<StorefrontRuntime> =
       ...storefrontConfig.brand,
       searchPlaceholder:
         publicSiteConfig?.searchPlaceholder || storefrontConfig.brand.searchPlaceholder,
-      policyMessage: publicSiteConfig?.policyText || storefrontConfig.brand.policyMessage,
+      policyMessage: policyBundle.message || storefrontConfig.brand.policyMessage,
     },
+    commerce: policyBundle.commerce,
     assets: {
       ...storefrontConfig.assets,
       logoUrl: publicSiteConfig?.logoUrl || undefined,
@@ -221,6 +230,7 @@ export const getStorefrontRuntime = cache(async (): Promise<StorefrontRuntime> =
         publicSiteConfig?.navigationJson ||
         publicSiteConfig?.menuJson,
     ),
+    seller: policyBundle.seller,
     home: {
       ...storefrontConfig.home,
       supportItems: [

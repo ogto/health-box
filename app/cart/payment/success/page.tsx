@@ -4,7 +4,7 @@ import { MemberPaymentSuccess } from "../../../_components/member-payment-succes
 import { Breadcrumbs, StoreShell } from "../../../_components/store-ui";
 
 export const metadata: Metadata = {
-  title: "테스트 결제 확인",
+  title: "결제 확인",
 };
 
 export default function CartPaymentSuccessPage() {
@@ -15,7 +15,7 @@ export default function CartPaymentSuccessPage() {
           items={[
             { label: "홈", href: "/" },
             { label: "장바구니", href: "/cart" },
-            { label: "테스트 결제 확인" },
+            { label: "결제 확인" },
           ]}
         />
         <div className="member-auth-screen">

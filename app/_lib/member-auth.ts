@@ -2,6 +2,9 @@ import { cookies } from "next/headers";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const MEMBER_COOKIE_NAME = "health_box_member_auth";
+export const MEMBER_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+
+const MEMBER_SESSION_CLOCK_SKEW_MS = 60 * 1000;
 
 export type MemberSession = {
   memberId: number | null;
@@ -21,12 +24,22 @@ type DealerSessionScope = {
 } | null | undefined;
 
 function getMemberSessionSecret() {
-  return (
-    process.env.MEMBER_SESSION_SECRET?.trim() ||
-    process.env.ADMIN_SESSION_TOKEN?.trim() ||
-    process.env.ADMIN_PASSWORD?.trim() ||
-    "health-box-member-session"
-  );
+  const secret = process.env.MEMBER_SESSION_SECRET?.trim() || "";
+  const production = process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
+
+  if (secret) {
+    if (production && secret.length < 32) {
+      throw new Error("MEMBER_SESSION_SECRET must be at least 32 characters in production");
+    }
+
+    return secret;
+  }
+
+  if (production) {
+    throw new Error("MEMBER_SESSION_SECRET is not configured");
+  }
+
+  return "health-box-development-only-member-session-secret";
 }
 
 function signValue(value: string) {
@@ -46,8 +59,8 @@ function encodePayload(payload: Omit<MemberSession, "issuedAt">) {
 }
 
 function decodePayload(value: string): MemberSession | null {
-  const [data, signature] = value.split(".");
-  if (!data || !signature) {
+  const [data, signature, extra] = value.split(".");
+  if (!data || !signature || extra) {
     return null;
   }
 
@@ -69,6 +82,15 @@ function decodePayload(value: string): MemberSession | null {
     }
 
     if (!Number.isFinite(Number(parsed.dealerMallId))) {
+      return null;
+    }
+
+    const age = Date.now() - Number(parsed.issuedAt);
+    if (
+      !Number.isFinite(age) ||
+      age < -MEMBER_SESSION_CLOCK_SKEW_MS ||
+      age > MEMBER_SESSION_MAX_AGE_SECONDS * 1000
+    ) {
       return null;
     }
 

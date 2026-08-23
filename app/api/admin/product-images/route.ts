@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { ADMIN_COOKIE_NAME, getAdminSessionToken } from "../../../_lib/admin-auth";
+import { healthBoxInternalHeaders } from "../../../_lib/health-box-api";
 import {
   MAX_IMAGE_FILE_COUNT,
   MAX_IMAGE_FILE_SIZE,
   MAX_IMAGE_FILE_SIZE_MB,
 } from "@/lib/image-upload-limits";
-
-const DEFAULT_MEMBER_NO = "505";
-const DEFAULT_UPLOAD_BASE_URL = "https://cloud.1472.ai:18443";
-const DEFAULT_CDN_BASE_URL = "https://cdn.1472.ai";
 
 type UploadedFileResponse = {
   fileDownloadUri?: string;
@@ -19,25 +16,22 @@ type UploadedFileResponse = {
 };
 
 function getUploadBaseUrl() {
-  const explicitBaseUrl = process.env.FILE_UPLOAD_API_BASE_URL?.trim();
+  const explicitBaseUrl = process.env.HEALTH_BOX_UPLOAD_API_BASE_URL?.trim();
   if (explicitBaseUrl) {
     return explicitBaseUrl.replace(/\/+$/, "");
   }
 
   const healthBoxBaseUrl = process.env.HEALTH_BOX_API_BASE_URL?.trim();
   if (healthBoxBaseUrl) {
-    try {
-      return new URL(healthBoxBaseUrl).origin;
-    } catch {
-      return healthBoxBaseUrl.replace(/\/api\/v\d+\/?$/i, "").replace(/\/+$/, "");
-    }
+    return healthBoxBaseUrl.replace(/\/+$/, "");
   }
 
-  return DEFAULT_UPLOAD_BASE_URL;
+  throw new Error("HEALTH_BOX_UPLOAD_API_BASE_URL or HEALTH_BOX_API_BASE_URL is required");
 }
 
 function getCdnBaseUrl() {
-  return process.env.FILE_CDN_BASE_URL?.trim().replace(/\/+$/, "") || DEFAULT_CDN_BASE_URL;
+  const explicitBaseUrl = process.env.HEALTH_BOX_CDN_BASE_URL?.trim();
+  return explicitBaseUrl?.replace(/\/+$/, "") || new URL(getUploadBaseUrl()).origin;
 }
 
 function isAdminRequest(request: NextRequest) {
@@ -76,21 +70,27 @@ function normalizeUploadedFiles(files: UploadedFileResponse[], cdnBaseUrl: strin
       return file;
     }
 
-    if (/^https?:\/\/cloud\.1472\.ai(?::\d+)?\/downloadFile\//i.test(file.fileDownloadUri)) {
+    const trimmed = file.fileDownloadUri.trim();
+    try {
+      const baseUrl = new URL(cdnBaseUrl);
+      const uploadedUrl = /^https?:\/\//i.test(trimmed)
+        ? new URL(trimmed)
+        : trimmed.startsWith("//")
+          ? new URL(`${baseUrl.protocol}${trimmed}`)
+          : new URL(trimmed.replace(/^\/?/, "/"), baseUrl);
+
+      if (uploadedUrl.hostname.toLowerCase() === baseUrl.hostname.toLowerCase()) {
+        uploadedUrl.protocol = baseUrl.protocol;
+        uploadedUrl.host = baseUrl.host;
+      }
+
       return {
         ...file,
-        fileDownloadUri: file.fileDownloadUri.replace(/^https?:\/\/cloud\.1472\.ai(?::\d+)?\/downloadFile\//i, `${cdnBaseUrl}/`),
+        fileDownloadUri: uploadedUrl.toString(),
       };
-    }
-
-    if (/^https?:\/\//i.test(file.fileDownloadUri)) {
+    } catch {
       return file;
     }
-
-    return {
-      ...file,
-      fileDownloadUri: new URL(file.fileDownloadUri.replace(/^\/?/, "/"), cdnBaseUrl).toString(),
-    };
   });
 }
 
@@ -134,44 +134,21 @@ export async function POST(request: NextRequest) {
 
     const uploadBaseUrl = getUploadBaseUrl();
     const cdnBaseUrl = getCdnBaseUrl();
-    const fileType = "I";
-    const ids = "S";
-    const mberNo = DEFAULT_MEMBER_NO;
-
-    if (files.length === 1) {
-      const uploadUrl = new URL("/api/v1/uploadFile", uploadBaseUrl);
-      uploadUrl.searchParams.set("fileType", fileType);
-      uploadUrl.searchParams.set("ids", ids);
-      uploadUrl.searchParams.set("mberNo", mberNo);
-
-      const outboundFormData = new FormData();
-      outboundFormData.set("file", files[0]);
-
-      const response = await fetch(uploadUrl, {
-        method: "POST",
-        body: outboundFormData,
-      });
-
-      const uploaded = normalizeUploadedFiles(await parseUploadResponse(response), cdnBaseUrl);
-      return NextResponse.json({ files: uploaded });
-    }
-
     const outboundFormData = new FormData();
-    outboundFormData.set("fileType", fileType);
-    outboundFormData.set("ids", ids);
-    outboundFormData.set("mberNo", mberNo);
     for (const file of files) {
       outboundFormData.append("files", file);
     }
 
-    const response = await fetch(new URL("/api/v1/uploadFiles", uploadBaseUrl), {
+    const response = await fetch(`${uploadBaseUrl}/health-box/admin/files`, {
       method: "POST",
+      headers: healthBoxInternalHeaders(),
       body: outboundFormData,
     });
 
     const uploaded = normalizeUploadedFiles(await parseUploadResponse(response), cdnBaseUrl);
     return NextResponse.json({ files: uploaded });
   } catch (error) {
+    console.error("[api/admin/product-images] upload failed", error);
     return NextResponse.json(
       {
         message: "Image upload failed.",

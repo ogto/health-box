@@ -1,12 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { deleteProductAction, saveProductAction } from "../../../_actions/health-box-admin";
+import { deleteProductAction } from "../../../_actions/health-box-admin";
 import { AdminConfirmSubmitButton } from "../../../_components/admin/admin-confirm-submit-button";
 import { AdminHeader } from "../../../_components/admin/admin-header";
+import { AdminProductCategoryPicker } from "../../../_components/admin/admin-product-category-picker";
 import { AdminProductDetailBlocksEditor } from "../../../_components/admin/admin-product-detail-blocks-editor";
+import { AdminProductDisclosureFields } from "../../../_components/admin/admin-product-disclosure-fields";
+import { AdminProductForm } from "../../../_components/admin/admin-product-form";
 import { AdminProductImageUpload } from "../../../_components/admin/admin-product-image-upload";
 import { AdminProductOptionsEditor } from "../../../_components/admin/admin-product-options-editor";
+import { AdminProductRelationsPicker } from "../../../_components/admin/admin-product-relations-picker";
 import {
   AdminPolicyTemplatePicker,
   type AdminPolicyTemplate,
@@ -24,6 +28,7 @@ import {
   type HealthBoxSalesPolicy,
 } from "../../../_lib/health-box-api";
 import { findProductBySlug, mapProductRows } from "../../../_lib/health-box-presenters";
+import { formatInformationLines } from "../../../_lib/product-commerce";
 
 function toProductRow(record: HealthBoxRecord | null) {
   if (!record) {
@@ -89,13 +94,21 @@ export default async function AdminProductDetailPage({
   const canSave = hasHealthBoxApi() && Boolean(productId);
   const productImages = Array.from(new Set([product.image, ...product.gallery].filter(Boolean)));
   const imageCount = productImages.length;
-  const [salesPolicyTemplates, deliveryPolicyTemplates, categories] = hasHealthBoxApi()
+  const [salesPolicyTemplates, deliveryPolicyTemplates, categories, productOptionsPage] = hasHealthBoxApi()
     ? await Promise.all([
         fetchAdminSalesPolicies().then((policies) => mapPolicyTemplates(policies, "sales")),
         fetchAdminDeliveryPolicies().then((policies) => mapPolicyTemplates(policies, "delivery")),
         fetchAdminCategories(),
+        fetchAdminProducts({ page: 1, size: 200 }),
       ])
-    : [[], [], []];
+    : [[], [], [], null];
+  const productOptions = mapProductRows(productOptionsPage).items;
+  const relationOptions = productOptions.map(({ brand, image, slug: productSlug, title }) => ({
+    brand,
+    image,
+    slug: productSlug,
+    title,
+  }));
 
   return (
     <div className="admin-page">
@@ -103,6 +116,11 @@ export default async function AdminProductDetailPage({
         title="상품 수정"
         actions={
           <>
+            {productId ? (
+              <Link className="admin-button secondary" href={`/admin/products/${product.slug}/inquiries`}>
+                상품 Q&amp;A
+              </Link>
+            ) : null}
             <Link aria-label="상품 목록으로 돌아가기" className="admin-icon-button" href="/admin/products" title="상품 목록">
               <BackIcon />
             </Link>
@@ -113,9 +131,10 @@ export default async function AdminProductDetailPage({
         }
       />
 
-      <form action={saveProductAction} className="admin-product-edit-form" id="admin-product-save-form">
+      <AdminProductForm className="admin-product-edit-form" id="admin-product-save-form">
         <input name="id" type="hidden" value={String(productId ?? "")} />
         <input name="redirectTo" type="hidden" value={`/admin/products/${product.slug}`} />
+        <input name="errorRedirectTo" type="hidden" value={`/admin/products/${product.slug}`} />
         <input name="toast" type="hidden" value="상품 수정이 완료되었습니다." />
 
         <div className="admin-product-edit-topbar">
@@ -143,27 +162,22 @@ export default async function AdminProductDetailPage({
             >
               <div className="admin-field-grid two">
                 <label className="admin-field span-two admin-title-field">
-                  <span>상품명</span>
+                  <span>
+                    상품명
+                    <em className="admin-required-mark">필수</em>
+                  </span>
                   <input className="admin-input admin-title-input" defaultValue={product.title} name="name" required type="text" />
                 </label>
                 <label className="admin-field">
                   <span>브랜드명</span>
                   <input className="admin-input" defaultValue={product.brand} name="brandName" type="text" />
                 </label>
-                <label className="admin-field">
-                  <span>카테고리</span>
-                  <select className="admin-select" defaultValue={String(product.categoryId ?? categories?.[0]?.id ?? 1)} name="categoryId">
-                    {categories?.length ? (
-                      categories.map((category) => (
-                        <option key={category.id || category.slug || category.name} value={category.id}>
-                          {category.name || category.categoryCode || `카테고리 ${category.id}`}
-                        </option>
-                      ))
-                    ) : (
-                      <option value={product.categoryId ?? 1}>{product.category || "기본 카테고리"}</option>
-                    )}
-                  </select>
-                </label>
+                <AdminProductCategoryPicker
+                  categories={categories || []}
+                  defaultPrimaryId={product.categoryId ?? categories?.[0]?.id ?? 1}
+                  defaultSelectedIds={product.categoryIds || []}
+                  fallbackLabel={product.category || "기본 카테고리"}
+                />
               </div>
             </AdminPanel>
 
@@ -258,6 +272,18 @@ export default async function AdminProductDetailPage({
               <AdminProductDetailBlocksEditor defaultHtml={product.detailHtml} />
             </AdminPanel>
 
+            <AdminPanel
+              title="상품정보 제공고시"
+              description="상품군별 필수정보를 항목: 내용 형식으로 한 줄씩 입력합니다."
+            >
+              <AdminProductDisclosureFields
+                defaultDisclosureItems={formatInformationLines(product.disclosureItems || [])}
+                defaultDisclosureSource={product.disclosureSource || "STRUCTURED"}
+                defaultDisclosureType={product.disclosureType || "HEALTH_FUNCTIONAL_FOOD"}
+                defaultPurchaseInformation={formatInformationLines(product.purchaseInformation || [])}
+              />
+            </AdminPanel>
+
             <AdminPanel title="판매/배송 문구" description="상품 상세 하단과 구매 안내에 노출되는 운영 문구입니다.">
               <div className="admin-field-grid two">
                 <div className="span-two">
@@ -278,7 +304,37 @@ export default async function AdminProductDetailPage({
                     type="delivery"
                   />
                 </div>
+                <label className="admin-field span-two">
+                  <span>상품별 교환·반품 안내</span>
+                  <textarea
+                    className="admin-textarea"
+                    defaultValue={product.exchangeReturnGuide || ""}
+                    name="exchangeReturnGuide"
+                    placeholder="비워두면 홈페이지 관리의 기본 교환·반품 안내를 사용합니다."
+                  />
+                </label>
+                <label className="admin-field span-two">
+                  <span>주의사항</span>
+                  <textarea className="admin-textarea" defaultValue={product.cautions || ""} name="cautions" />
+                </label>
+                <label className="admin-field span-two">
+                  <span>상품별 쇼핑안전거래 TIP</span>
+                  <textarea
+                    className="admin-textarea"
+                    defaultValue={product.safetyTip || ""}
+                    name="safetyTip"
+                    placeholder="비워두면 홈페이지 관리의 기본 안내를 사용합니다."
+                  />
+                </label>
               </div>
+            </AdminPanel>
+
+            <AdminPanel title="묶음 판매" description="선택한 상품을 상세페이지에서 한 번에 함께 담을 수 있습니다.">
+              <AdminProductRelationsPicker
+                currentSlug={product.slug}
+                products={relationOptions}
+                selectedSlugs={product.bundleProductSlugs || []}
+              />
             </AdminPanel>
           </div>
         </section>
@@ -316,7 +372,7 @@ export default async function AdminProductDetailPage({
             </button>
           )}
         </div>
-      </form>
+      </AdminProductForm>
 
       <form action={deleteProductAction} id="admin-product-delete-form">
         <input name="id" type="hidden" value={String(productId ?? "")} />

@@ -9,7 +9,6 @@ export function CartCountBadge({ loggedIn }: { loggedIn: boolean }) {
 
   useEffect(() => {
     if (!loggedIn) {
-      setQuantity(0);
       return;
     }
 

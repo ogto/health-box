@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
-const PROMO_HIDE_KEY = "health-box-promo-hidden-on";
+const PROMO_HIDE_KEY = "health-box-promo-hidden-on:v1";
+const PROMO_SYNC_EVENT = "health-box-promo-sync";
 
 function getTodayKey() {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -16,17 +17,27 @@ function getTodayKey() {
   return formatter.format(new Date());
 }
 
-export function HeaderPromoBar({ label = "3,000원 회원가입 쿠폰" }: { label?: string }) {
-  const [hidden, setHidden] = useState(false);
-  const [hideToday, setHideToday] = useState(false);
+function subscribeToPromoStorage(callback: () => void) {
+  window.addEventListener("storage", callback);
+  window.addEventListener(PROMO_SYNC_EVENT, callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener(PROMO_SYNC_EVENT, callback);
+  };
+}
 
-  useEffect(() => {
-    try {
-      setHidden(window.localStorage.getItem(PROMO_HIDE_KEY) === getTodayKey());
-    } catch {
-      setHidden(false);
-    }
-  }, []);
+function promoHiddenSnapshot() {
+  try {
+    return window.localStorage.getItem(PROMO_HIDE_KEY) === getTodayKey();
+  } catch {
+    return false;
+  }
+}
+
+export function HeaderPromoBar({ label = "3,000원 회원가입 쿠폰" }: { label?: string }) {
+  const hiddenForToday = useSyncExternalStore(subscribeToPromoStorage, promoHiddenSnapshot, () => false);
+  const [hiddenForSession, setHiddenForSession] = useState(false);
+  const [hideToday, setHideToday] = useState(false);
 
   function handleClose() {
     try {
@@ -35,14 +46,15 @@ export function HeaderPromoBar({ label = "3,000원 회원가입 쿠폰" }: { lab
       } else {
         window.localStorage.removeItem(PROMO_HIDE_KEY);
       }
+      window.dispatchEvent(new Event(PROMO_SYNC_EVENT));
     } catch {
       // Ignore storage errors and only close the banner for this session.
     }
 
-    setHidden(true);
+    setHiddenForSession(true);
   }
 
-  if (hidden) {
+  if (hiddenForToday || hiddenForSession) {
     return null;
   }
 

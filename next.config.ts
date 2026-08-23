@@ -31,6 +31,11 @@ const nextConfig: NextConfig = {
         hostname: "cdn.1472.ai",
       },
       {
+        protocol: "https",
+        hostname: "api.everybuy.co.kr",
+        pathname: "/api/v5/health-box/files/**",
+      },
+      {
         protocol: "http",
         hostname: "cloud.1472.ai",
         port: "8080",

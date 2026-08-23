@@ -14,6 +14,7 @@ import {
 
 import type { Product } from "../_lib/store-data";
 import { addMemberCartItemsToServer, dispatchMemberCartSync, type MemberCartItem } from "../_lib/member-cart";
+import { ProductPriceDisplay } from "./product-price-display";
 
 type DropdownOption = {
   disabled?: boolean;
@@ -179,6 +180,9 @@ export function ProductPurchaseBox({
   brand,
   title,
   price,
+  consumerPrice,
+  memberPrice,
+  priceExposurePolicy,
   isMember = false,
   productImage,
   productSlug,
@@ -191,6 +195,9 @@ export function ProductPurchaseBox({
   brand: string;
   title: string;
   price: string;
+  consumerPrice?: number;
+  memberPrice?: number;
+  priceExposurePolicy?: string;
   isMember?: boolean;
   productImage: string;
   productSlug: string;
@@ -398,7 +405,13 @@ export function ProductPurchaseBox({
       <div className="price-panel shop-price-panel">
         <div>
           <p className="price-label">상품 가격</p>
-          <p className="price-value">{isMember ? price : "로그인 후 확인"}</p>
+          <ProductPriceDisplay
+            consumerPrice={consumerPrice}
+            fallbackPrice={price}
+            isMember={isMember}
+            memberPrice={memberPrice}
+            priceExposurePolicy={priceExposurePolicy}
+          />
         </div>
         <p className="price-note">
           {isMember

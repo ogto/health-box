@@ -12,6 +12,7 @@ export default function AdminNoticeNewPage() {
 
       <form action={saveNoticeAction} className="admin-form-layout">
         <input name="redirectTo" type="hidden" value="/admin/notices" />
+        <input name="errorRedirectTo" type="hidden" value="/admin/notices/new" />
         <input name="category" type="hidden" value="운영안내" />
         <input name="visibility" type="hidden" value="전체 공개" />
 
@@ -19,11 +20,17 @@ export default function AdminNoticeNewPage() {
           <AdminPanel title="공지 내용">
             <div className="admin-field-grid">
               <label className="admin-field">
-                <span>제목</span>
-                <input className="admin-input" name="title" placeholder="공지 제목을 입력하세요" type="text" />
+                <span>
+                  제목
+                  <em className="admin-required-mark">필수</em>
+                </span>
+                <input className="admin-input" name="title" placeholder="공지 제목을 입력하세요" required type="text" />
               </label>
               <div className="admin-field">
-                <span>내용</span>
+                <span>
+                  내용
+                  <em className="admin-required-mark">필수</em>
+                </span>
                 <AdminNoticeBodyEditor />
               </div>
             </div>

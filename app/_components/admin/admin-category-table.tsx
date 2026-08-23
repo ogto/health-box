@@ -126,6 +126,7 @@ export function AdminCategoryTable({ categories }: { categories: HealthBoxCatego
                   name="name"
                   onChange={(event) => patchRow(item.localKey, { name: event.target.value })}
                   placeholder="카테고리명"
+                  required
                   type="text"
                   value={item.name || ""}
                 />

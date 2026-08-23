@@ -12,6 +12,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated Tiptap UI kit sources are maintained upstream and checked through build/typecheck.
+    "components/tiptap-ui/**",
+    "components/tiptap-ui-primitive/**",
+    "hooks/**",
+    "lib/tiptap-utils.ts",
   ]),
 ]);
 

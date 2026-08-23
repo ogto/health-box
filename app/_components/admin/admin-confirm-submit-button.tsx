@@ -35,6 +35,10 @@ export function AdminConfirmSubmitButton({
 
     setSubmitting(true);
     targetForm.requestSubmit();
+    if (!targetForm.checkValidity()) {
+      setSubmitting(false);
+      setOpen(false);
+    }
   }
 
   return (

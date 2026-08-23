@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   fetchAdminBuyerSignupApplications,
   fetchDealerPublicBySlug,
+  healthBoxInternalHeaders,
   type HealthBoxRecord,
   stringValue,
 } from "../../../_lib/health-box-api";
@@ -10,6 +11,7 @@ import {
   buildMemberSessionCookieValue,
   isMemberSecureCookie,
   MEMBER_COOKIE_NAME,
+  MEMBER_SESSION_MAX_AGE_SECONDS,
 } from "../../../_lib/member-auth";
 
 function getApiBaseUrl() {
@@ -144,9 +146,9 @@ export async function POST(request: NextRequest) {
     const backendResponse = await fetch(`${apiBaseUrl}/health-box/public/buyer-auth/login`, {
       method: "POST",
       cache: "no-store",
-      headers: {
+      headers: healthBoxInternalHeaders({
         "Content-Type": "application/json",
-      },
+      }),
       body: JSON.stringify({
         dealerMallId: hqMall ? undefined : requestedDealerMallId || undefined,
         loginId,
@@ -230,7 +232,7 @@ export async function POST(request: NextRequest) {
       sameSite: "lax",
       secure: isMemberSecureCookie(),
       path: "/",
-      maxAge: 60 * 60 * 24 * 30,
+      maxAge: MEMBER_SESSION_MAX_AGE_SECONDS,
     });
 
     return response;

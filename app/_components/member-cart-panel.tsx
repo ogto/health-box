@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   deleteMemberCartItem,
@@ -14,6 +14,7 @@ import {
 import { addressAlias, addressLine, isDefaultAddress, type MemberAddress } from "../_lib/member-address";
 import { writeMemberOrderDraft } from "../_lib/member-order-draft";
 import type { Product } from "../_lib/store-data";
+import { calculateShippingBreakdown, remainingForFreeShipping } from "../_lib/storefront-policy";
 import { AddressSearchButton } from "./address-search-button";
 
 declare global {
@@ -52,12 +53,25 @@ function displayOptionLabel(value: string) {
   return !label || label === "기본 상품" || label === "상품" ? "없음" : label;
 }
 
-async function fetchOrderQuote(items: MemberCartItem[]) {
+type OrderQuote = {
+  checkoutIntent: string;
+  discountAmount: number;
+  freeShippingThreshold: number;
+  orderId: string;
+  productAmount: number;
+  remainingForFreeShipping: number;
+  remoteAreaFee: number;
+  shippingFee: number;
+  totalPaymentAmount: number;
+};
+
+async function fetchOrderQuote(items: MemberCartItem[], zipCode: string): Promise<OrderQuote> {
   const response = await fetch("/api/member/orders/quote", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
     body: JSON.stringify({
+      zipCode,
       items: items.map((item) => ({
         skuId: item.skuId,
         quantity: item.quantity,
@@ -71,10 +85,21 @@ async function fetchOrderQuote(items: MemberCartItem[]) {
     throw new Error(`${data?.message || "주문 금액을 확인하지 못했습니다."}${detail}`);
   }
 
-  return Number(data.totalPaymentAmount || 0);
+  return {
+    checkoutIntent: String(data.checkoutIntent || ""),
+    orderId: String(data.orderId || ""),
+    productAmount: Number(data.productAmount || 0),
+    shippingFee: Number(data.shippingFee || 0),
+    remoteAreaFee: Number(data.remoteAreaFee || 0),
+    discountAmount: Number(data.discountAmount || 0),
+    totalPaymentAmount: Number(data.totalPaymentAmount || 0),
+    freeShippingThreshold: Number(data.freeShippingThreshold || 0),
+    remainingForFreeShipping: Number(data.remainingForFreeShipping || 0),
+  };
 }
 
 export function MemberCartPanel({
+  baseShippingFee,
   defaultName,
   defaultPhone,
   customerEmail,
@@ -82,7 +107,11 @@ export function MemberCartPanel({
   loggedIn,
   orderSessionReady,
   productCatalog = [],
+  freeShippingThreshold,
+  remoteAreaFee,
+  remoteAreaZipRanges,
 }: {
+  baseShippingFee: number;
   customerEmail?: string;
   customerKey?: string;
   defaultName?: string;
@@ -90,6 +119,9 @@ export function MemberCartPanel({
   loggedIn: boolean;
   orderSessionReady: boolean;
   productCatalog?: Product[];
+  freeShippingThreshold: number;
+  remoteAreaFee: number;
+  remoteAreaZipRanges: string[];
 }) {
   const [items, setItems] = useState<MemberCartItem[]>([]);
   const [addresses, setAddresses] = useState<MemberAddress[]>([]);
@@ -108,7 +140,7 @@ export function MemberCartPanel({
   const paymentWidgetsRef = useRef<TossPaymentWidgets | null>(null);
   const paymentWidgetCustomerRef = useRef("");
 
-  function repairCartItem(item: MemberCartItem) {
+  const repairCartItem = useCallback((item: MemberCartItem) => {
     const matchedProduct =
       productCatalog.find((product) => product.skus?.some((sku) => Number(sku.id || 0) === item.skuId)) ||
       productCatalog.find((product) => product.title === item.productTitle);
@@ -119,11 +151,10 @@ export function MemberCartPanel({
       productSlug: matchedProduct?.slug || item.productSlug,
       productTitle: matchedProduct?.title || item.productTitle,
     };
-  }
+  }, [productCatalog]);
 
   useEffect(() => {
     if (!loggedIn) {
-      setItems([]);
       return;
     }
 
@@ -148,7 +179,7 @@ export function MemberCartPanel({
     return () => {
       canceled = true;
     };
-  }, [loggedIn, productCatalog]);
+  }, [loggedIn, repairCartItem]);
 
   useEffect(() => {
     let canceled = false;
@@ -184,9 +215,24 @@ export function MemberCartPanel({
     };
   }, [loggedIn, orderSessionReady]);
 
-  const totalQuantity = useMemo(() => items.reduce((sum, item) => sum + item.quantity, 0), [items]);
-  const totalAmount = useMemo(() => items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0), [items]);
-  const tossTestClientKey = process.env.NEXT_PUBLIC_HEALTH_BOX_TOSS_TEST_CLIENT_KEY || "";
+  const productAmount = useMemo(() => items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0), [items]);
+  const shippingPolicy = useMemo(
+    () => ({
+      baseShippingFee,
+      freeShippingThreshold,
+      remoteAreaFee,
+      remoteAreaZipRanges,
+      deliveryGuide: "",
+      exchangeReturnGuide: "",
+      safetyTip: "",
+    }),
+    [baseShippingFee, freeShippingThreshold, remoteAreaFee, remoteAreaZipRanges],
+  );
+  const shippingBreakdown = calculateShippingBreakdown(productAmount, shippingPolicy, zipCode);
+  const shippingFee = shippingBreakdown.shippingFee;
+  const totalPaymentAmount = productAmount + shippingFee;
+  const freeShippingRemaining = remainingForFreeShipping(productAmount, shippingPolicy);
+  const tossClientKey = process.env.NEXT_PUBLIC_HEALTH_BOX_TOSS_CLIENT_KEY || "";
   const customerIdentifier = customerKey || "healthbox-member-anonymous";
 
   function commitItems(nextItems: MemberCartItem[]) {
@@ -318,14 +364,14 @@ export function MemberCartPanel({
       setPaymentWidgetReady(false);
       setPaymentWidgetError("");
 
-      if (!loggedIn || !orderSessionReady || !items.length || totalAmount <= 0 || !tossTestClientKey) {
+      if (!loggedIn || !orderSessionReady || !items.length || totalPaymentAmount <= 0 || !tossClientKey) {
         return;
       }
 
       try {
         const existingWidgets = paymentWidgetsRef.current;
         if (existingWidgets && paymentWidgetCustomerRef.current === customerIdentifier) {
-          await existingWidgets.setAmount({ currency: "KRW", value: totalAmount });
+          await existingWidgets.setAmount({ currency: "KRW", value: totalPaymentAmount });
           if (!canceled) {
             setPaymentWidgetReady(true);
           }
@@ -342,14 +388,14 @@ export function MemberCartPanel({
           return;
         }
 
-        const tossPayments = window.TossPayments?.(tossTestClientKey);
+        const tossPayments = window.TossPayments?.(tossClientKey);
         const widgets = tossPayments?.widgets({ customerKey: customerIdentifier });
 
         if (!widgets) {
           throw new Error("토스페이먼츠 결제위젯을 초기화하지 못했습니다.");
         }
 
-        await widgets.setAmount({ currency: "KRW", value: totalAmount });
+        await widgets.setAmount({ currency: "KRW", value: totalPaymentAmount });
         await widgets.renderPaymentMethods({ selector: "#health-box-payment-methods" });
         await widgets.renderAgreement({ selector: "#health-box-payment-agreement" });
 
@@ -360,7 +406,7 @@ export function MemberCartPanel({
         }
       } catch (widgetError) {
         if (!canceled) {
-          setPaymentWidgetError(widgetError instanceof Error ? widgetError.message : "테스트 결제수단을 불러오지 못했습니다.");
+          setPaymentWidgetError(widgetError instanceof Error ? widgetError.message : "결제수단을 불러오지 못했습니다.");
         }
       }
     }
@@ -370,7 +416,7 @@ export function MemberCartPanel({
     return () => {
       canceled = true;
     };
-  }, [customerIdentifier, items.length, loggedIn, orderSessionReady, tossTestClientKey, totalAmount]);
+  }, [customerIdentifier, items.length, loggedIn, orderSessionReady, tossClientKey, totalPaymentAmount]);
 
   async function handleOrder() {
     setMessage("");
@@ -396,8 +442,8 @@ export function MemberCartPanel({
       return;
     }
 
-    if (!tossTestClientKey) {
-      setError("테스트 결제 클라이언트 키가 설정되지 않았습니다.");
+    if (!tossClientKey) {
+      setError("결제 클라이언트 키가 설정되지 않았습니다.");
       return;
     }
 
@@ -410,24 +456,24 @@ export function MemberCartPanel({
 
       const orderName =
         items.length > 1 ? `${items[0].productTitle} 외 ${items.length - 1}건` : items[0]?.productTitle || "건강창고 주문";
-      const orderId = `healthbox_test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      const quotedAmount = await fetchOrderQuote(items);
+      const quote = await fetchOrderQuote(items, zipCode);
 
-      if (quotedAmount <= 0) {
+      if (!quote.orderId || !quote.checkoutIntent || quote.totalPaymentAmount <= 0) {
         throw new Error("주문 금액을 확인하지 못했습니다.");
       }
 
       writeMemberOrderDraft({
-        amount: quotedAmount,
+        amount: quote.totalPaymentAmount,
         baseAddress,
         buyerAddressId: Number(selectedAddressId || 0) || undefined,
+        checkoutIntent: quote.checkoutIntent,
         detailAddress,
         items: items.map((item) => ({
           skuId: item.skuId,
           optionLabel: item.optionLabel,
           quantity: item.quantity,
         })),
-        orderId,
+        orderId: quote.orderId,
         orderName,
         receiverName,
         receiverPhone,
@@ -438,11 +484,11 @@ export function MemberCartPanel({
       if (!widgets) {
         throw new Error("결제수단을 선택할 수 있도록 잠시 후 다시 시도해주세요.");
       }
-      await widgets.setAmount({ currency: "KRW", value: quotedAmount });
+      await widgets.setAmount({ currency: "KRW", value: quote.totalPaymentAmount });
 
       const origin = window.location.origin;
       await widgets.requestPayment({
-        orderId,
+        orderId: quote.orderId,
         orderName,
         customerEmail,
         customerName: receiverName,
@@ -451,7 +497,7 @@ export function MemberCartPanel({
         failUrl: `${origin}/cart/payment/fail`,
       });
     } catch (paymentError) {
-      setError(paymentError instanceof Error ? paymentError.message : "테스트 결제 요청 중 오류가 발생했습니다.");
+      setError(paymentError instanceof Error ? paymentError.message : "결제 요청 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
@@ -532,17 +578,47 @@ export function MemberCartPanel({
           <div className="summary-rows">
             <div className="summary-row">
               <span>총 상품 가격</span>
-              <strong>{formatWon(totalAmount)}</strong>
+              <strong>{formatWon(productAmount)}</strong>
             </div>
             <div className="summary-row">
+              <span>기본 배송비</span>
+              <strong>
+                {shippingBreakdown.baseShippingFee ? `+${formatWon(shippingBreakdown.baseShippingFee)}` : "무료"}
+              </strong>
+            </div>
+            {shippingBreakdown.remoteAreaFee ? (
+              <div className="summary-row">
+                <span>도서산간 추가배송비</span>
+                <strong>{`+${formatWon(shippingBreakdown.remoteAreaFee)}`}</strong>
+              </div>
+            ) : null}
+            <div className="summary-row">
               <span>총 배송비</span>
-              <strong>+0원</strong>
+              <strong>{shippingFee ? `+${formatWon(shippingFee)}` : "무료"}</strong>
             </div>
             <div className="summary-row total">
               <span>총 결제 예상 금액</span>
-              <strong>{formatWon(totalAmount)}</strong>
+              <strong>{formatWon(totalPaymentAmount)}</strong>
             </div>
           </div>
+
+          {items.length && freeShippingRemaining > 0 ? (
+            <p className="cart-shipping-notice">
+              {formatWon(freeShippingRemaining)} 더 담으면 기본 배송비가 무료입니다.
+            </p>
+          ) : items.length && freeShippingThreshold > 0 ? (
+            <p className="cart-shipping-notice is-free">무료배송 조건을 충족했습니다.</p>
+          ) : null}
+
+          {items.length && shippingBreakdown.isRemoteArea && remoteAreaFee > 0 ? (
+            <p className="cart-shipping-notice is-remote-area">
+              제주·도서산간 지역으로 추가 배송비 {formatWon(remoteAreaFee)}이 더해집니다.
+            </p>
+          ) : items.length && remoteAreaFee > 0 && !zipCode ? (
+            <p className="cart-shipping-notice">
+              배송지를 선택하면 제주·도서산간 추가 배송비가 반영됩니다.
+            </p>
+          ) : null}
 
           <div className="cart-order-form">
             {addresses.length ? (
@@ -653,11 +729,11 @@ export function MemberCartPanel({
               type="button"
             >
               {loading
-                ? "테스트 결제 준비 중..."
+                ? "결제 준비 중..."
                 : !items.length
                   ? "상품을 선택해주세요"
                   : paymentWidgetReady
-                    ? "테스트 결제 후 주문"
+                    ? "결제 후 주문"
                     : "결제수단 준비 중..."}
             </button>
           ) : loggedIn ? (

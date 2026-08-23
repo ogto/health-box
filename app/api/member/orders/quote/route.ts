@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { healthBoxFetch } from "../../../../_lib/health-box-api";
 import { getMemberSession } from "../../../../_lib/member-auth";
+import {
+  fetchMemberOrderQuote,
+  normalizeMemberOrderItems,
+} from "../../../../_lib/member-orders";
+import { buildCheckoutIntent } from "../../../../_lib/payment-intent";
 
 function extractErrorMessage(error: unknown) {
   const rawMessage = error instanceof Error ? error.message : String(error);
@@ -51,13 +55,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const items = Array.isArray(body.items) ? body.items : [];
-    const orderItems = items
-      .map((item: Record<string, unknown>) => ({
-        skuId: Number(item?.skuId || 0),
-        quantity: Number(item?.quantity || 0),
-      }))
-      .filter((item: { quantity: number; skuId: number }) => item.skuId > 0 && item.quantity > 0);
+    const orderItems = normalizeMemberOrderItems(body.items);
 
     if (!orderItems.length) {
       return NextResponse.json(
@@ -66,34 +64,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const quote = await healthBoxFetch<{ totalPaymentAmount?: number }>("/health-box/public/orders/quote", {
-      method: "POST",
-      body: {
-        buyerMemberId: session.memberId,
-        dealerMallId: session.dealerMallId,
-        sessionToken: session.sessionToken,
-        items: orderItems,
-      },
-    });
-
-    const totalPaymentAmount = Number(
-      quote.totalPaymentAmount ??
-        (quote as { totalAmount?: number }).totalAmount ??
-        (quote as { amount?: number }).amount ??
-        0,
-    );
-
-    if (totalPaymentAmount <= 0) {
-      return NextResponse.json({
-        ok: false,
-        message: "백엔드에서 산출한 주문 금액이 0원입니다. 상품 SKU 가격을 확인해주세요.",
-        detail: JSON.stringify(quote),
-      });
-    }
+    const quote = await fetchMemberOrderQuote(session, orderItems, body.zipCode);
+    const orderId = `healthbox_${crypto.randomUUID().replaceAll("-", "")}`;
+    const checkoutIntent = buildCheckoutIntent(session, orderId, orderItems, quote);
 
     return NextResponse.json({
       ok: true,
-      totalPaymentAmount,
+      checkoutIntent,
+      orderId,
+      ...quote,
     });
   } catch (error) {
     const message = extractErrorMessage(error);

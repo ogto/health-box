@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { Breadcrumbs, StoreShell } from "../../../_components/store-ui";
 
 export const metadata: Metadata = {
-  title: "테스트 결제 실패",
+  title: "결제 실패",
 };
 
 export default async function CartPaymentFailPage({
@@ -21,14 +21,14 @@ export default async function CartPaymentFailPage({
           items={[
             { label: "홈", href: "/" },
             { label: "장바구니", href: "/cart" },
-            { label: "테스트 결제 실패" },
+            { label: "결제 실패" },
           ]}
         />
         <div className="member-auth-screen">
           <div className="member-auth-card content-panel payment-result-panel">
             <h1 className="section-panel-title">결제 실패</h1>
             <div className="member-auth-alert is-error">
-              {params.message || "테스트 결제가 완료되지 않았습니다."}
+              {params.message || "결제가 완료되지 않았습니다."}
               {params.code ? ` (${params.code})` : ""}
             </div>
             <div className="member-auth-actions">

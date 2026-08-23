@@ -47,8 +47,11 @@ export default async function AdminCategoriesPage() {
         <form action={saveCategoryAction} className="admin-category-create-form is-page">
           <input name="redirectTo" type="hidden" value="/admin/categories" />
           <label className="admin-field admin-category-name-field">
-            <span>카테고리명</span>
-            <input className="admin-input" name="name" placeholder="예: 영양제" type="text" />
+            <span>
+              카테고리명
+              <em className="admin-required-mark">필수</em>
+            </span>
+            <input className="admin-input" name="name" placeholder="예: 영양제" required type="text" />
           </label>
           <label className="admin-field admin-category-order-field">
             <span>노출 순서</span>

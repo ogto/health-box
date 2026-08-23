@@ -16,6 +16,7 @@ import {
 } from "../../_lib/health-box-api";
 import { mapNoticeRows, mapProductRows } from "../../_lib/health-box-presenters";
 import { resolveStorefrontNavigationItems, storefrontConfig } from "../../_lib/storefront-config";
+import { formatZipRangeLines, parseStorefrontPolicyBundle } from "../../_lib/storefront-policy";
 
 const previewTabs = ["베스트", "균형있는", "건강하게", "체중조절"] as const;
 
@@ -30,6 +31,7 @@ export default async function AdminStorefrontPage() {
   const productOptions = mapProductRows(remoteProductPage).items;
   const previewProducts = productOptions.slice(0, 4);
   const previewNotices = mapNoticeRows(remoteNotices).slice(0, 3);
+  const policyBundle = parseStorefrontPolicyBundle(remoteConfig?.policyText);
 
   const pageConfig = {
     metadata: {
@@ -39,7 +41,7 @@ export default async function AdminStorefrontPage() {
     brand: {
       ...storefrontConfig.brand,
       searchPlaceholder: remoteConfig?.searchPlaceholder || storefrontConfig.brand.searchPlaceholder,
-      policyMessage: remoteConfig?.policyText || storefrontConfig.brand.policyMessage,
+      policyMessage: policyBundle.message || storefrontConfig.brand.policyMessage,
     },
     assets: {
       ...storefrontConfig.assets,
@@ -114,7 +116,7 @@ export default async function AdminStorefrontPage() {
                 <span>운영 정책 문구</span>
                 <textarea
                   className="admin-textarea"
-                  defaultValue={remoteConfig?.policyText || ""}
+                  defaultValue={policyBundle.message}
                   name="policyText"
                 />
               </label>
@@ -125,6 +127,140 @@ export default async function AdminStorefrontPage() {
                   defaultValue={remoteConfig?.customerCenterText || ""}
                   name="customerCenterText"
                 />
+              </label>
+            </div>
+          </AdminPanel>
+
+          <AdminPanel
+            title="배송비 정책"
+            description="장바구니, 결제 승인, 주문 생성에서 동일한 서버 계산 규칙을 사용합니다."
+          >
+            <div className="admin-field-grid three">
+              <label className="admin-field">
+                <span>기본 배송비</span>
+                <input
+                  className="admin-input"
+                  defaultValue={policyBundle.commerce.baseShippingFee}
+                  min="0"
+                  name="baseShippingFee"
+                  required
+                  step="100"
+                  type="number"
+                />
+              </label>
+              <label className="admin-field">
+                <span>무료배송 기준금액</span>
+                <input
+                  className="admin-input"
+                  defaultValue={policyBundle.commerce.freeShippingThreshold}
+                  min="0"
+                  name="freeShippingThreshold"
+                  required
+                  step="1000"
+                  type="number"
+                />
+              </label>
+              <label className="admin-field">
+                <span>도서산간 추가비</span>
+                <input
+                  className="admin-input"
+                  defaultValue={policyBundle.commerce.remoteAreaFee}
+                  min="0"
+                  name="remoteAreaFee"
+                  step="100"
+                  type="number"
+                />
+              </label>
+              <label className="admin-field span-two">
+                <span>도서산간 우편번호 범위</span>
+                <textarea
+                  className="admin-textarea"
+                  defaultValue={formatZipRangeLines(policyBundle.commerce.remoteAreaZipRanges)}
+                  name="remoteAreaZipRanges"
+                  placeholder={"63000-63644\n40200-40240"}
+                  rows={4}
+                />
+                <small className="admin-field-hint">
+                  한 줄에 하나씩 5자리 우편번호 범위를 입력하세요. 기본값은 제주(63000-63644)와 울릉도(40200-40240)이며,
+                  배송지 우편번호가 범위에 포함되면 무료배송 조건을 충족해도 추가비가 부과됩니다.
+                </small>
+              </label>
+              <label className="admin-field span-two">
+                <span>기본 배송 안내</span>
+                <textarea
+                  className="admin-textarea"
+                  defaultValue={policyBundle.commerce.deliveryGuide}
+                  name="defaultDeliveryGuide"
+                  required
+                />
+              </label>
+              <label className="admin-field span-two">
+                <span>기본 교환·반품 안내</span>
+                <textarea
+                  className="admin-textarea"
+                  defaultValue={policyBundle.commerce.exchangeReturnGuide}
+                  name="defaultExchangeReturnGuide"
+                  required
+                />
+              </label>
+              <label className="admin-field span-two">
+                <span>쇼핑안전거래 TIP</span>
+                <textarea
+                  className="admin-textarea"
+                  defaultValue={policyBundle.commerce.safetyTip}
+                  name="defaultSafetyTip"
+                />
+              </label>
+            </div>
+          </AdminPanel>
+
+          <AdminPanel
+            title="판매자정보"
+            description="공개몰 푸터와 상품 상세에 공통으로 표시됩니다. 실제 계약·결제 주체의 정보를 입력하세요."
+          >
+            <div className="admin-field-grid two">
+              <label className="admin-field">
+                <span>쇼핑몰명</span>
+                <input className="admin-input" defaultValue={policyBundle.seller.shopName} name="sellerShopName" required type="text" />
+              </label>
+              <label className="admin-field">
+                <span>상호명</span>
+                <input className="admin-input" defaultValue={policyBundle.seller.companyName} name="sellerCompanyName" required type="text" />
+              </label>
+              <label className="admin-field">
+                <span>대표자명</span>
+                <input className="admin-input" defaultValue={policyBundle.seller.representativeName} name="sellerRepresentativeName" required type="text" />
+              </label>
+              <label className="admin-field">
+                <span>사업자등록번호</span>
+                <input
+                  className="admin-input"
+                  defaultValue={policyBundle.seller.businessRegistrationNumber}
+                  name="sellerBusinessRegistrationNumber"
+                  required
+                  type="text"
+                />
+              </label>
+              <label className="admin-field">
+                <span>통신판매업 신고번호</span>
+                <input
+                  className="admin-input"
+                  defaultValue={policyBundle.seller.mailOrderRegistrationNumber}
+                  name="sellerMailOrderRegistrationNumber"
+                  type="text"
+                />
+              </label>
+              <label className="admin-field">
+                <span>고객센터 전화</span>
+                <input className="admin-input" defaultValue={policyBundle.seller.supportPhone} name="sellerSupportPhone" required type="tel" />
+              </label>
+              <label className="admin-field span-two">
+                <span>사업장 주소</span>
+                <input className="admin-input" defaultValue={policyBundle.seller.businessAddress} name="sellerBusinessAddress" required type="text" />
+              </label>
+              <label className="admin-field span-two">
+                <span>고객센터 이메일</span>
+                <input className="admin-input" defaultValue={policyBundle.seller.supportEmail} name="sellerSupportEmail" required type="email" />
               </label>
             </div>
           </AdminPanel>

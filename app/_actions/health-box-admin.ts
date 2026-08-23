@@ -1,17 +1,28 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 import {
   fetchAdminDealerMalls,
-  fetchAdminProducts,
   hasHealthBoxApi,
   healthBoxFetch,
+  healthBoxInternalHeaders,
   type HealthBoxSalesPolicy,
   type HealthBoxRecord,
 } from "../_lib/health-box-api";
-import { mapProductRows } from "../_lib/health-box-presenters";
+import { requireAdminSession } from "../_lib/admin-session";
+import {
+  parseInformationLines,
+  serializeProductCommercePolicy,
+  type ProductDisclosureType,
+} from "../_lib/product-commerce";
+import {
+  defaultStorefrontPolicyBundle,
+  normalizeZipRanges,
+  serializeStorefrontPolicyBundle,
+} from "../_lib/storefront-policy";
+import { sanitizeRichHtml } from "@/lib/sanitize-rich-html";
 
 export type CreateDealerMallDialogState = {
   message?: string;
@@ -41,6 +52,28 @@ function optionalNumber(formData: FormData, key: string) {
 
   const number = Number(value);
   return Number.isFinite(number) ? number : undefined;
+}
+
+function stringValues(formData: FormData, key: string) {
+  return Array.from(
+    new Set(
+      formData
+        .getAll(key)
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function positiveIntegerValues(formData: FormData, key: string) {
+  return Array.from(
+    new Set(
+      stringValues(formData, key)
+        .map(Number)
+        .filter((value) => Number.isSafeInteger(value) && value > 0),
+    ),
+  );
 }
 
 function collectStorefrontNavigationItems(formData: FormData) {
@@ -235,6 +268,15 @@ function buildRedirectWithMessage(path: string, key: string, value: string) {
   return `${path}${path.includes("?") ? "&" : "?"}${params.toString()}`;
 }
 
+function redirectFormError(formData: FormData, message: string): never {
+  const redirectTo = optionalString(formData, "errorRedirectTo") || optionalString(formData, "redirectTo");
+  if (redirectTo) {
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", message));
+  }
+
+  throw new Error(message);
+}
+
 function actionErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message.trim()) {
     return error.message.trim();
@@ -257,19 +299,6 @@ function isMissingEndpointError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return /HealthBox API (404|405):/i.test(message);
 }
-
-async function findProductWithSlug(slug: string, currentProductId: number | undefined) {
-  const page = await fetchAdminProducts({ q: slug, page: 1, size: 50 });
-
-  return mapProductRows(page).items.find((product) => {
-    const isSameProduct = currentProductId && product.recordId === currentProductId;
-    return !isSameProduct && (product.sourceSlug === slug || product.slug === slug);
-  });
-}
-
-const PRODUCT_IMAGE_MEMBER_NO = "505";
-const DEFAULT_UPLOAD_BASE_URL = "https://cloud.1472.ai:18443";
-const DEFAULT_CDN_BASE_URL = "https://cdn.1472.ai";
 
 type UploadedFileResponse = {
   fileDownloadUri?: string;
@@ -302,25 +331,22 @@ async function fetchExistingProductForSave(id: number | undefined) {
 }
 
 function getUploadBaseUrl() {
-  const explicitBaseUrl = process.env.FILE_UPLOAD_API_BASE_URL?.trim();
+  const explicitBaseUrl = process.env.HEALTH_BOX_UPLOAD_API_BASE_URL?.trim();
   if (explicitBaseUrl) {
     return explicitBaseUrl.replace(/\/+$/, "");
   }
 
   const healthBoxBaseUrl = process.env.HEALTH_BOX_API_BASE_URL?.trim();
   if (healthBoxBaseUrl) {
-    try {
-      return new URL(healthBoxBaseUrl).origin;
-    } catch {
-      return healthBoxBaseUrl.replace(/\/api\/v\d+\/?$/i, "").replace(/\/+$/, "");
-    }
+    return healthBoxBaseUrl.replace(/\/+$/, "");
   }
 
-  return DEFAULT_UPLOAD_BASE_URL;
+  throw new Error("HEALTH_BOX_UPLOAD_API_BASE_URL or HEALTH_BOX_API_BASE_URL is required");
 }
 
 function getCdnBaseUrl() {
-  return process.env.FILE_CDN_BASE_URL?.trim().replace(/\/+$/, "") || DEFAULT_CDN_BASE_URL;
+  const explicitBaseUrl = process.env.HEALTH_BOX_CDN_BASE_URL?.trim();
+  return explicitBaseUrl?.replace(/\/+$/, "") || new URL(getUploadBaseUrl()).origin;
 }
 
 function normalizeCdnUrl(value: string, cdnBaseUrl = getCdnBaseUrl()) {
@@ -329,19 +355,19 @@ function normalizeCdnUrl(value: string, cdnBaseUrl = getCdnBaseUrl()) {
     return "";
   }
 
-  if (/^https?:\/\/cloud\.1472\.ai(?::\d+)?\/downloadFile\//i.test(trimmed)) {
-    return trimmed.replace(/^https?:\/\/cloud\.1472\.ai(?::\d+)?\/downloadFile\//i, `${cdnBaseUrl}/`);
+  const baseUrl = new URL(cdnBaseUrl);
+  const normalizedUrl = /^https?:\/\//i.test(trimmed)
+    ? new URL(trimmed)
+    : trimmed.startsWith("//")
+      ? new URL(`${baseUrl.protocol}${trimmed}`)
+      : new URL(trimmed.replace(/^\/?/, "/"), baseUrl);
+
+  if (normalizedUrl.hostname.toLowerCase() === baseUrl.hostname.toLowerCase()) {
+    normalizedUrl.protocol = baseUrl.protocol;
+    normalizedUrl.host = baseUrl.host;
   }
 
-  if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed;
-  }
-
-  if (trimmed.startsWith("//")) {
-    return `https:${trimmed}`;
-  }
-
-  return new URL(trimmed.replace(/^\/?/, "/"), cdnBaseUrl).toString();
+  return normalizedUrl.toString();
 }
 
 function getProductImageFiles(formData: FormData) {
@@ -381,36 +407,15 @@ async function uploadProductImageFiles(files: File[]) {
   const uploadBaseUrl = getUploadBaseUrl();
   const cdnBaseUrl = getCdnBaseUrl();
 
-  if (files.length === 1) {
-    const uploadUrl = new URL("/api/v1/uploadFile", uploadBaseUrl);
-    uploadUrl.searchParams.set("fileType", "I");
-    uploadUrl.searchParams.set("ids", "S");
-    uploadUrl.searchParams.set("mberNo", PRODUCT_IMAGE_MEMBER_NO);
-
-    const outboundFormData = new FormData();
-    outboundFormData.set("file", files[0]);
-
-    const uploaded = await parseUploadResponse(
-      await fetch(uploadUrl, {
-        method: "POST",
-        body: outboundFormData,
-      }),
-    );
-
-    return uploaded.map((file) => (file.fileDownloadUri ? normalizeCdnUrl(file.fileDownloadUri, cdnBaseUrl) : ""));
-  }
-
   const outboundFormData = new FormData();
-  outboundFormData.set("fileType", "I");
-  outboundFormData.set("ids", "S");
-  outboundFormData.set("mberNo", PRODUCT_IMAGE_MEMBER_NO);
   for (const file of files) {
     outboundFormData.append("files", file);
   }
 
   const uploaded = await parseUploadResponse(
-    await fetch(new URL("/api/v1/uploadFiles", uploadBaseUrl), {
+    await fetch(`${uploadBaseUrl}/health-box/admin/files`, {
       method: "POST",
+      headers: healthBoxInternalHeaders(),
       body: outboundFormData,
     }),
   );
@@ -550,7 +555,54 @@ async function submitDealerMall(formData: FormData): Promise<CreateDealerMallDia
 }
 
 export async function saveStorefrontConfigAction(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
+
+  const policyText = serializeStorefrontPolicyBundle({
+    message: optionalString(formData, "policyText") || "",
+    commerce: {
+      baseShippingFee:
+        optionalNumber(formData, "baseShippingFee") ??
+        defaultStorefrontPolicyBundle.commerce.baseShippingFee,
+      freeShippingThreshold:
+        optionalNumber(formData, "freeShippingThreshold") ??
+        defaultStorefrontPolicyBundle.commerce.freeShippingThreshold,
+      remoteAreaFee:
+        optionalNumber(formData, "remoteAreaFee") ??
+        defaultStorefrontPolicyBundle.commerce.remoteAreaFee,
+      remoteAreaZipRanges: normalizeZipRanges(optionalString(formData, "remoteAreaZipRanges") || ""),
+      deliveryGuide:
+        optionalString(formData, "defaultDeliveryGuide") ||
+        defaultStorefrontPolicyBundle.commerce.deliveryGuide,
+      exchangeReturnGuide:
+        optionalString(formData, "defaultExchangeReturnGuide") ||
+        defaultStorefrontPolicyBundle.commerce.exchangeReturnGuide,
+      safetyTip:
+        optionalString(formData, "defaultSafetyTip") ||
+        defaultStorefrontPolicyBundle.commerce.safetyTip,
+    },
+    seller: {
+      shopName:
+        optionalString(formData, "sellerShopName") ||
+        defaultStorefrontPolicyBundle.seller.shopName,
+      companyName:
+        optionalString(formData, "sellerCompanyName") ||
+        defaultStorefrontPolicyBundle.seller.companyName,
+      representativeName:
+        optionalString(formData, "sellerRepresentativeName") ||
+        defaultStorefrontPolicyBundle.seller.representativeName,
+      businessRegistrationNumber:
+        optionalString(formData, "sellerBusinessRegistrationNumber") ||
+        defaultStorefrontPolicyBundle.seller.businessRegistrationNumber,
+      mailOrderRegistrationNumber:
+        optionalString(formData, "sellerMailOrderRegistrationNumber") || "",
+      businessAddress:
+        optionalString(formData, "sellerBusinessAddress") ||
+        defaultStorefrontPolicyBundle.seller.businessAddress,
+      supportPhone: optionalString(formData, "sellerSupportPhone") || "",
+      supportEmail: optionalString(formData, "sellerSupportEmail") || "",
+    },
+  });
 
   await healthBoxFetch("/health-box/admin/public-site-config", {
     method: "PUT",
@@ -565,7 +617,7 @@ export async function saveStorefrontConfigAction(formData: FormData) {
       metaDescription: optionalString(formData, "metaDescription"),
       mainNavigationJson: collectStorefrontNavigationItems(formData),
       searchPlaceholder: optionalString(formData, "searchPlaceholder"),
-      policyText: optionalString(formData, "policyText"),
+      policyText,
       customerCenterText: optionalString(formData, "customerCenterText"),
     },
   });
@@ -578,6 +630,7 @@ export async function saveStorefrontConfigAction(formData: FormData) {
 }
 
 export async function saveDealerMallPublicConfigAction(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   const dealerMallId = requiredString(formData, "dealerMallId");
@@ -629,6 +682,7 @@ export async function saveDealerMallPublicConfigAction(formData: FormData) {
 }
 
 export async function createDealerMallAction(formData: FormData) {
+  await requireAdminSession();
   const redirectTo = optionalString(formData, "redirectTo") || "/admin/dealers";
   const result = await submitDealerMall(formData);
 
@@ -649,10 +703,12 @@ export async function createDealerMallDialogAction(
   _previousState: CreateDealerMallDialogState,
   formData: FormData,
 ) {
+  await requireAdminSession();
   return submitDealerMall(formData);
 }
 
 export async function approveDealerApplicationAction(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
   const applicationId = requiredString(formData, "applicationId");
   if (!applicationId) {
@@ -671,6 +727,7 @@ export async function approveDealerApplicationAction(formData: FormData) {
 }
 
 export async function rejectDealerApplicationAction(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
   const applicationId = requiredString(formData, "applicationId");
   if (!applicationId) {
@@ -690,6 +747,7 @@ export async function rejectDealerApplicationAction(formData: FormData) {
 }
 
 export async function approveBuyerSignupApplicationAction(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
   const applicationId = requiredString(formData, "applicationId");
   const redirectTo = optionalString(formData, "redirectTo") || "/admin/members";
@@ -724,6 +782,7 @@ export async function approveBuyerSignupApplicationAction(formData: FormData) {
 }
 
 export async function rejectBuyerSignupApplicationAction(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
   const applicationId = requiredString(formData, "applicationId");
   if (!applicationId) {
@@ -742,13 +801,14 @@ export async function rejectBuyerSignupApplicationAction(formData: FormData) {
 }
 
 export async function saveNoticeAction(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   const id = optionalNumber(formData, "id");
   const title = requiredString(formData, "title");
-  const body = requiredString(formData, "body");
+  const body = sanitizeRichHtml(requiredString(formData, "body"));
   if (!title || !body) {
-    throw new Error("공지 제목과 내용을 입력해주세요.");
+    redirectFormError(formData, "공지 제목과 내용을 입력해주세요.");
   }
 
   const summary = optionalString(formData, "summary") || buildNoticeSummary(body) || title;
@@ -780,6 +840,7 @@ export async function saveNoticeAction(formData: FormData) {
 }
 
 export async function deleteNoticeAction(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   const noticeId = optionalNumber(formData, "id");
@@ -799,7 +860,8 @@ export async function deleteNoticeAction(formData: FormData) {
   redirect(buildRedirectWithMessage("/admin/notices", "toast", "공지가 삭제되었습니다."));
 }
 
-export async function saveProductAction(formData: FormData) {
+async function saveProduct(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   const name = requiredString(formData, "name");
@@ -817,6 +879,46 @@ export async function saveProductAction(formData: FormData) {
   const optionGroups = optionalJsonArray<HealthBoxRecord>(formData, "optionGroups") || [];
   const skus = optionalJsonArray<HealthBoxRecord>(formData, "skus") || [];
   const memberPrice = optionalNumber(formData, "memberPrice") ?? 0;
+  const consumerPrice = optionalNumber(formData, "consumerPrice") ?? 0;
+  if (consumerPrice > 0 && memberPrice > consumerPrice) {
+    throw new Error("회원가는 소비자가보다 높을 수 없습니다.");
+  }
+
+  const primaryCategoryId = optionalNumber(formData, "categoryId") ?? 1;
+  const categoryIds = Array.from(
+    new Set([primaryCategoryId, ...positiveIntegerValues(formData, "categoryIds")]),
+  );
+  const detailHtml = sanitizeRichHtml(optionalString(formData, "detailHtml") || "");
+  const disclosureSource = optionalString(formData, "disclosureSource") === "DETAIL_HTML"
+    ? "DETAIL_HTML"
+    : "STRUCTURED";
+  const disclosureTypeValue = optionalString(formData, "disclosureType");
+  const disclosureType: ProductDisclosureType =
+    disclosureTypeValue === "GENERAL" ||
+    disclosureTypeValue === "PROCESSED_FOOD" ||
+    disclosureTypeValue === "HEALTH_FUNCTIONAL_FOOD"
+      ? disclosureTypeValue
+      : "HEALTH_FUNCTIONAL_FOOD";
+  const disclosureItems = parseInformationLines(optionalString(formData, "disclosureItems"));
+  if (disclosureSource === "STRUCTURED" && !disclosureItems.length) {
+    throw new Error("상품정보 제공고시를 한 개 이상 입력해주세요.");
+  }
+  if (disclosureSource === "DETAIL_HTML" && !detailHtml) {
+    throw new Error("상세페이지 참조를 선택하려면 상품 상세 콘텐츠를 입력해주세요.");
+  }
+
+  const salesPolicyText = serializeProductCommercePolicy({
+    salesPolicyText: optionalString(formData, "salesPolicyText") || "",
+    exchangeReturnGuide: optionalString(formData, "exchangeReturnGuide") || "",
+    cautions: optionalString(formData, "cautions") || "",
+    safetyTip: optionalString(formData, "safetyTip") || "",
+    disclosureSource,
+    disclosureType,
+    disclosureItems,
+    purchaseInformation: parseInformationLines(optionalString(formData, "purchaseInformation")),
+    categoryIds,
+    bundleProductSlugs: stringValues(formData, "bundleProductSlugs"),
+  });
   const hasOptionRows = skus.some((sku) => Array.isArray(sku.optionValueCodes) && sku.optionValueCodes.length > 0);
   const optionUseYn = requestedOptionUseYn === "Y" && (optionGroups.length > 0 || hasOptionRows) ? "Y" : "N";
   const normalizedSkus =
@@ -851,10 +953,10 @@ export async function saveProductAction(formData: FormData) {
   const productPayload = {
     id: productId ?? 0,
     brandName: optionalString(formData, "brandName") || "",
-    categoryId: optionalNumber(formData, "categoryId") ?? 1,
-    consumerPrice: optionalNumber(formData, "consumerPrice") ?? 0,
+    categoryId: primaryCategoryId,
+    consumerPrice,
     deliveryPolicyText: optionalString(formData, "deliveryPolicyText") || optionalString(formData, "shipping") || "",
-    detailHtml: optionalString(formData, "detailHtml") || "",
+    detailHtml,
     mediaItems: mediaItems.map((item) => ({
       id: item.id ?? 0,
       altText: item.altText || name,
@@ -868,7 +970,7 @@ export async function saveProductAction(formData: FormData) {
     optionUseYn,
     priceExposurePolicy: optionalString(formData, "priceExposurePolicy") || "MEMBER_ONLY",
     publishStatus: optionalString(formData, "publishStatus") || "정상 판매",
-    salesPolicyText: optionalString(formData, "salesPolicyText") || "",
+    salesPolicyText,
     settlementBasePrice: optionalNumber(formData, "settlementBasePrice") ?? 0,
     skus: normalizedSkus,
     sortOrder: optionalNumber(formData, "sortOrder") ?? 0,
@@ -884,7 +986,10 @@ export async function saveProductAction(formData: FormData) {
     });
   } catch (error) {
     console.error("[saveProductAction]", error);
-    const redirectTo = optionalString(formData, "redirectTo") || (productId ? `/admin/products/product-${productId}` : "/admin/products");
+    const redirectTo =
+      optionalString(formData, "errorRedirectTo") ||
+      optionalString(formData, "redirectTo") ||
+      (productId ? `/admin/products/product-${productId}` : "/admin/products/new");
     redirect(
       buildRedirectWithMessage(
         redirectTo,
@@ -906,13 +1011,74 @@ export async function saveProductAction(formData: FormData) {
   redirectIfRequested(formData);
 }
 
+export async function saveProductAction(formData: FormData) {
+  try {
+    await saveProduct(formData);
+  } catch (error) {
+    unstable_rethrow(error);
+    console.error("[saveProductAction]", error);
+    redirectFormError(formData, actionErrorMessage(error, "상품 저장 중 오류가 발생했습니다."));
+  }
+}
+
+export async function answerProductInquiryAction(formData: FormData) {
+  await requireAdminSession();
+  ensureApiConfigured();
+
+  const inquiryId = optionalNumber(formData, "inquiryId");
+  const productId = optionalNumber(formData, "productId");
+  const answer = requiredString(formData, "answer");
+  const redirectTo = optionalString(formData, "redirectTo") || "/admin/products";
+
+  if (!inquiryId || !productId) {
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", "문의 정보가 올바르지 않습니다."));
+  }
+  if (answer.length < 2 || answer.length > 2_000) {
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", "답변은 2자 이상 2,000자 이하로 입력해주세요."));
+  }
+
+  const body = { answer, answerText: answer, productId, status: "ANSWERED" };
+  try {
+    try {
+      await healthBoxFetch(`/health-box/admin/product-inquiries/${inquiryId}/answer`, {
+        method: "PUT",
+        body,
+      });
+    } catch (error) {
+      if (!isMissingEndpointError(error)) {
+        throw error;
+      }
+      await healthBoxFetch(`/health-box/admin/product-inquiries/${inquiryId}`, {
+        method: "PUT",
+        body,
+      });
+    }
+  } catch (error) {
+    console.error("[answerProductInquiryAction]", error);
+    redirect(
+      buildRedirectWithMessage(
+        redirectTo,
+        "toastError",
+        isMissingEndpointError(error)
+          ? "상품 문의 답변 API가 아직 연결되지 않았습니다."
+          : actionErrorMessage(error, "상품 문의 답변을 저장하지 못했습니다."),
+      ),
+    );
+  }
+
+  revalidatePath(redirectTo);
+  revalidatePath(`/product/product-${productId}`);
+  redirect(buildRedirectWithMessage(redirectTo, "toast", "상품 문의 답변을 저장했습니다."));
+}
+
 export async function saveCategoryAction(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   const name = requiredString(formData, "name");
   const slug = optionalString(formData, "slug") || buildSafeSlug(name, "category");
   if (!name) {
-    throw new Error("카테고리명을 입력해주세요.");
+    redirectFormError(formData, "카테고리명을 입력해주세요.");
   }
 
   await healthBoxFetch("/health-box/admin/categories", {
@@ -934,6 +1100,7 @@ export async function saveCategoryAction(formData: FormData) {
 }
 
 export async function saveCategoryOrderAction(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   const categories = optionalJsonArray<HealthBoxRecord>(formData, "categoryOrder") || [];
@@ -963,6 +1130,7 @@ export async function saveCategoryOrderAction(formData: FormData) {
 }
 
 export async function deleteCategoryAction(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   const categoryId = optionalNumber(formData, "id");
@@ -987,6 +1155,7 @@ export async function saveSalesPolicyTemplateAction(input: {
   status?: string | null;
   title: string;
 }) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   const title = input.title.trim();
@@ -1012,6 +1181,7 @@ export async function saveSalesPolicyTemplateAction(input: {
 }
 
 export async function fetchSalesPolicyTemplateAction(policyId: number) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   if (!policyId) {
@@ -1022,6 +1192,7 @@ export async function fetchSalesPolicyTemplateAction(policyId: number) {
 }
 
 export async function deleteSalesPolicyTemplateAction(policyId: number) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   if (!policyId) {
@@ -1043,6 +1214,7 @@ export async function saveDeliveryPolicyTemplateAction(input: {
   status?: string | null;
   title: string;
 }) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   const title = input.title.trim();
@@ -1068,6 +1240,7 @@ export async function saveDeliveryPolicyTemplateAction(input: {
 }
 
 export async function fetchDeliveryPolicyTemplateAction(policyId: number) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   if (!policyId) {
@@ -1078,6 +1251,7 @@ export async function fetchDeliveryPolicyTemplateAction(policyId: number) {
 }
 
 export async function deleteDeliveryPolicyTemplateAction(policyId: number) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   if (!policyId) {
@@ -1093,6 +1267,7 @@ export async function deleteDeliveryPolicyTemplateAction(policyId: number) {
 }
 
 export async function deleteProductAction(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   const productId = optionalNumber(formData, "id");
@@ -1116,11 +1291,13 @@ export async function deleteProductAction(formData: FormData) {
 }
 
 export async function cancelOrderAction(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   const orderId = requiredString(formData, "orderId");
-  if (!orderId) {
-    throw new Error("orderId is required");
+  const cancellationRequestId = requiredString(formData, "cancellationRequestId");
+  if (!orderId || !cancellationRequestId) {
+    throw new Error("취소 요청 정보가 없습니다.");
   }
 
   await healthBoxFetch(`/health-box/admin/orders/${orderId}/cancel`, {
@@ -1132,18 +1309,21 @@ export async function cancelOrderAction(formData: FormData) {
 }
 
 export async function partialCancelOrderAction(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   const orderId = requiredString(formData, "orderId");
+  const cancellationRequestId = requiredString(formData, "cancellationRequestId");
   const orderItemId = optionalNumber(formData, "orderItemId");
   const quantity = optionalNumber(formData, "quantity");
-  if (!orderId || !orderItemId || !quantity) {
+  if (!orderId || !cancellationRequestId || !orderItemId || !quantity) {
     throw new Error("부분취소할 주문상품과 수량을 선택해주세요.");
   }
 
   await healthBoxFetch(`/health-box/admin/orders/${orderId}/partial-cancel`, {
     method: "POST",
     body: {
+      requestId: cancellationRequestId,
       items: [{ orderItemId, quantity }],
     },
   });
@@ -1153,6 +1333,7 @@ export async function partialCancelOrderAction(formData: FormData) {
 }
 
 export async function updateShipmentStatusAction(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   const shipmentId = requiredString(formData, "shipmentId");
@@ -1191,6 +1372,7 @@ export async function updateShipmentStatusAction(formData: FormData) {
 }
 
 export async function bulkPrepareShipmentsAction(formData: FormData) {
+  await requireAdminSession();
   ensureApiConfigured();
 
   const shipmentIds = formData

@@ -52,7 +52,19 @@ export function MemberAddressManager() {
   }
 
   useEffect(() => {
-    void loadAddresses();
+    let active = true;
+    void requestJson<{ addresses: MemberAddress[] }>("/api/member/addresses")
+      .then((data) => {
+        if (active) setAddresses(data.addresses || []);
+      })
+      .catch((loadError: unknown) => {
+        if (active) {
+          setError(loadError instanceof Error ? loadError.message : "배송지를 불러오지 못했습니다.");
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   function startCreate() {
@@ -190,35 +202,35 @@ export function MemberAddressManager() {
               <div className="cart-order-form">
                 <label className="member-auth-field">
                   <span>별칭</span>
-                  <input className="member-auth-input" onChange={(event) => setForm({ ...form, addressAlias: event.target.value })} placeholder="예: 집, 회사" value={form.addressAlias} />
+                  <input className="member-auth-input" onChange={(event) => setForm((current) => ({ ...current, addressAlias: event.target.value }))} placeholder="예: 집, 회사" value={form.addressAlias} />
                 </label>
                 <label className="member-auth-field">
                   <span>받는 분</span>
-                  <input className="member-auth-input" onChange={(event) => setForm({ ...form, receiverName: event.target.value })} value={form.receiverName} />
+                  <input className="member-auth-input" onChange={(event) => setForm((current) => ({ ...current, receiverName: event.target.value }))} value={form.receiverName} />
                 </label>
                 <label className="member-auth-field">
                   <span>연락처</span>
-                  <input className="member-auth-input" inputMode="tel" onChange={(event) => setForm({ ...form, receiverPhone: event.target.value })} value={form.receiverPhone} />
+                  <input className="member-auth-input" inputMode="tel" onChange={(event) => setForm((current) => ({ ...current, receiverPhone: event.target.value }))} value={form.receiverPhone} />
                 </label>
                 <label className="member-auth-field">
                   <span>우편번호</span>
                   <div className="address-search-row">
-                    <input className="member-auth-input" onChange={(event) => setForm({ ...form, zipCode: event.target.value })} value={form.zipCode} />
-                    <AddressSearchButton onSelect={(address) => setForm({ ...form, ...address })} />
+                    <input className="member-auth-input" onChange={(event) => setForm((current) => ({ ...current, zipCode: event.target.value }))} value={form.zipCode} />
+                    <AddressSearchButton onSelect={(address) => setForm((current) => ({ ...current, ...address }))} />
                   </div>
                 </label>
                 <label className="member-auth-field">
                   <span>주소</span>
-                  <input className="member-auth-input" onChange={(event) => setForm({ ...form, baseAddress: event.target.value })} value={form.baseAddress} />
+                  <input className="member-auth-input" onChange={(event) => setForm((current) => ({ ...current, baseAddress: event.target.value }))} value={form.baseAddress} />
                 </label>
                 <label className="member-auth-field">
                   <span>상세주소</span>
-                  <input className="member-auth-input" onChange={(event) => setForm({ ...form, detailAddress: event.target.value })} value={form.detailAddress} />
+                  <input className="member-auth-input" onChange={(event) => setForm((current) => ({ ...current, detailAddress: event.target.value }))} value={form.detailAddress} />
                 </label>
                 <label className="member-auth-check">
                   <input
                     checked={form.defaultYn === "Y"}
-                    onChange={(event) => setForm({ ...form, defaultYn: event.target.checked ? "Y" : "N" })}
+                    onChange={(event) => setForm((current) => ({ ...current, defaultYn: event.target.checked ? "Y" : "N" }))}
                     type="checkbox"
                   />
                   <span>기본 배송지로 사용</span>

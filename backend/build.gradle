@@ -1,0 +1,51 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'com.everybuy.healthbox'
+version = '0.1.0'
+sourceCompatibility = '1.8'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa:2.2.6.RELEASE'
+    implementation 'org.springframework.boot:spring-boot-starter-web:2.2.6.RELEASE'
+    implementation 'org.springframework.security:spring-security-crypto:5.2.2.RELEASE'
+    implementation 'org.mariadb.jdbc:mariadb-java-client:2.5.4'
+    implementation 'com.google.code.gson:gson:2.8.5'
+    implementation 'io.swagger:swagger-annotations:1.6.12'
+    implementation 'javax.xml.bind:jaxb-api:2.3.1'
+    runtimeOnly 'org.glassfish.jaxb:jaxb-runtime:2.3.3'
+
+    compileOnly 'org.projectlombok:lombok:1.18.20'
+    annotationProcessor 'org.projectlombok:lombok:1.18.20'
+    testCompileOnly 'org.projectlombok:lombok:1.18.20'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.20'
+
+    testImplementation('org.springframework.boot:spring-boot-starter-test:2.2.6.RELEASE') {
+        exclude group: 'org.junit.vintage', module: 'junit-vintage-engine'
+    }
+}
+
+application {
+    mainClass = 'healthBoxApi.HealthBoxApiApplication'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.register('generateSchema', JavaExec) {
+    dependsOn classes
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'healthBoxApi.tools.HealthBoxSchemaExport'
+    args file('src/main/resources/sql/V1__health_box_schema.sql').absolutePath
+}
+
+test {
+    useJUnitPlatform()
+}

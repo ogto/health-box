@@ -1,10 +1,13 @@
 import Link from "next/link";
 
-import { saveProductAction } from "../../../_actions/health-box-admin";
 import { AdminHeader } from "../../../_components/admin/admin-header";
+import { AdminProductCategoryPicker } from "../../../_components/admin/admin-product-category-picker";
 import { AdminProductDetailBlocksEditor } from "../../../_components/admin/admin-product-detail-blocks-editor";
+import { AdminProductDisclosureFields } from "../../../_components/admin/admin-product-disclosure-fields";
+import { AdminProductForm } from "../../../_components/admin/admin-product-form";
 import { AdminProductImageUpload } from "../../../_components/admin/admin-product-image-upload";
 import { AdminProductOptionsEditor } from "../../../_components/admin/admin-product-options-editor";
+import { AdminProductRelationsPicker } from "../../../_components/admin/admin-product-relations-picker";
 import {
   AdminPolicyTemplatePicker,
   type AdminPolicyTemplate,
@@ -14,10 +17,12 @@ import { AdminBadge, AdminPanel } from "../../../_components/admin/admin-ui";
 import {
   fetchAdminDeliveryPolicies,
   fetchAdminCategories,
+  fetchAdminProducts,
   fetchAdminSalesPolicies,
   hasHealthBoxApi,
   type HealthBoxSalesPolicy,
 } from "../../../_lib/health-box-api";
+import { mapProductRows } from "../../../_lib/health-box-presenters";
 
 const statusOptions = [
   { label: "판매중", value: "ACTIVE" },
@@ -57,13 +62,21 @@ function mapPolicyTemplates(
 
 export default async function AdminProductNewPage() {
   const apiConnected = hasHealthBoxApi();
-  const [salesPolicyTemplates, deliveryPolicyTemplates, categories] = apiConnected
+  const [salesPolicyTemplates, deliveryPolicyTemplates, categories, productPage] = apiConnected
     ? await Promise.all([
         fetchAdminSalesPolicies().then((policies) => mapPolicyTemplates(policies, "sales")),
         fetchAdminDeliveryPolicies().then((policies) => mapPolicyTemplates(policies, "delivery")),
         fetchAdminCategories(),
+        fetchAdminProducts({ page: 1, size: 200 }),
       ])
-    : [[], [], []];
+    : [[], [], [], null];
+  const productOptions = mapProductRows(productPage).items;
+  const relationOptions = productOptions.map(({ brand, image, slug, title }) => ({
+    brand,
+    image,
+    slug,
+    title,
+  }));
 
   return (
     <div className="admin-page">
@@ -76,8 +89,9 @@ export default async function AdminProductNewPage() {
         }
       />
 
-      <form action={saveProductAction} className="admin-form-layout">
+      <AdminProductForm className="admin-form-layout" id="admin-product-create-form">
         <input name="redirectTo" type="hidden" value="/admin/products" />
+        <input name="errorRedirectTo" type="hidden" value="/admin/products/new" />
         <input name="toast" type="hidden" value="상품 등록이 완료되었습니다." />
 
         <div className="admin-form-main">
@@ -88,31 +102,31 @@ export default async function AdminProductNewPage() {
                 <input className="admin-input" name="brandName" placeholder="예: 건강창고" type="text" />
               </label>
 
-              <label className="admin-field">
-                <span>카테고리</span>
-                <select className="admin-select" defaultValue={categories?.[0]?.id ? String(categories[0].id) : "1"} name="categoryId">
-                  {categories?.length ? (
-                    categories.map((category) => (
-                      <option key={category.id || category.slug || category.name} value={category.id}>
-                        {category.name || category.categoryCode || `카테고리 ${category.id}`}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="1">기본 카테고리</option>
-                  )}
-                </select>
-              </label>
-
-              <label className="admin-field span-two">
-                <span>상품명</span>
-                <input className="admin-input" name="name" placeholder="상품명을 입력하세요" required type="text" />
-              </label>
+              <AdminProductCategoryPicker
+                categories={categories || []}
+                defaultPrimaryId={categories?.[0]?.id || 1}
+              >
+                <label className="admin-field span-two">
+                  <span>
+                    상품명
+                    <em className="admin-required-mark">필수</em>
+                  </span>
+                  <input className="admin-input" name="name" placeholder="상품명을 입력하세요" required type="text" />
+                </label>
+              </AdminProductCategoryPicker>
 
             </div>
           </AdminPanel>
 
           <AdminPanel title="상품 상세 콘텐츠">
             <AdminProductDetailBlocksEditor />
+          </AdminPanel>
+
+          <AdminPanel
+            title="상품정보 제공고시"
+            description="상품군별 필수정보를 항목: 내용 형식으로 한 줄씩 입력합니다."
+          >
+            <AdminProductDisclosureFields />
           </AdminPanel>
 
           <AdminPanel title="가격 / 정산">
@@ -181,7 +195,31 @@ export default async function AdminProductNewPage() {
                   type="delivery"
                 />
               </div>
+              <label className="admin-field span-two">
+                <span>상품별 교환·반품 안내</span>
+                <textarea
+                  className="admin-textarea"
+                  name="exchangeReturnGuide"
+                  placeholder="비워두면 홈페이지 관리의 기본 교환·반품 안내를 사용합니다."
+                />
+              </label>
+              <label className="admin-field span-two">
+                <span>주의사항</span>
+                <textarea className="admin-textarea" name="cautions" placeholder="상품별 섭취·보관·사용 주의사항" />
+              </label>
+              <label className="admin-field span-two">
+                <span>상품별 쇼핑안전거래 TIP</span>
+                <textarea
+                  className="admin-textarea"
+                  name="safetyTip"
+                  placeholder="비워두면 홈페이지 관리의 기본 안내를 사용합니다."
+                />
+              </label>
             </div>
+          </AdminPanel>
+
+          <AdminPanel title="묶음 판매" description="선택한 상품을 상세페이지에서 한 번에 함께 담을 수 있습니다.">
+            <AdminProductRelationsPicker products={relationOptions} />
           </AdminPanel>
 
           <AdminPanel title="노출 상태">
@@ -261,7 +299,7 @@ export default async function AdminProductNewPage() {
             )}
           </div>
         </div>
-      </form>
+      </AdminProductForm>
     </div>
   );
 }

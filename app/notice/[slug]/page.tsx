@@ -9,6 +9,7 @@ import {
   fetchStoreNotices,
 } from "../../_lib/storefront-content";
 import { getStorefrontRuntime } from "../../_lib/storefront-runtime";
+import { sanitizeRichHtml } from "@/lib/sanitize-rich-html";
 
 export default async function NoticeDetailPage({
   params,
@@ -29,6 +30,7 @@ export default async function NoticeDetailPage({
   }
 
   const latestNotices = notices.filter((entry) => entry.slug !== notice.slug).slice(0, 3);
+  const bodyHtml = sanitizeRichHtml(notice.bodyHtml || "");
   const noticeContent = (
     <>
       <div className="cart-page-head detail-page-head">
@@ -52,8 +54,8 @@ export default async function NoticeDetailPage({
           </div>
 
           <div className="notice-rich-body">
-            {notice.bodyHtml ? (
-              <div dangerouslySetInnerHTML={{ __html: notice.bodyHtml }} />
+            {bodyHtml ? (
+              <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
             ) : notice.paragraphs.length ? (
               notice.paragraphs.map((paragraph, index) => (
                 <p key={`${index}-${paragraph}`}>{paragraph}</p>

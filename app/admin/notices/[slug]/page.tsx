@@ -10,6 +10,7 @@ import {
   type HealthBoxRecord,
 } from "../../../_lib/health-box-api";
 import { findNoticeBySlug, mapNoticeRows } from "../../../_lib/health-box-presenters";
+import { sanitizeRichHtml } from "@/lib/sanitize-rich-html";
 
 function toNoticeRow(record: HealthBoxRecord | null) {
   if (!record) {
@@ -46,6 +47,8 @@ export default async function AdminNoticeDetailPage({
     notFound();
   }
 
+  const bodyHtml = sanitizeRichHtml(notice.bodyHtml || "");
+
   return (
     <div className="admin-page">
       <AdminHeader
@@ -72,8 +75,8 @@ export default async function AdminNoticeDetailPage({
 
           <div className="admin-notice-detail-body">
             <div className="notice-rich-body">
-              {notice.bodyHtml ? (
-                <div dangerouslySetInnerHTML={{ __html: notice.bodyHtml }} />
+              {bodyHtml ? (
+                <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
               ) : notice.paragraphs.length ? (
                 notice.paragraphs.map((paragraph: string, index: number) => (
                   <p key={`${index}-${paragraph}`}>{paragraph}</p>

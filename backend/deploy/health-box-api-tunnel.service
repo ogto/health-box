@@ -1,0 +1,20 @@
+[Unit]
+Description=HealthBox API private SSH tunnel
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=healthbox-tunnel
+Group=healthbox-tunnel
+ExecStart=/usr/bin/ssh -NT -i /etc/health-box-tunnel/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/etc/health-box-tunnel/known_hosts -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ConnectTimeout=10 -L 127.0.0.1:18081:127.0.0.1:8081 ubuntu@172.31.32.76
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/health-box-tunnel
+
+[Install]
+WantedBy=multi-user.target

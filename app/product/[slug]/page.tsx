@@ -2,15 +2,20 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { BundleProductPicker } from "../../_components/bundle-product-picker";
 import { ProductDetailAnchorTabs, type ProductDetailAnchorTab } from "../../_components/product-detail-anchor-tabs";
 import { ProductDetailGallery } from "../../_components/product-detail-gallery";
+import { ProductInquirySection } from "../../_components/product-inquiry-section";
 import { ProductPurchaseBox, ProductPurchaseProvider } from "../../_components/product-purchase-controls";
 import { Breadcrumbs, ProductCard, StoreShell } from "../../_components/store-ui";
 import { getMemberSession } from "../../_lib/member-auth";
+import { fetchPublicProductInquiries } from "../../_lib/product-inquiries";
 import {
   fetchStoreProductBySlug,
   fetchStoreProducts,
 } from "../../_lib/storefront-content";
+import { getStorefrontRuntime } from "../../_lib/storefront-runtime";
+import { sanitizeRichHtml } from "@/lib/sanitize-rich-html";
 
 function meaningfulText(value: string | null | undefined) {
   const text = (value || "").trim();
@@ -43,14 +48,6 @@ function uniqueTexts(values: Array<string | null | undefined>) {
 
 const hiddenBadgeTexts = new Set(["best", "인기", "추천", "신상품", "정상판매", "상품", "공개", "판매중"]);
 
-function sanitizeProductHtml(value: string) {
-  return value
-    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
-    .replace(/\son\w+="[^"]*"/gi, "")
-    .replace(/\son\w+='[^']*'/gi, "")
-    .replace(/javascript:/gi, "");
-}
-
 function paragraphsFromText(value: string) {
   return value
     .replace(/\r\n/g, "\n")
@@ -65,10 +62,11 @@ export default async function ProductDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [product, products, session] = await Promise.all([
+  const [product, products, session, runtime] = await Promise.all([
     fetchStoreProductBySlug(slug),
-    fetchStoreProducts(),
+    fetchStoreProducts({ size: 200 }),
     getMemberSession(),
+    getStorefrontRuntime(),
   ]);
 
   if (!product) {
@@ -77,8 +75,25 @@ export default async function ProductDetailPage({
 
   const showPrice = Boolean(session);
   const relatedProducts = products.filter((entry) => entry.slug !== product.slug).slice(0, 4);
+  const configuredBundleProducts = (product.bundleProductSlugs?.length
+    ? product.bundleProductSlugs
+        .map((bundleSlug) =>
+          products.find((entry) => entry.slug === bundleSlug || entry.sourceSlug === bundleSlug),
+        )
+        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+    : relatedProducts.slice(0, 3));
+  const inquiries = product.id ? await fetchPublicProductInquiries(product.id, session) : [];
   const salesPolicyText = meaningfulText(product.salesPolicyText);
-  const deliveryPolicyText = meaningfulText(product.deliveryPolicyText) || meaningfulText(product.shipping);
+  const deliveryPolicyText =
+    meaningfulText(product.deliveryPolicyText) ||
+    meaningfulText(runtime.commerce.deliveryGuide) ||
+    meaningfulText(product.shipping);
+  const exchangeReturnGuide =
+    meaningfulText(product.exchangeReturnGuide) || meaningfulText(runtime.commerce.exchangeReturnGuide);
+  const safetyTip = meaningfulText(product.safetyTip) || meaningfulText(runtime.commerce.safetyTip);
+  const remoteAreaNotice = runtime.commerce.remoteAreaFee > 0
+    ? `제주 및 도서산간 지역은 무료배송 조건과 관계없이 추가 배송비 ${runtime.commerce.remoteAreaFee.toLocaleString("ko-KR")}원이 부과됩니다.`
+    : "";
   const reviewText = meaningfulText(product.review) || "후기 정보 준비중";
   const policyTextKeys = new Set(
     [salesPolicyText, deliveryPolicyText, product.shipping].map((text) => normalizeText(text || "")).filter(Boolean),
@@ -96,7 +111,7 @@ export default async function ProductDetailPage({
         caption: product.category,
       }));
   const introParagraphs = uniqueTexts([product.summary, ...product.description]);
-  const detailHtml = sanitizeProductHtml(product.detailHtml || "");
+  const detailHtml = sanitizeRichHtml(product.detailHtml || "");
   const usedDetailTexts = new Set(introParagraphs.map(normalizeText));
   const detailSections = rawDetailSections.map((section) => {
     const body = meaningfulText(section.body);
@@ -120,8 +135,10 @@ export default async function ProductDetailPage({
       : "";
   const tabItems: ProductDetailAnchorTab[] = [
     { id: "detail-info", label: "상품상세정보" },
-    { id: "sales-policy", label: "판매정책" },
-    { id: "delivery-policy", label: "배송정책" },
+    { id: "product-disclosure", label: "상품정보고시" },
+    { id: "purchase-information", label: "구매안내" },
+    { id: "delivery-policy", label: "배송/교환/반품" },
+    { id: "product-inquiries", label: "상품문의" },
     { id: "product-reviews", label: "후기" },
   ];
 
@@ -143,11 +160,14 @@ export default async function ProductDetailPage({
           <aside className="detail-summary shop-buy-panel">
             <ProductPurchaseBox
               brand={product.brand}
+              consumerPrice={product.consumerPrice}
               displaySubtitle={displaySubtitle}
               highlights={highlights}
               isMember={Boolean(session)}
               optionGroups={product.optionGroups}
               price={product.price}
+              memberPrice={product.memberPrice}
+              priceExposurePolicy={product.priceExposurePolicy}
               productImage={product.image}
               productSlug={product.slug}
               skus={product.skus}
@@ -157,64 +177,7 @@ export default async function ProductDetailPage({
         </div>
       </section>
 
-      <section className="shop-mini-review-section">
-        <div className="shop-mini-review-head">
-          <h2>
-            4점 이상 리뷰가 <strong>100%</strong>예요
-          </h2>
-          <Link href="#product-reviews">리뷰 전체보기</Link>
-        </div>
-        <div className="shop-mini-review-grid">
-          {[0, 1, 2].map((index) => (
-            <article className="shop-mini-review-card" key={`review-${index}`}>
-              <div className="shop-mini-review-image">
-                <Image
-                  alt={`${product.title} 리뷰 이미지 ${index + 1}`}
-                  className="object-cover"
-                  fill
-                  sizes="88px"
-                  src={product.gallery[index % product.gallery.length] || product.image}
-                  unoptimized
-                />
-              </div>
-              <div>
-                <p>
-                  <strong>★ 5</strong> 맛 만족도 · 구매 만족
-                </p>
-                <span>
-                  제품 구성이 깔끔하고 설명이 자세해서 구매 전에 확인하기 좋았어요. 배송 안내도 보기 편했습니다.
-                </span>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="shop-bundle-pick-section">
-        <div className="shop-bundle-head">
-          <h2>다른 구성 상품 골라 담기</h2>
-          <span>함께 구매하기 좋은 상품을 빠르게 담아보세요.</span>
-        </div>
-        <div className="shop-bundle-card-grid">
-          {relatedProducts.slice(0, 3).map((bundleProduct) => (
-            <article className="shop-bundle-card" key={bundleProduct.slug}>
-              <div className="shop-bundle-image">
-                <Image
-                  alt={bundleProduct.title}
-                  className="object-cover"
-                  fill
-                  sizes="(max-width: 760px) 42vw, 180px"
-                  src={bundleProduct.image}
-                  unoptimized
-                />
-              </div>
-              <button type="button">담기</button>
-              <h3>{bundleProduct.title}</h3>
-              <p>{showPrice ? bundleProduct.price : "로그인 후 확인"}</p>
-            </article>
-          ))}
-        </div>
-      </section>
+      <BundleProductPicker isMember={showPrice} products={configuredBundleProducts} />
 
       <section className="shop-detail-banner-section">
         <div className="shop-detail-banner">
@@ -273,31 +236,95 @@ export default async function ProductDetailPage({
             ) : null}
           </article>
 
-          <article className="content-panel shop-policy-section" id="sales-policy">
-            <h2 className="section-panel-title">판매정책</h2>
-            {salesPolicyText ? (
-              <div className="shop-policy-copy">
-                {paragraphsFromText(salesPolicyText).map((paragraph) => (
-                  <p key={paragraph}>{paragraph}</p>
+          <article className="content-panel shop-policy-section" id="product-disclosure">
+            <h2 className="section-panel-title">상품정보 제공고시</h2>
+            {product.disclosureSource === "DETAIL_HTML" ? (
+              <p className="detail-copy">상품정보 제공고시 내용은 위 상품 상세페이지를 참조해주세요.</p>
+            ) : product.disclosureItems?.length ? (
+              <dl className="product-information-table">
+                {product.disclosureItems.map((item) => (
+                  <div key={`${item.label}-${item.value}`}>
+                    <dt>{item.label}</dt>
+                    <dd>{item.value}</dd>
+                  </div>
                 ))}
-              </div>
+              </dl>
             ) : (
-              <p className="detail-copy">등록된 판매정책이 없습니다.</p>
+              <p className="detail-copy">상품정보 제공고시가 아직 등록되지 않았습니다.</p>
             )}
           </article>
 
-          <article className="content-panel shop-policy-section" id="delivery-policy">
-            <h2 className="section-panel-title">배송정책</h2>
-            {deliveryPolicyText ? (
-              <div className="shop-policy-copy">
-                {paragraphsFromText(deliveryPolicyText).map((paragraph) => (
-                  <p key={paragraph}>{paragraph}</p>
+          <article className="content-panel shop-policy-section" id="purchase-information">
+            <h2 className="section-panel-title">구매 추가정보 및 판매 안내</h2>
+            {product.purchaseInformation?.length ? (
+              <dl className="product-information-table">
+                {product.purchaseInformation.map((item) => (
+                  <div key={`${item.label}-${item.value}`}>
+                    <dt>{item.label}</dt>
+                    <dd>{item.value}</dd>
+                  </div>
                 ))}
+              </dl>
+            ) : null}
+            {salesPolicyText ? (
+              <div className="shop-policy-copy">
+                {paragraphsFromText(salesPolicyText).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
               </div>
-            ) : (
-              <p className="detail-copy">등록된 배송정책이 없습니다.</p>
-            )}
+            ) : !product.purchaseInformation?.length ? (
+              <p className="detail-copy">별도로 등록된 구매 추가정보가 없습니다.</p>
+            ) : null}
           </article>
+
+          <article className="content-panel shop-policy-section" id="delivery-policy">
+            <h2 className="section-panel-title">배송·교환·반품 안내</h2>
+            <div className="shop-policy-subsection">
+              <h3>배송 안내</h3>
+              <div className="shop-policy-copy">
+                {paragraphsFromText(deliveryPolicyText).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+                {remoteAreaNotice ? <p>{remoteAreaNotice}</p> : null}
+              </div>
+            </div>
+            <div className="shop-policy-subsection">
+              <h3>교환·반품 안내</h3>
+              <div className="shop-policy-copy">
+                {paragraphsFromText(exchangeReturnGuide).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+              </div>
+            </div>
+            {product.cautions ? (
+              <div className="shop-policy-subsection">
+                <h3>주의사항</h3>
+                <div className="shop-policy-copy">
+                  {paragraphsFromText(product.cautions).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+                </div>
+              </div>
+            ) : null}
+            {safetyTip ? (
+              <div className="shop-policy-subsection is-safety-tip">
+                <h3>쇼핑안전거래 TIP</h3>
+                <div className="shop-policy-copy">
+                  {paragraphsFromText(safetyTip).map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+                </div>
+              </div>
+            ) : null}
+            <div className="shop-policy-subsection">
+              <h3>판매자정보</h3>
+              <dl className="product-information-table is-compact">
+                <div><dt>상호</dt><dd>{runtime.seller.companyName || runtime.seller.shopName}</dd></div>
+                {runtime.seller.representativeName ? <div><dt>대표자</dt><dd>{runtime.seller.representativeName}</dd></div> : null}
+                {runtime.seller.businessRegistrationNumber ? <div><dt>사업자등록번호</dt><dd>{runtime.seller.businessRegistrationNumber}</dd></div> : null}
+                {runtime.seller.mailOrderRegistrationNumber ? <div><dt>통신판매업 신고</dt><dd>{runtime.seller.mailOrderRegistrationNumber}</dd></div> : null}
+                {runtime.seller.businessAddress ? <div><dt>사업장 소재지</dt><dd>{runtime.seller.businessAddress}</dd></div> : null}
+                <div><dt>고객센터</dt><dd>{runtime.seller.supportPhone || runtime.dealer?.supportPhone || "판매자 정보에서 확인"}</dd></div>
+              </dl>
+            </div>
+          </article>
+
+          <ProductInquirySection
+            initialInquiries={inquiries}
+            loggedIn={Boolean(session)}
+            productId={product.id}
+            productSlug={product.slug}
+          />
 
           <article className="content-panel shop-review-section" id="product-reviews">
             <div className="shop-review-head">
@@ -316,11 +343,14 @@ export default async function ProductDetailPage({
             <ProductPurchaseBox
               brand={product.brand}
               className="is-compact"
+              consumerPrice={product.consumerPrice}
               displaySubtitle=""
               highlights={highlights}
               isMember={Boolean(session)}
               optionGroups={product.optionGroups}
               price={product.price}
+              memberPrice={product.memberPrice}
+              priceExposurePolicy={product.priceExposurePolicy}
               productImage={product.image}
               productSlug={product.slug}
               skus={product.skus}

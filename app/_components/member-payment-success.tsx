@@ -12,27 +12,10 @@ import {
 
 type Status = "error" | "loading" | "success";
 
-function paymentMethodName(payment: Record<string, unknown>) {
-  const easyPay = payment.easyPay && typeof payment.easyPay === "object" ? payment.easyPay as Record<string, unknown> : null;
-  const method = String(payment.method || "").trim();
-  const easyPayProvider = String(easyPay?.provider || "").trim();
-
-  if (easyPayProvider) {
-    return easyPayProvider;
-  }
-
-  return method || "테스트 결제";
-}
-
-function paymentReceiptUrl(payment: Record<string, unknown>) {
-  const receipt = payment.receipt && typeof payment.receipt === "object" ? payment.receipt as Record<string, unknown> : null;
-  return String(receipt?.url || "").trim();
-}
-
 export function MemberPaymentSuccess() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<Status>("loading");
-  const [message, setMessage] = useState("테스트 결제를 확인하고 있습니다.");
+  const [message, setMessage] = useState("결제를 확인하고 주문을 접수하고 있습니다.");
   const [orderDetailHref, setOrderDetailHref] = useState("/mypage");
 
   useEffect(() => {
@@ -55,44 +38,22 @@ export function MemberPaymentSuccess() {
       }
 
       try {
-        const confirmResponse = await fetch("/api/member/payments/test/confirm", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({ paymentKey, orderId, amount }),
-        });
-        const confirmData = await confirmResponse.json();
-
-        if (!confirmResponse.ok || !confirmData.ok) {
-          setStatus("error");
-          setMessage(confirmData?.message || "테스트 결제 승인에 실패했습니다.");
-          return;
-        }
-
-        const orderResponse = await fetch("/api/member/orders", {
+        const orderResponse = await fetch("/api/member/payments/confirm", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "same-origin",
           body: JSON.stringify({
+            amount,
             buyerAddressId: draft.buyerAddressId,
+            checkoutIntent: draft.checkoutIntent,
             receiverName: draft.receiverName,
             receiverPhone: draft.receiverPhone,
             zipCode: draft.zipCode,
             baseAddress: draft.baseAddress,
             detailAddress: draft.detailAddress,
             items: draft.items,
-            payment: {
-              provider: "TOSS_TEST",
-              paymentKey: String(confirmData.payment?.paymentKey || paymentKey),
-              paymentOrderId: String(confirmData.payment?.orderId || orderId),
-              method: String(confirmData.payment?.method || "테스트 결제"),
-              methodDetail: paymentMethodName(confirmData.payment || {}),
-              paymentMethodName: paymentMethodName(confirmData.payment || {}),
-              approvedAt: String(confirmData.payment?.approvedAt || ""),
-              paidAmount: Number(confirmData.payment?.totalAmount || amount),
-              receiptUrl: paymentReceiptUrl(confirmData.payment || {}),
-              rawResponseJson: JSON.stringify(confirmData.payment || {}),
-            },
+            orderId,
+            paymentKey,
           }),
         });
         const orderData = await orderResponse.json();
@@ -110,10 +71,10 @@ export function MemberPaymentSuccess() {
         clearMemberOrderDraft();
         setStatus("success");
         setOrderDetailHref(orderData.order?.id ? `/mypage/orders/${orderData.order.id}` : "/mypage");
-        setMessage(`테스트 결제와 주문 접수가 완료되었습니다. 주문번호 ${orderData.order?.orderNo || ""}`.trim());
+        setMessage(`결제와 주문 접수가 완료되었습니다. 주문번호 ${orderData.order?.orderNo || ""}`.trim());
       } catch {
         setStatus("error");
-        setMessage("테스트 결제 확인 중 오류가 발생했습니다.");
+        setMessage("결제 확인 중 오류가 발생했습니다.");
       }
     }
 

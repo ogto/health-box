@@ -6,6 +6,7 @@ import type { ReactNode, SVGProps } from "react";
 import { BrandLogo } from "./brand-logo";
 import { CartCountBadge } from "./cart-count-badge";
 import { HeaderPromoBar } from "./header-promo-bar";
+import { ProductPriceDisplay } from "./product-price-display";
 import { StoreNavigation } from "./store-navigation";
 import type { Notice, Product } from "../_lib/store-data";
 import { fetchStoreCategories } from "../_lib/storefront-content";
@@ -21,7 +22,7 @@ export async function StoreShell({
   children: ReactNode;
   activeKey?: ActiveKey;
 }) {
-  const [{ assets, brand, dealer, host, navigation }, categories, session] = await Promise.all([
+  const [{ assets, brand, dealer, host, navigation, seller }, categories, session] = await Promise.all([
     getStorefrontRuntime(),
     fetchStoreCategories(),
     getMemberSession(),
@@ -92,6 +93,27 @@ export async function StoreShell({
         </header>
 
         {children}
+
+        <footer className="site-footer">
+          <div className="site-footer-head">
+            <strong>{seller.shopName || brand.name}</strong>
+            <nav aria-label="하단 안내">
+              <Link href="/notice">공지사항</Link>
+              <Link href="/products/best">상품목록</Link>
+              <Link href="/mypage">마이페이지</Link>
+            </nav>
+          </div>
+          <div className="site-footer-business">
+            {seller.companyName ? <span>상호 {seller.companyName}</span> : null}
+            {seller.representativeName ? <span>대표 {seller.representativeName}</span> : null}
+            {seller.businessRegistrationNumber ? <span>사업자등록번호 {seller.businessRegistrationNumber}</span> : null}
+            {seller.mailOrderRegistrationNumber ? <span>통신판매업 신고 {seller.mailOrderRegistrationNumber}</span> : null}
+            {seller.businessAddress ? <span>사업장 소재지 {seller.businessAddress}</span> : null}
+            {seller.supportPhone || dealer?.supportPhone ? <span>고객센터 {seller.supportPhone || dealer?.supportPhone}</span> : null}
+            {seller.supportEmail || dealer?.supportEmail ? <span>이메일 {seller.supportEmail || dealer?.supportEmail}</span> : null}
+          </div>
+          <p>상품별 배송·교환·반품 조건과 상품정보 제공고시는 각 상품 상세페이지에서 확인할 수 있습니다.</p>
+        </footer>
       </div>
     </main>
   );
@@ -131,8 +153,14 @@ export function ProductCard({
         <h4>{product.title}</h4>
         <p className="product-subtitle">{product.subtitle || product.summary}</p>
         <div className="product-card-price-row">
-          <p className="product-price">{showPrice ? product.price : "로그인 후 확인"}</p>
-          <span>{showPrice ? "판매가" : "회원 전용"}</span>
+          <ProductPriceDisplay
+            compact
+            consumerPrice={product.consumerPrice}
+            fallbackPrice={product.price}
+            isMember={showPrice}
+            memberPrice={product.memberPrice}
+            priceExposurePolicy={product.priceExposurePolicy}
+          />
         </div>
         {showMeta ? (
           <div className="product-meta">

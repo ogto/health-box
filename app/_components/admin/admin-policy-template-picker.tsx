@@ -158,10 +158,23 @@ function PolicyTemplateManagerDialog({
   type: PolicyTemplateType;
 }) {
   const titleId = useId();
+  const initialDraftId = `draft-${type}-${useId().replaceAll(":", "")}`;
   const policyLabel = type === "sales" ? "판매정책" : "배송정책";
-  const [draftTemplates, setDraftTemplates] = useState(templates);
+  const [draftTemplates, setDraftTemplates] = useState<AdminPolicyTemplate[]>(() =>
+    templates.length
+      ? templates
+      : [{
+          id: initialDraftId,
+          policyId: null,
+          sortOrder: 0,
+          status: "ACTIVE",
+          type,
+          title: "새 템플릿",
+          content: currentText,
+        }],
+  );
   const [activeTemplateId, setActiveTemplateId] = useState(
-    selectedTemplateId || templates[0]?.id || `draft-${type}-${Date.now()}`,
+    selectedTemplateId || templates[0]?.id || initialDraftId,
   );
   const [message, setMessage] = useState("");
   const [templateToDelete, setTemplateToDelete] = useState<AdminPolicyTemplate | null>(null);
@@ -171,8 +184,8 @@ function PolicyTemplateManagerDialog({
     () => draftTemplates.find((template) => template.id === activeTemplateId) || null,
     [activeTemplateId, draftTemplates],
   );
-  const [title, setTitle] = useState(activeTemplate?.title || "");
-  const [content, setContent] = useState(activeTemplate?.content || currentText);
+  const title = activeTemplate?.title || "";
+  const content = activeTemplate?.content || "";
   const canUseRemoteApi = true;
 
   useEffect(() => {
@@ -185,12 +198,6 @@ function PolicyTemplateManagerDialog({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isPending, onClose]);
-
-  useEffect(() => {
-    setTitle(activeTemplate?.title || "");
-    setContent(activeTemplate?.content || "");
-    setMessage("");
-  }, [activeTemplate]);
 
   function createTemplate() {
     const nextTemplate: AdminPolicyTemplate = {
@@ -205,10 +212,12 @@ function PolicyTemplateManagerDialog({
 
     setDraftTemplates((currentTemplates) => [...currentTemplates, nextTemplate]);
     setActiveTemplateId(nextTemplate.id);
+    setMessage("");
   }
 
   function selectTemplate(template: AdminPolicyTemplate) {
     setActiveTemplateId(template.id);
+    setMessage("");
 
     if (!canUseRemoteApi || !template.policyId) {
       return;
@@ -398,7 +407,6 @@ function PolicyTemplateManagerDialog({
                 className="admin-input"
                 disabled={isPending}
                 onChange={(event) => {
-                  setTitle(event.target.value);
                   updateActiveTemplateDraft({ title: event.target.value });
                 }}
                 placeholder="예: 회원 전용 기본 판매정책"
@@ -413,7 +421,6 @@ function PolicyTemplateManagerDialog({
                 className="admin-textarea admin-policy-template-modal-textarea"
                 disabled={isPending}
                 onChange={(event) => {
-                  setContent(event.target.value);
                   updateActiveTemplateDraft({ content: event.target.value });
                 }}
                 placeholder="상품 상세에 노출할 정책 문구를 입력하세요."

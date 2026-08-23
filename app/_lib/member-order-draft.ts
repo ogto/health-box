@@ -6,6 +6,7 @@ export type MemberOrderDraft = {
   amount: number;
   baseAddress: string;
   buyerAddressId?: number;
+  checkoutIntent: string;
   detailAddress?: string;
   items: Array<Pick<MemberCartItem, "optionLabel" | "quantity" | "skuId">>;
   orderId: string;

@@ -1,3 +1,5 @@
+import "server-only";
+
 import { cache } from "react";
 
 export type HealthBoxRecord = Record<string, unknown>;
@@ -110,6 +112,29 @@ export type HealthBoxPageResponse<T> = {
 const API_BASE_URL = process.env.HEALTH_BOX_API_BASE_URL?.trim().replace(/\/+$/, "") || "";
 const PUBLIC_REVALIDATE_SECONDS = 60;
 
+function getInternalApiKey() {
+  const key = process.env.HEALTH_BOX_INTERNAL_API_KEY?.trim() || "";
+  const production = process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
+
+  if (!key && production) {
+    throw new Error("HEALTH_BOX_INTERNAL_API_KEY is not configured");
+  }
+  if (production && key.length < 32) {
+    throw new Error("HEALTH_BOX_INTERNAL_API_KEY must be at least 32 characters in production");
+  }
+
+  return key;
+}
+
+export function healthBoxInternalHeaders(headers?: HeadersInit) {
+  const result = new Headers(headers);
+  const key = getInternalApiKey();
+  if (key) {
+    result.set("X-Health-Box-Internal-Key", key);
+  }
+  return result;
+}
+
 function buildUrl(path: string, query?: Record<string, string | number | null | undefined>) {
   const url = new URL(`${API_BASE_URL}${path}`);
 
@@ -170,10 +195,10 @@ export async function healthBoxFetch<T>(
     method,
     cache: isRead && typeof options?.revalidate === "number" ? undefined : "no-store",
     next: isRead && typeof options?.revalidate === "number" ? { revalidate: options.revalidate } : undefined,
-    headers: {
+    headers: healthBoxInternalHeaders({
       ...(options?.body ? { "Content-Type": "application/json" } : {}),
       ...options?.headers,
-    },
+    }),
     body: options?.body ? JSON.stringify(options.body) : undefined,
   });
 

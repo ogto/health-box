@@ -101,6 +101,7 @@ function toStoreProduct(row: PublicStoreProductRow): Product {
       : [];
 
   return {
+    id: row.recordId || undefined,
     slug: row.slug,
     sourceSlug: row.routeSlug || row.sourceSlug,
     badge: row.badge || row.publishStatus || row.category || "상품",
@@ -108,7 +109,19 @@ function toStoreProduct(row: PublicStoreProductRow): Product {
     title: row.title,
     subtitle: row.subtitle || summary,
     category: row.category || "상품",
+    categoryIds: row.categoryIds,
+    consumerPrice: row.consumerPrice ?? undefined,
+    memberPrice: row.memberPrice ?? undefined,
+    priceExposurePolicy: row.priceExposurePolicy,
     deliveryPolicyText: row.deliveryPolicyText,
+    exchangeReturnGuide: row.exchangeReturnGuide,
+    cautions: row.cautions,
+    safetyTip: row.safetyTip,
+    disclosureSource: row.disclosureSource,
+    disclosureType: row.disclosureType,
+    disclosureItems: row.disclosureItems,
+    purchaseInformation: row.purchaseInformation,
+    bundleProductSlugs: row.bundleProductSlugs,
     review: row.review || "후기 정보 준비중",
     salesPolicyText: row.salesPolicyText,
     shipping: row.shipping || "배송 정보 준비중",
@@ -199,15 +212,21 @@ export const fetchStoreProducts = cache(async (query?: { q?: string; size?: numb
 });
 
 export const fetchStoreProductPage = cache(
-  async (query?: { category?: string; page?: number; q?: string; size?: number }): Promise<StoreProductPage> => {
+  async (query?: { category?: string; categoryIds?: number[]; categoryNames?: string[]; page?: number; q?: string; size?: number }): Promise<StoreProductPage> => {
     const requestedPage = Math.max(1, query?.page || 1);
     const size = Math.max(1, query?.size || 20);
     const keyword = query?.q?.trim();
     const category = query?.category?.trim();
+    const categoryNames = Array.from(new Set((query?.categoryNames || []).map((value) => value.trim()).filter(Boolean)));
+    const categoryIds = Array.from(
+      new Set((query?.categoryIds || []).filter((value) => Number.isSafeInteger(value) && value > 0)),
+    );
 
     if (!hasHealthBoxApi()) {
       const filteredProducts = fallbackProducts.filter((product) => {
-        const matchesCategory = !category || product.category === category;
+        const matchesCategory = categoryNames.length
+          ? categoryNames.includes(product.category)
+          : !category || product.category === category;
         const normalizedKeyword = keyword?.toLowerCase();
         const matchesKeyword =
           !normalizedKeyword ||
@@ -238,6 +257,36 @@ export const fetchStoreProductPage = cache(
     }
 
     const runtime = await getStorefrontRuntime();
+    if (categoryIds.length) {
+      const allProductsPage = runtime.dealer
+        ? await fetchDealerMallProductPage(runtime.dealer.slug, {
+            page: 1,
+            q: keyword,
+            size: 500,
+          })
+        : await fetchStorefrontProductPage({
+            page: 1,
+            q: keyword,
+            size: 500,
+          });
+      const filteredProducts = mapStorefrontProductRows(allProductsPage)
+        .map(toStoreProduct)
+        .filter((product) =>
+          categoryIds.some((categoryId) => (product.categoryIds || []).includes(categoryId)),
+        );
+      const totalElements = filteredProducts.length;
+      const totalPages = Math.ceil(totalElements / size);
+      const start = (requestedPage - 1) * size;
+
+      return {
+        items: filteredProducts.slice(start, start + size),
+        page: requestedPage,
+        size,
+        totalElements,
+        totalPages,
+      };
+    }
+
     const page = runtime.dealer
       ? await fetchDealerMallProductPage(runtime.dealer.slug, {
           category,
@@ -280,7 +329,7 @@ export const fetchStoreCategories = cache(async () => {
     .map((category, index) => {
       const label = category.name || category.categoryCode || `카테고리 ${index + 1}`;
       return {
-        href: `/products/best?menu=category&category=${encodeURIComponent(label)}`,
+        href: `/products/best?menu=category&category=${encodeURIComponent(label)}&categoryId=${encodeURIComponent(String(category.id || ""))}`,
         key: String(category.id || category.slug || category.categoryCode || index),
         label,
       };

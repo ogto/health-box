@@ -4,6 +4,7 @@ import { MemberCartPanel } from "../_components/member-cart-panel";
 import { getMemberSession } from "../_lib/member-auth";
 import { fetchStoreProducts } from "../_lib/storefront-content";
 import { getStorefrontRuntime } from "../_lib/storefront-runtime";
+import { buildTossCustomerKey } from "../_lib/toss-payments";
 
 export default async function CartPage() {
   const [runtime, session, products] = await Promise.all([getStorefrontRuntime(), getMemberSession(), fetchStoreProducts()]);
@@ -13,12 +14,16 @@ export default async function CartPage() {
     <>
       <MemberCartPanel
         customerEmail={session?.email}
-        customerKey={session?.memberId ? `healthbox-member-${session.memberId}` : undefined}
+        customerKey={session?.memberId ? buildTossCustomerKey(session.memberId) : undefined}
+        baseShippingFee={runtime.commerce.baseShippingFee}
         defaultName={session?.name}
         defaultPhone={session?.phone}
         loggedIn={Boolean(session)}
         orderSessionReady={Boolean(session?.sessionToken)}
         productCatalog={products}
+        freeShippingThreshold={runtime.commerce.freeShippingThreshold}
+        remoteAreaFee={runtime.commerce.remoteAreaFee}
+        remoteAreaZipRanges={runtime.commerce.remoteAreaZipRanges}
       />
 
       <section className="section-block account-recommend-section">

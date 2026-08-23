@@ -1,8 +1,10 @@
+import Link from "next/link";
+
 import { Breadcrumbs, ProductCard, StoreShell } from "../../_components/store-ui";
 import { StoreProductPagination } from "../../_components/store-product-pagination";
 import { getMemberSession } from "../../_lib/member-auth";
 import { findNavigationItemByKey, resolveNavigationProducts } from "../../_lib/storefront-config";
-import { fetchStoreProductPage, fetchStoreProducts } from "../../_lib/storefront-content";
+import { fetchStoreCategories, fetchStoreProductPage, fetchStoreProducts } from "../../_lib/storefront-content";
 import { getStorefrontRuntime } from "../../_lib/storefront-runtime";
 
 const PRODUCT_PAGE_SIZE = 20;
@@ -10,33 +12,69 @@ const PRODUCT_PAGE_SIZE = 20;
 export default async function BestProductsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ category?: string; menu?: string; page?: string }>;
+  searchParams?: Promise<{
+    category?: string | string[];
+    categoryId?: string | string[];
+    menu?: string;
+    page?: string;
+  }>;
 }) {
   const params = await searchParams;
-  const selectedCategory = params?.category?.trim() || "";
-  const selectedMenu = selectedCategory ? "category" : params?.menu?.trim() || "best";
+  const categoryValues = Array.isArray(params?.category)
+    ? params.category
+    : params?.category
+      ? [params.category]
+      : [];
+  const selectedCategories = Array.from(
+    new Set(categoryValues.flatMap((value) => value.split(",")).map((value) => value.trim()).filter(Boolean)),
+  );
+  const selectedCategory = selectedCategories[0] || "";
+  const categoryIdValues = Array.isArray(params?.categoryId)
+    ? params.categoryId
+    : params?.categoryId
+      ? [params.categoryId]
+      : [];
+  const selectedCategoryIds = Array.from(
+    new Set(
+      categoryIdValues
+        .flatMap((value) => value.split(","))
+        .map(Number)
+        .filter((value) => Number.isSafeInteger(value) && value > 0),
+    ),
+  );
+  const selectedMenu = selectedCategories.length || selectedCategoryIds.length ? "category" : params?.menu?.trim() || "best";
   const requestedPage = Math.max(1, Number(params?.page) || 1);
-  const [runtime, productResult, session] = await Promise.all([
+  const [runtime, productResult, session, categories] = await Promise.all([
     getStorefrontRuntime(),
-    selectedCategory
+    selectedCategories.length || selectedCategoryIds.length
       ? fetchStoreProductPage({
-          category: selectedCategory,
+          category: selectedCategoryIds.length ? undefined : selectedCategory,
+          categoryIds: selectedCategoryIds,
+          categoryNames: selectedCategories,
           page: requestedPage,
           size: PRODUCT_PAGE_SIZE,
         })
       : fetchStoreProducts(),
     getMemberSession(),
+    fetchStoreCategories(),
   ]);
   const bestProducts = Array.isArray(productResult) ? productResult : productResult.items;
   const showPrice = Boolean(session);
   const activeNavigationItem = findNavigationItemByKey(runtime.navigation, selectedMenu);
-  const activeKey = activeNavigationItem?.key || (selectedCategory ? "category" : "best");
-  const pageTitle = selectedCategory || activeNavigationItem?.label || "베스트상품";
+  const activeKey = activeNavigationItem?.key || (selectedCategories.length ? "category" : "best");
+  const selectedCategoryLabels = categories
+    .filter((category) => selectedCategoryIds.includes(Number(category.key)))
+    .map((category) => category.label);
+  const pageTitle = selectedCategoryLabels.length
+    ? selectedCategoryLabels.join(" · ")
+    : selectedCategories.length
+      ? selectedCategories.join(" · ")
+      : activeNavigationItem?.label || "베스트상품";
   const menuProducts = resolveNavigationProducts(
     bestProducts,
     activeNavigationItem?.style === "category" ? null : activeNavigationItem,
   );
-  const filteredProducts = selectedCategory
+  const filteredProducts = selectedCategories.length || selectedCategoryIds.length
     ? bestProducts
     : menuProducts;
   const categoryPage = Array.isArray(productResult) ? null : productResult;
@@ -54,8 +92,10 @@ export default async function BestProductsPage({
         <div className="content-panel">
           <h2 className="detail-title">{pageTitle}</h2>
           <p className="detail-copy">
-            {selectedCategory
-              ? `${selectedCategory} 카테고리에 등록된 상품을 확인할 수 있습니다.`
+            {selectedCategories.length
+              ? `${pageTitle} 카테고리에 등록된 상품을 확인할 수 있습니다.`
+              : selectedCategoryIds.length
+                ? `${pageTitle} 중 하나 이상에 등록된 상품을 확인할 수 있습니다.`
               : "건강창고에서 가장 많이 찾는 대표 상품만 모아 둔 페이지입니다. 첫 구매가 많은 기본 영양 루틴 상품과 재구매가 꾸준한 스테디셀러를 중심으로 확인할 수 있습니다."}
           </p>
           <div className="detail-chip-row">
@@ -63,6 +103,35 @@ export default async function BestProductsPage({
             <span className="detail-chip">재구매율 높은 상품</span>
             <span className="detail-chip">회원 선호 루틴</span>
           </div>
+          {categories.length ? (
+            <form action="/products/best" className="shop-category-filter" method="get">
+              <input name="menu" type="hidden" value="category" />
+              <fieldset>
+                <legend>카테고리 복수 선택</legend>
+                {categories.map((category) => {
+                  const numericCategoryId = Number(category.key);
+                  const hasNumericId = Number.isSafeInteger(numericCategoryId) && numericCategoryId > 0;
+                  return (
+                    <label key={category.key}>
+                      <input
+                        defaultChecked={hasNumericId
+                          ? selectedCategoryIds.includes(numericCategoryId)
+                          : selectedCategories.includes(category.label)}
+                        name={hasNumericId ? "categoryId" : "category"}
+                        type="checkbox"
+                        value={hasNumericId ? category.key : category.label}
+                      />
+                      <span>{category.label}</span>
+                    </label>
+                  );
+                })}
+              </fieldset>
+              <div>
+                <button className="button-primary" type="submit">선택 적용</button>
+                <Link className="button-secondary" href="/products/best?menu=category">선택 초기화</Link>
+              </div>
+            </form>
+          ) : null}
         </div>
 
         <section className="subpage-section">
@@ -89,7 +158,9 @@ export default async function BestProductsPage({
           </div>
           {categoryPage ? (
             <StoreProductPagination
-              baseHref={`/products/best?menu=category&category=${encodeURIComponent(selectedCategory)}`}
+              baseHref={selectedCategoryIds.length
+                ? `/products/best?menu=category&categoryId=${encodeURIComponent(selectedCategoryIds.join(","))}`
+                : `/products/best?menu=category&category=${encodeURIComponent(selectedCategories.join(","))}`}
               currentPage={categoryPage.page}
               totalPages={categoryPage.totalPages}
             />
