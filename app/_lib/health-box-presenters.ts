@@ -305,7 +305,7 @@ export function buildDashboardMetrics(orders: HealthBoxRecord[] | null, dealerAp
     return [
       zeroMetric("오늘 주문", "실데이터 없음", "blue"),
       zeroMetric("주문 처리 대기", "실데이터 없음", "cyan"),
-      zeroMetric("승인대기 회원", "실데이터 없음", "gold"),
+      zeroMetric("자동 가입 완료", "실데이터 없음", "gold"),
       zeroMetric("승인대기 딜러", "실데이터 없음", "violet"),
     ];
   }
@@ -322,12 +322,14 @@ export function buildDashboardMetrics(orders: HealthBoxRecord[] | null, dealerAp
       return /ORDERED|PENDING|주문\s*접수/.test(shipmentStatus || orderStatus);
     }).length ?? 0;
   const pendingDealerCount = countPendingApplications(dealerApps);
-  const pendingBuyerCount = countPendingApplications(buyerApps);
+  const completedBuyerCount = (buyerApps ?? []).filter((application) =>
+    /^APPROVED$/i.test(stringValue(application, "status")),
+  ).length;
 
   return [
     { label: "오늘 주문", value: `${todayOrders}건`, hint: "주문일 기준", tone: "blue" as const },
     { label: "주문 처리 대기", value: `${processingOrders}건`, hint: "접수/상품 준비 기준", tone: "cyan" as const },
-    { label: "승인대기 회원", value: `${pendingBuyerCount}건`, hint: "회원관리에서 처리", tone: "gold" as const },
+    { label: "자동 가입 완료", value: `${completedBuyerCount}건`, hint: "회원가입 처리 이력", tone: "gold" as const },
     { label: "승인대기 딜러", value: `${pendingDealerCount}건`, hint: "딜러몰관리에서 처리", tone: "violet" as const },
   ];
 }
@@ -444,11 +446,20 @@ export function mapApprovalQueue(
 
 export function buildDealerMetrics(dealers: HealthBoxRecord[] | null, members: HealthBoxRecord[] | null, dealerApps: HealthBoxRecord[] | null) {
   const pendingDealerCount = countPendingApplications(dealerApps);
+  const dealerIds = new Set(
+    (dealers ?? [])
+      .map((dealer) => idValue(dealer, "id", "dealerMallId"))
+      .filter((dealerId): dealerId is number => dealerId !== null),
+  );
+  const dealerMemberCount = (members ?? []).filter((member) => {
+    const dealerMallId = idValue(member, "dealerMallId");
+    return dealerMallId !== null && dealerIds.has(dealerMallId);
+  }).length;
 
   if (!dealers?.length) {
     return [
       { label: "전체 딜러몰", value: "0개", hint: "실데이터 없음", tone: "blue" as const },
-      { label: "전체 회원", value: `${members?.length ?? 0}명`, hint: "구매 회원 기준", tone: "cyan" as const },
+      { label: "딜러 소속 회원", value: "0명", hint: "운영 딜러몰 기준", tone: "cyan" as const },
       { label: "활성 딜러", value: "0개", hint: "실데이터 없음", tone: "green" as const },
       { label: "승인 대기", value: `${pendingDealerCount}건`, hint: "신규 딜러 신청", tone: "gold" as const },
     ];
@@ -456,7 +467,7 @@ export function buildDealerMetrics(dealers: HealthBoxRecord[] | null, members: H
 
   return [
     { label: "전체 딜러몰", value: `${dealers.length}개`, hint: "API 기준", tone: "blue" as const },
-    { label: "전체 회원", value: `${members?.length ?? 0}명`, hint: "구매 회원 기준", tone: "cyan" as const },
+    { label: "딜러 소속 회원", value: `${dealerMemberCount}명`, hint: "운영 딜러몰 기준", tone: "cyan" as const },
     { label: "활성 딜러", value: `${dealers.filter((item) => /ACTIVE|APPROVED|운영/.test(stringValue(item, "status"))).length}개`, hint: "운영 상태 기준", tone: "green" as const },
     { label: "승인 대기", value: `${pendingDealerCount}건`, hint: "신규 딜러 신청", tone: "gold" as const },
   ];
@@ -498,14 +509,16 @@ export function mapDealerRows(dealers: HealthBoxRecord[] | null, members: Health
 }
 
 export function buildMemberMetrics(members: HealthBoxRecord[] | null, dealers: HealthBoxRecord[] | null, buyerApps: HealthBoxRecord[] | null) {
-  const pendingBuyerCount = countPendingApplications(buyerApps);
+  const completedBuyerCount = (buyerApps ?? []).filter((application) =>
+    /^APPROVED$/i.test(stringValue(application, "status")),
+  ).length;
 
   if (!members?.length) {
     return [
       { label: "전체 회원", value: "0명", hint: "실데이터 없음", tone: "blue" as const },
       { label: "활성 딜러몰", value: `${dealers?.length ?? 0}개`, hint: "회원 귀속 기준", tone: "cyan" as const },
       { label: "활성 회원", value: "0명", hint: "실데이터 없음", tone: "green" as const },
-      { label: "승인 대기", value: `${pendingBuyerCount}명`, hint: "가입 승인 요청", tone: "gold" as const },
+      { label: "자동 가입 완료", value: `${completedBuyerCount}명`, hint: "가입 처리 이력", tone: "gold" as const },
     ];
   }
 
@@ -513,7 +526,7 @@ export function buildMemberMetrics(members: HealthBoxRecord[] | null, dealers: H
     { label: "전체 회원", value: `${members.length}명`, hint: "구매 회원 기준", tone: "blue" as const },
     { label: "활성 딜러몰", value: `${dealers?.length ?? 0}개`, hint: "회원 귀속 기준", tone: "cyan" as const },
     { label: "활성 회원", value: `${members.filter((item) => /ACTIVE|활성/.test(stringValue(item, "status"))).length}명`, hint: "상태 기준", tone: "green" as const },
-    { label: "승인 대기", value: `${pendingBuyerCount}명`, hint: "가입 승인 요청", tone: "gold" as const },
+    { label: "자동 가입 완료", value: `${completedBuyerCount}명`, hint: "가입 처리 이력", tone: "gold" as const },
   ];
 }
 

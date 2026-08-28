@@ -51,5 +51,11 @@ public class HealthBoxDealerApplicationVo extends HealthBoxBaseVo {
 
     @Column(name = "REVIEW_MEMO", length = 1000)
     private String reviewMemo;
+
+    @Column(name = "PRIVACY_AGREED_AT")
+    private LocalDateTime privacyAgreedAt;
+
+    @Column(name = "CONSENT_DOCUMENT_VERSION", length = 20)
+    private String consentDocumentVersion;
 }
 

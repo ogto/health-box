@@ -1,6 +1,5 @@
-import Link from "next/link";
-
 import { Breadcrumbs, ProductCard, StoreShell } from "../../_components/store-ui";
+import { StoreCategoryFilter } from "../../_components/store-category-filter";
 import { StoreProductPagination } from "../../_components/store-product-pagination";
 import { getMemberSession } from "../../_lib/member-auth";
 import { findNavigationItemByKey, resolveNavigationProducts } from "../../_lib/storefront-config";
@@ -40,7 +39,7 @@ export default async function BestProductsPage({
         .flatMap((value) => value.split(","))
         .map(Number)
         .filter((value) => Number.isSafeInteger(value) && value > 0),
-    ),
+      ),
   );
   const selectedMenu = selectedCategories.length || selectedCategoryIds.length ? "category" : params?.menu?.trim() || "best";
   const requestedPage = Math.max(1, Number(params?.page) || 1);
@@ -104,33 +103,11 @@ export default async function BestProductsPage({
             <span className="detail-chip">회원 선호 루틴</span>
           </div>
           {categories.length ? (
-            <form action="/products/best" className="shop-category-filter" method="get">
-              <input name="menu" type="hidden" value="category" />
-              <fieldset>
-                <legend>카테고리 복수 선택</legend>
-                {categories.map((category) => {
-                  const numericCategoryId = Number(category.key);
-                  const hasNumericId = Number.isSafeInteger(numericCategoryId) && numericCategoryId > 0;
-                  return (
-                    <label key={category.key}>
-                      <input
-                        defaultChecked={hasNumericId
-                          ? selectedCategoryIds.includes(numericCategoryId)
-                          : selectedCategories.includes(category.label)}
-                        name={hasNumericId ? "categoryId" : "category"}
-                        type="checkbox"
-                        value={hasNumericId ? category.key : category.label}
-                      />
-                      <span>{category.label}</span>
-                    </label>
-                  );
-                })}
-              </fieldset>
-              <div>
-                <button className="button-primary" type="submit">선택 적용</button>
-                <Link className="button-secondary" href="/products/best?menu=category">선택 초기화</Link>
-              </div>
-            </form>
+            <StoreCategoryFilter
+              categories={categories.map(({ key, label }) => ({ key, label }))}
+              selectedCategories={selectedCategories}
+              selectedCategoryIds={selectedCategoryIds}
+            />
           ) : null}
         </div>
 

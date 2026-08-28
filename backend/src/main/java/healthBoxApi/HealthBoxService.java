@@ -8,6 +8,7 @@ import healthBoxApi.payment.HealthBoxPaymentResponse;
 import healthBoxApi.payment.HealthBoxPaymentService;
 import healthBoxApi.dto.HealthBoxApprovalRequest;
 import healthBoxApi.dto.HealthBoxAdminDealerCreateRequest;
+import healthBoxApi.dto.HealthBoxDealerApplicationCreateRequest;
 import healthBoxApi.dto.HealthBoxBuyerLoginRequest;
 import healthBoxApi.dto.HealthBoxBuyerLoginResponse;
 import healthBoxApi.dto.HealthBoxBuyerPasswordResetRequest;
@@ -15,6 +16,8 @@ import healthBoxApi.dto.HealthBoxBuyerProfileUpdateRequest;
 import healthBoxApi.dto.HealthBoxBuyerAddressRequest;
 import healthBoxApi.dto.HealthBoxBuyerAddressResponse;
 import healthBoxApi.dto.HealthBoxBuyerSignupCreateRequest;
+import healthBoxApi.dto.HealthBoxBuyerSignupAvailabilityRequest;
+import healthBoxApi.dto.HealthBoxBuyerSignupAvailabilityResponse;
 import healthBoxApi.dto.HealthBoxCartItemRequest;
 import healthBoxApi.dto.HealthBoxCartItemResponse;
 import healthBoxApi.dto.HealthBoxCategoryResponse;
@@ -63,6 +66,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
@@ -76,6 +80,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -86,6 +91,8 @@ public class HealthBoxService {
     private static final long SINGLETON_PUBLIC_SITE_CONFIG_ID = 1L;
     private static final long DEFAULT_HQ_ID = 1L;
     private static final long HQ_BUYER_DEALER_MALL_ID = 0L;
+    private static final String BUYER_SIGNUP_CONSENT_VERSION = "v1.0";
+    private static final String DEALER_APPLICATION_CONSENT_VERSION = "v1.0";
     private static final String ROOT_HOST = "everybuy.co.kr";
     private static final String WWW_ROOT_HOST = "www.everybuy.co.kr";
     private static final String ROOT_DOMAIN = ".everybuy.co.kr";
@@ -340,6 +347,83 @@ public class HealthBoxService {
     }
 
     @Transactional
+    public HealthBoxDealerApplicationVo createDealerApplication(HealthBoxDealerApplicationCreateRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("dealer application request is required");
+        }
+
+        String applicantName = request.getApplicantName() == null ? "" : request.getApplicantName().trim();
+        String normalizedPhone = normalizePhone(request.getPhone());
+        String normalizedEmail = normalizeEmail(request.getEmail());
+        String businessInfo = request.getBusinessInfo() == null ? "" : request.getBusinessInfo().trim();
+        String wantedMallName = request.getWantedMallName() == null ? "" : request.getWantedMallName().trim();
+        String wantedSlug = normalizeSlug(request.getWantedSlug());
+
+        if (!StringUtils.hasText(applicantName) || applicantName.length() > 100) {
+            throw new IllegalArgumentException("applicantName is required and must be 100 characters or fewer");
+        }
+        if (!StringUtils.hasText(normalizedPhone) || !normalizedPhone.matches("^[0-9]{9,11}$")) {
+            throw new IllegalArgumentException("valid phone is required");
+        }
+        if (!StringUtils.hasText(normalizedEmail) ||
+            normalizedEmail.length() > 150 ||
+            !normalizedEmail.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            throw new IllegalArgumentException("valid email is required");
+        }
+        if (businessInfo.length() < 10 || businessInfo.length() > 1000) {
+            throw new IllegalArgumentException("businessInfo must be between 10 and 1000 characters");
+        }
+        if (!StringUtils.hasText(wantedMallName) || wantedMallName.length() > 150) {
+            throw new IllegalArgumentException("wantedMallName is required and must be 150 characters or fewer");
+        }
+        if (wantedSlug == null || wantedSlug.length() < 3 || wantedSlug.length() > 40 ||
+            wantedSlug.startsWith("-") || wantedSlug.endsWith("-")) {
+            throw new IllegalArgumentException("wantedSlug must be between 3 and 40 characters");
+        }
+        validateDealerSlug(wantedSlug);
+        if (!Boolean.TRUE.equals(request.getPrivacyAgreed()) ||
+            !DEALER_APPLICATION_CONSENT_VERSION.equals(request.getConsentDocumentVersion())) {
+            throw new IllegalArgumentException("privacy consent is required");
+        }
+        if (dealerMallRepository.existsBySlug(wantedSlug)) {
+            throw new IllegalArgumentException("dealer mall slug already exists. slug=" + wantedSlug);
+        }
+
+        HealthBoxDealerApplicationVo matchingIdentity = null;
+        for (HealthBoxDealerApplicationVo pending : dealerApplicationRepository.findByStatusIgnoreCaseOrderByIdDesc("PENDING")) {
+            String pendingPhone = normalizePhone(pending.getPhone());
+            String pendingEmail = normalizeEmail(pending.getEmail());
+            boolean sameIdentity = normalizedPhone.equals(pendingPhone) || normalizedEmail.equalsIgnoreCase(pendingEmail);
+            String pendingSlug = normalizeSlug(pending.getWantedSlug());
+
+            if (wantedSlug.equals(pendingSlug) && !sameIdentity) {
+                throw new IllegalArgumentException("dealer mall slug already has a pending application. slug=" + wantedSlug);
+            }
+            if (sameIdentity && matchingIdentity == null) {
+                matchingIdentity = pending;
+            }
+        }
+
+        HealthBoxDealerApplicationVo application = matchingIdentity != null
+            ? matchingIdentity
+            : new HealthBoxDealerApplicationVo();
+        application.setApplicantName(applicantName);
+        application.setPhone(normalizedPhone);
+        application.setEmail(normalizedEmail);
+        application.setBusinessInfo(businessInfo);
+        application.setWantedMallName(wantedMallName);
+        application.setWantedSlug(wantedSlug);
+        application.setStatus("PENDING");
+        application.setDealerMallId(null);
+        application.setApprovedAt(null);
+        application.setRejectReason(null);
+        application.setReviewMemo(null);
+        application.setPrivacyAgreedAt(LocalDateTime.now());
+        application.setConsentDocumentVersion(DEALER_APPLICATION_CONSENT_VERSION);
+        return dealerApplicationRepository.save(application);
+    }
+
+    @Transactional
     public HealthBoxBuyerSignupApplicationVo createBuyerSignupApplication(HealthBoxBuyerSignupCreateRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("buyer signup request is required");
@@ -356,6 +440,17 @@ public class HealthBoxService {
             throw new IllegalArgumentException("name is required");
         }
         validateBuyerPassword(request.getPassword());
+        validateBuyerSignupConsent(request);
+
+        LocalDateTime consentedAt = LocalDateTime.now();
+        HealthBoxBuyerSignupApplicationVo identity = new HealthBoxBuyerSignupApplicationVo();
+        identity.setDealerMallId(signupDealerMallId);
+        identity.setPhone(normalizedPhone);
+        identity.setEmail(normalizedEmail);
+        HealthBoxBuyerMemberVo existingBuyerMember = findExistingBuyerMember(identity);
+        if (existingBuyerMember != null) {
+            throw new IllegalArgumentException(duplicateBuyerIdentityMessage(existingBuyerMember, normalizedEmail));
+        }
 
         HealthBoxBuyerSignupApplicationVo existingPending = findExistingPendingBuyerSignupApplication(signupDealerMallId, normalizedPhone, normalizedEmail);
         if (existingPending != null) {
@@ -365,7 +460,10 @@ public class HealthBoxService {
             existingPending.setPasswordHash(passwordEncoder.encode(request.getPassword()));
             existingPending.setInboundChannel(coalesce(request.getInboundChannel(), existingPending.getInboundChannel()));
             existingPending.setDealerMallId(signupDealerMallId);
-            return buyerSignupApplicationRepository.save(existingPending);
+            existingPending.setStatus("PENDING");
+            existingPending.setRejectReason(null);
+            applyBuyerSignupConsent(existingPending, request, consentedAt);
+            return activateBuyerSignupApplication(buyerSignupApplicationRepository.save(existingPending));
         }
 
         HealthBoxBuyerSignupApplicationVo application = new HealthBoxBuyerSignupApplicationVo();
@@ -375,9 +473,56 @@ public class HealthBoxService {
         application.setEmail(normalizedEmail);
         application.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         application.setStatus("PENDING");
-        application.setAppliedAt(LocalDateTime.now());
+        application.setAppliedAt(consentedAt);
         application.setInboundChannel(StringUtils.hasText(request.getInboundChannel()) ? request.getInboundChannel().trim() : resolveInboundChannel(request));
-        return buyerSignupApplicationRepository.save(application);
+        applyBuyerSignupConsent(application, request, consentedAt);
+        return activateBuyerSignupApplication(buyerSignupApplicationRepository.save(application));
+    }
+
+    @Transactional(readOnly = true)
+    public HealthBoxBuyerSignupAvailabilityResponse getBuyerSignupAvailability(
+        HealthBoxBuyerSignupAvailabilityRequest request
+    ) {
+        if (request == null) {
+            throw new IllegalArgumentException("buyer signup availability request is required");
+        }
+
+        boolean hqMallSignup = Boolean.TRUE.equals(request.getHqMall())
+            || Long.valueOf(HQ_BUYER_DEALER_MALL_ID).equals(request.getDealerMallId());
+        Long dealerMallId;
+        if (hqMallSignup) {
+            dealerMallId = HQ_BUYER_DEALER_MALL_ID;
+        } else if (request.getDealerMallId() != null && request.getDealerMallId() > 0) {
+            HealthBoxDealerMallVo dealerMall = dealerMallRepository.findById(request.getDealerMallId())
+                .orElseThrow(() -> new IllegalArgumentException("dealer mall not found. id=" + request.getDealerMallId()));
+            validateDealerMallPublicAvailability(dealerMall);
+            dealerMallId = dealerMall.getId();
+        } else if (StringUtils.hasText(request.getSlug())) {
+            dealerMallId = getActiveDealerPublicViewBySlug(request.getSlug()).getDealerMall().getId();
+        } else {
+            throw new IllegalArgumentException("dealerMallId or slug is required");
+        }
+
+        boolean phoneType = "phone".equalsIgnoreCase(request.getType());
+        String value = phoneType ? normalizePhone(request.getValue()) : normalizeEmail(request.getValue());
+        if (!StringUtils.hasText(value)) {
+            throw new IllegalArgumentException(phoneType ? "phone is required" : "email is required");
+        }
+
+        HealthBoxBuyerMemberVo existingBuyerMember = phoneType
+            ? buyerMemberRepository.findByDealerMallIdAndPhone(dealerMallId, value).orElse(null)
+            : buyerMemberRepository.findByDealerMallIdAndEmail(dealerMallId, value).orElse(null);
+        if (existingBuyerMember != null) {
+            return new HealthBoxBuyerSignupAvailabilityResponse(
+                false,
+                phoneType ? "이미 가입된 휴대폰 번호입니다." : "이미 가입된 이메일입니다."
+            );
+        }
+
+        return new HealthBoxBuyerSignupAvailabilityResponse(
+            true,
+            phoneType ? "사용 가능한 휴대폰 번호입니다." : "사용 가능한 이메일입니다."
+        );
     }
 
     public HealthBoxBuyerLoginResponse loginBuyer(HealthBoxBuyerLoginRequest request) {
@@ -504,6 +649,9 @@ public class HealthBoxService {
         if ("APPROVED".equalsIgnoreCase(application.getStatus())) {
             return application;
         }
+        if (!"PENDING".equalsIgnoreCase(application.getStatus())) {
+            throw new IllegalArgumentException("dealer application is not pending. id=" + applicationId);
+        }
 
         validateApprovalIdentity(normalizeEmail(application.getEmail()), normalizePhone(application.getPhone()), "dealer application");
 
@@ -554,6 +702,13 @@ public class HealthBoxService {
         HealthBoxDealerApplicationVo application = dealerApplicationRepository.findById(applicationId)
             .orElseThrow(() -> new IllegalArgumentException("dealer application not found. id=" + applicationId));
 
+        if ("APPROVED".equalsIgnoreCase(application.getStatus())) {
+            throw new IllegalArgumentException("approved dealer application cannot be rejected. id=" + applicationId);
+        }
+        if (!"PENDING".equalsIgnoreCase(application.getStatus()) && !"REJECTED".equalsIgnoreCase(application.getStatus())) {
+            throw new IllegalArgumentException("dealer application is not pending. id=" + applicationId);
+        }
+
         application.setStatus("REJECTED");
         application.setRejectReason(request != null ? request.getRejectReason() : null);
         application.setReviewMemo(request != null ? request.getReviewMemo() : null);
@@ -568,6 +723,11 @@ public class HealthBoxService {
         if ("APPROVED".equalsIgnoreCase(application.getStatus())) {
             return application;
         }
+
+        return activateBuyerSignupApplication(application);
+    }
+
+    private HealthBoxBuyerSignupApplicationVo activateBuyerSignupApplication(HealthBoxBuyerSignupApplicationVo application) {
 
         validateApprovalIdentity(normalizeEmail(application.getEmail()), normalizePhone(application.getPhone()), "buyer signup application");
 
@@ -596,12 +756,20 @@ public class HealthBoxService {
         buyerMember.setEmail(normalizeEmail(application.getEmail()));
         buyerMember.setStatus("ACTIVE");
         buyerMember.setApprovedAt(now);
+        buyerMember.setBirthDate(application.getBirthDate());
+        buyerMember.setTermsAgreedAt(application.getTermsAgreedAt());
+        buyerMember.setPrivacyAgreedAt(application.getPrivacyAgreedAt());
+        buyerMember.setThirdPartyAgreedAt(application.getThirdPartyAgreedAt());
+        buyerMember.setMarketingConsentYn(application.getMarketingConsentYn());
+        buyerMember.setMarketingConsentUpdatedAt(application.getMarketingConsentUpdatedAt());
+        buyerMember.setConsentDocumentVersion(application.getConsentDocumentVersion());
         buyerMember.setAccountId(resolveOrCreateBuyerAccount(application, buyerMember));
         buyerMember = buyerMemberRepository.save(buyerMember);
 
         application.setStatus("APPROVED");
         application.setApprovedAt(now);
         application.setBuyerMemberId(buyerMember.getId());
+        application.setRejectReason(null);
         return buyerSignupApplicationRepository.save(application);
     }
 
@@ -617,6 +785,11 @@ public class HealthBoxService {
 
     public List<HealthBoxBuyerMemberVo> getBuyerMembersByDealerMall(Long dealerMallId) {
         return buyerMemberRepository.findByDealerMallIdOrderByIdDesc(dealerMallId);
+    }
+
+    public HealthBoxBuyerSignupApplicationVo getBuyerSignupApplication(Long applicationId) {
+        return buyerSignupApplicationRepository.findById(applicationId)
+            .orElseThrow(() -> new IllegalArgumentException("buyer signup application not found. id=" + applicationId));
     }
 
     public List<HealthBoxBuyerMemberVo> getBuyerMembers() {
@@ -893,7 +1066,11 @@ public class HealthBoxService {
         String shippingZipCode = buyerAddress.getZipCode();
 
         int verifiedProductAmount = calculateOrderItemsAmount(request.getItems());
-        CommerceAmounts verifiedCommerceAmounts = resolveCommerceAmounts(verifiedProductAmount, shippingZipCode);
+        CommerceAmounts verifiedCommerceAmounts = resolveCommerceAmounts(
+            verifiedProductAmount,
+            shippingZipCode,
+            request.getDealerMallId()
+        );
         validateRequestedCommerceAmounts(request, verifiedCommerceAmounts);
         validateConfirmedTossPayment(request, verifiedCommerceAmounts.totalPaymentAmount);
 
@@ -968,7 +1145,7 @@ public class HealthBoxService {
             savedItems.add(orderItem);
         }
 
-        CommerceAmounts commerceAmounts = resolveCommerceAmounts(productAmount, shippingZipCode);
+        CommerceAmounts commerceAmounts = resolveCommerceAmounts(productAmount, shippingZipCode, request.getDealerMallId());
         validateRequestedCommerceAmounts(request, commerceAmounts);
         order.setProductAmount(commerceAmounts.productAmount);
         order.setShippingFee(commerceAmounts.shippingFee);
@@ -1004,7 +1181,7 @@ public class HealthBoxService {
         );
 
         int productAmount = calculateOrderItemsAmount(request.getItems());
-        CommerceAmounts commerceAmounts = resolveCommerceAmounts(productAmount, request.getZipCode());
+        CommerceAmounts commerceAmounts = resolveCommerceAmounts(productAmount, request.getZipCode(), request.getDealerMallId());
         HealthBoxOrderQuoteResponse response = new HealthBoxOrderQuoteResponse();
         response.setProductAmount(commerceAmounts.productAmount);
         response.setShippingFee(commerceAmounts.shippingFee);
@@ -1162,16 +1339,26 @@ public class HealthBoxService {
         return totalPaymentAmount;
     }
 
-    private CommerceAmounts resolveCommerceAmounts(int productAmount, String zipCode) {
+    private CommerceAmounts resolveCommerceAmounts(int productAmount, String zipCode, Long dealerMallId) {
         int baseShippingFee = DEFAULT_BASE_SHIPPING_FEE;
         int freeShippingThreshold = DEFAULT_FREE_SHIPPING_THRESHOLD;
         int configuredRemoteAreaFee = DEFAULT_REMOTE_AREA_FEE;
         List<int[]> remoteAreaZipRanges = DEFAULT_REMOTE_AREA_ZIP_RANGES;
-        HealthBoxPublicSiteConfigVo config = publicSiteConfigRepository.findById(SINGLETON_PUBLIC_SITE_CONFIG_ID).orElse(null);
+        String policyText = null;
+        if (dealerMallId != null && dealerMallId > 0) {
+            policyText = dealerMallPublicConfigRepository.findByDealerMallId(dealerMallId)
+                .map(HealthBoxDealerMallPublicConfigVo::getPolicyText)
+                .orElse(null);
+        }
+        if (!StringUtils.hasText(policyText)) {
+            policyText = publicSiteConfigRepository.findById(SINGLETON_PUBLIC_SITE_CONFIG_ID)
+                .map(HealthBoxPublicSiteConfigVo::getPolicyText)
+                .orElse(null);
+        }
 
-        if (config != null && StringUtils.hasText(config.getPolicyText())) {
+        if (StringUtils.hasText(policyText)) {
             try {
-                JsonElement parsed = new JsonParser().parse(config.getPolicyText());
+                JsonElement parsed = new JsonParser().parse(policyText);
                 if (parsed.isJsonObject()) {
                     JsonObject root = parsed.getAsJsonObject();
                     JsonElement schema = root.get("schema");
@@ -1492,8 +1679,19 @@ public class HealthBoxService {
         return buildOrderDetailResponse(order);
     }
 
+    public HealthBoxOrderDetailResponse getOrderDetailByShipmentId(Long shipmentId) {
+        HealthBoxShipmentVo shipment = shipmentRepository.findById(shipmentId)
+            .orElseThrow(() -> new IllegalArgumentException("shipment not found. id=" + shipmentId));
+        return getOrderDetail(shipment.getOrderId());
+    }
+
     public List<HealthBoxDealerMallVo> getDealerMalls() {
         return dealerMallRepository.findAll(Sort.by(Sort.Direction.DESC, "id"));
+    }
+
+    public HealthBoxDealerMallVo getDealerMall(Long dealerMallId) {
+        return dealerMallRepository.findById(dealerMallId)
+            .orElseThrow(() -> new IllegalArgumentException("dealer mall not found. id=" + dealerMallId));
     }
 
     public List<HealthBoxDealerApplicationVo> getDealerApplications() {
@@ -1502,6 +1700,10 @@ public class HealthBoxService {
 
     public List<HealthBoxBuyerSignupApplicationVo> getBuyerSignupApplications() {
         return buyerSignupApplicationRepository.findAll(Sort.by(Sort.Direction.DESC, "id"));
+    }
+
+    public List<HealthBoxBuyerSignupApplicationVo> getBuyerSignupApplicationsByDealerMall(Long dealerMallId) {
+        return buyerSignupApplicationRepository.findByDealerMallIdOrderByIdDesc(dealerMallId);
     }
 
     public List<HealthBoxCategoryResponse> getCategories() {
@@ -1863,9 +2065,18 @@ public class HealthBoxService {
 
     @Transactional
     public HealthBoxNoticeVo saveNotice(HealthBoxNoticeSaveRequest request) {
+        return saveNotice(request, null);
+    }
+
+    @Transactional
+    public HealthBoxNoticeVo saveNotice(HealthBoxNoticeSaveRequest request, Long dealerMallId) {
         HealthBoxNoticeVo target = request.getId() != null
             ? noticeRepository.findById(request.getId()).orElse(new HealthBoxNoticeVo())
             : new HealthBoxNoticeVo();
+
+        if (target.getId() != null && !Objects.equals(target.getDealerMallId(), dealerMallId)) {
+            throw new IllegalArgumentException("notice scope mismatch");
+        }
 
         if (!StringUtils.hasText(request.getTitle())) {
             throw new IllegalArgumentException("title is required");
@@ -1880,6 +2091,7 @@ public class HealthBoxService {
         target.setNoticeType(StringUtils.hasText(request.getCategory()) ? request.getCategory().trim() : "운영안내");
         target.setContent(request.getBody());
         target.setAuthorAccountId(request.getAuthorAccountId());
+        target.setDealerMallId(dealerMallId);
 
         applyNoticeStatus(target, request);
         return noticeRepository.save(target);
@@ -1889,9 +2101,30 @@ public class HealthBoxService {
         return noticeRepository.findAll(Sort.by(Sort.Direction.DESC, "id"));
     }
 
+    public List<HealthBoxNoticeVo> getNotices(Long dealerMallId) {
+        return dealerMallId == null
+            ? noticeRepository.findByDealerMallIdIsNullOrderByIdDesc()
+            : noticeRepository.findByDealerMallIdOrderByIdDesc(dealerMallId);
+    }
+
+    public List<HealthBoxNoticeVo> getPostedNotices(Long dealerMallId) {
+        return dealerMallId == null
+            ? noticeRepository.findByDealerMallIdIsNullAndPostStatusIgnoreCaseOrderByPinnedYnDescPostedAtDescIdDesc("POSTED")
+            : noticeRepository.findByDealerMallIdAndPostStatusIgnoreCaseOrderByPinnedYnDescPostedAtDescIdDesc(dealerMallId, "POSTED");
+    }
+
     public HealthBoxNoticeVo getNotice(Long noticeId) {
         return noticeRepository.findById(noticeId)
             .orElseThrow(() -> new IllegalArgumentException("notice not found. id=" + noticeId));
+    }
+
+    public HealthBoxNoticeVo getNotice(Long noticeId, Long dealerMallId, boolean postedOnly) {
+        HealthBoxNoticeVo notice = getNotice(noticeId);
+        if (!Objects.equals(notice.getDealerMallId(), dealerMallId)
+            || (postedOnly && !"POSTED".equalsIgnoreCase(notice.getPostStatus()))) {
+            throw new IllegalArgumentException("notice not found. id=" + noticeId);
+        }
+        return notice;
     }
 
     @Transactional
@@ -1899,6 +2132,11 @@ public class HealthBoxService {
         HealthBoxNoticeVo notice = noticeRepository.findById(noticeId)
             .orElseThrow(() -> new IllegalArgumentException("notice not found. id=" + noticeId));
         noticeRepository.delete(notice);
+    }
+
+    @Transactional
+    public void deleteNotice(Long noticeId, Long dealerMallId) {
+        noticeRepository.delete(getNotice(noticeId, dealerMallId, false));
     }
 
     @Transactional
@@ -1943,8 +2181,18 @@ public class HealthBoxService {
 
         target.setLogoUrl(coalesce(vo.getLogoUrl(), target.getLogoUrl()));
         target.setFaviconUrl(coalesce(vo.getFaviconUrl(), target.getFaviconUrl()));
-        target.setMainVisualUrl(coalesce(vo.getMainVisualUrl(), target.getMainVisualUrl()));
-        target.setMiddleBannerUrl(coalesce(vo.getMiddleBannerUrl(), target.getMiddleBannerUrl()));
+        if (vo.getMainVisualUrl() != null) {
+            target.setMainVisualUrl(StringUtils.hasText(vo.getMainVisualUrl()) ? vo.getMainVisualUrl().trim() : null);
+        }
+        if (vo.getMainVisualLinkUrl() != null) {
+            target.setMainVisualLinkUrl(normalizeStorefrontLink(vo.getMainVisualLinkUrl()));
+        }
+        if (vo.getMiddleBannerUrl() != null) {
+            target.setMiddleBannerUrl(StringUtils.hasText(vo.getMiddleBannerUrl()) ? vo.getMiddleBannerUrl().trim() : null);
+        }
+        if (vo.getMiddleBannerLinkUrl() != null) {
+            target.setMiddleBannerLinkUrl(normalizeStorefrontLink(vo.getMiddleBannerLinkUrl()));
+        }
         target.setShareThumbnailUrl(coalesce(vo.getShareThumbnailUrl(), target.getShareThumbnailUrl()));
         target.setMetaTitle(coalesce(vo.getMetaTitle(), target.getMetaTitle()));
         target.setMetaDescription(coalesce(vo.getMetaDescription(), target.getMetaDescription()));
@@ -1963,6 +2211,27 @@ public class HealthBoxService {
     public HealthBoxDealerMallPublicConfigVo getDealerMallPublicConfigByDealerMallId(Long dealerMallId) {
         return dealerMallPublicConfigRepository.findByDealerMallId(dealerMallId)
             .orElseThrow(() -> new IllegalArgumentException("dealer mall public config not found. dealerMallId=" + dealerMallId));
+    }
+
+    public HealthBoxPublicSiteConfigVo getDealerMallSiteConfig(Long dealerMallId) {
+        HealthBoxDealerMallPublicConfigVo dealer = getDealerMallPublicConfigByDealerMallId(dealerMallId);
+        HealthBoxPublicSiteConfigVo hq = getPublicSiteConfig();
+        HealthBoxPublicSiteConfigVo merged = new HealthBoxPublicSiteConfigVo();
+        merged.setId(dealer.getId());
+        merged.setLogoUrl(coalesce(dealer.getLogoUrl(), hq.getLogoUrl()));
+        merged.setFaviconUrl(coalesce(dealer.getFaviconUrl(), hq.getFaviconUrl()));
+        merged.setMainVisualUrl(coalesce(dealer.getMainVisualUrl(), hq.getMainVisualUrl()));
+        merged.setMainVisualLinkUrl(coalesce(dealer.getMainVisualLinkUrl(), hq.getMainVisualLinkUrl()));
+        merged.setMiddleBannerUrl(coalesce(dealer.getMiddleBannerUrl(), hq.getMiddleBannerUrl()));
+        merged.setMiddleBannerLinkUrl(coalesce(dealer.getMiddleBannerLinkUrl(), hq.getMiddleBannerLinkUrl()));
+        merged.setShareThumbnailUrl(coalesce(dealer.getShareThumbnailUrl(), hq.getShareThumbnailUrl()));
+        merged.setMetaTitle(coalesce(dealer.getMetaTitle(), hq.getMetaTitle()));
+        merged.setMetaDescription(coalesce(dealer.getMetaDescription(), hq.getMetaDescription()));
+        merged.setMainNavigationJson(coalesce(dealer.getMainNavigationJson(), hq.getMainNavigationJson()));
+        merged.setSearchPlaceholder(coalesce(dealer.getSearchPlaceholder(), hq.getSearchPlaceholder()));
+        merged.setPolicyText(coalesce(dealer.getPolicyText(), hq.getPolicyText()));
+        merged.setCustomerCenterText(coalesce(dealer.getCustomerCenterText(), hq.getCustomerCenterText()));
+        return merged;
     }
 
     @Transactional
@@ -1985,6 +2254,27 @@ public class HealthBoxService {
         target.setSupportEmail(normalizeEmail(supportEmail));
         target.setSupportPhone(normalizePhone(supportPhone));
         target.setActiveYn(StringUtils.hasText(vo.getActiveYn()) ? vo.getActiveYn() : coalesce(target.getActiveYn(), "Y"));
+        target.setLogoUrl(coalesce(vo.getLogoUrl(), target.getLogoUrl()));
+        target.setFaviconUrl(coalesce(vo.getFaviconUrl(), target.getFaviconUrl()));
+        if (vo.getMainVisualUrl() != null) {
+            target.setMainVisualUrl(StringUtils.hasText(vo.getMainVisualUrl()) ? vo.getMainVisualUrl().trim() : null);
+        }
+        if (vo.getMainVisualLinkUrl() != null) {
+            target.setMainVisualLinkUrl(normalizeStorefrontLink(vo.getMainVisualLinkUrl()));
+        }
+        if (vo.getMiddleBannerUrl() != null) {
+            target.setMiddleBannerUrl(StringUtils.hasText(vo.getMiddleBannerUrl()) ? vo.getMiddleBannerUrl().trim() : null);
+        }
+        if (vo.getMiddleBannerLinkUrl() != null) {
+            target.setMiddleBannerLinkUrl(normalizeStorefrontLink(vo.getMiddleBannerLinkUrl()));
+        }
+        target.setShareThumbnailUrl(coalesce(vo.getShareThumbnailUrl(), target.getShareThumbnailUrl()));
+        target.setMetaTitle(coalesce(vo.getMetaTitle(), target.getMetaTitle()));
+        target.setMetaDescription(coalesce(vo.getMetaDescription(), target.getMetaDescription()));
+        target.setMainNavigationJson(coalesce(vo.getMainNavigationJson(), target.getMainNavigationJson()));
+        target.setSearchPlaceholder(coalesce(vo.getSearchPlaceholder(), target.getSearchPlaceholder()));
+        target.setPolicyText(coalesce(vo.getPolicyText(), target.getPolicyText()));
+        target.setCustomerCenterText(coalesce(vo.getCustomerCenterText(), target.getCustomerCenterText()));
 
         dealerMall.setMallName(mallName);
         dealerMall.setDisplayName(displayName);
@@ -1993,6 +2283,25 @@ public class HealthBoxService {
         dealerMallRepository.save(dealerMall);
 
         return dealerMallPublicConfigRepository.save(target);
+    }
+
+    @Transactional
+    public HealthBoxDealerMallPublicConfigVo saveDealerMallSiteConfig(Long dealerMallId, HealthBoxPublicSiteConfigVo vo) {
+        HealthBoxDealerMallPublicConfigVo request = new HealthBoxDealerMallPublicConfigVo();
+        request.setLogoUrl(vo.getLogoUrl());
+        request.setFaviconUrl(vo.getFaviconUrl());
+        request.setMainVisualUrl(vo.getMainVisualUrl());
+        request.setMainVisualLinkUrl(vo.getMainVisualLinkUrl());
+        request.setMiddleBannerUrl(vo.getMiddleBannerUrl());
+        request.setMiddleBannerLinkUrl(vo.getMiddleBannerLinkUrl());
+        request.setShareThumbnailUrl(vo.getShareThumbnailUrl());
+        request.setMetaTitle(vo.getMetaTitle());
+        request.setMetaDescription(vo.getMetaDescription());
+        request.setMainNavigationJson(vo.getMainNavigationJson());
+        request.setSearchPlaceholder(vo.getSearchPlaceholder());
+        request.setPolicyText(vo.getPolicyText());
+        request.setCustomerCenterText(vo.getCustomerCenterText());
+        return saveDealerMallPublicConfig(dealerMallId, request);
     }
 
     private HealthBoxAccountVo resolveOrCreateDealerAdminAccount(HealthBoxDealerApplicationVo application) {
@@ -2050,6 +2359,14 @@ public class HealthBoxService {
         }
 
         return null;
+    }
+
+    private String duplicateBuyerIdentityMessage(HealthBoxBuyerMemberVo buyerMember, String normalizedEmail) {
+        if (StringUtils.hasText(normalizedEmail)
+            && normalizedEmail.equalsIgnoreCase(normalizeEmail(buyerMember.getEmail()))) {
+            return "이미 가입된 이메일입니다. 로그인 후 이용해주세요.";
+        }
+        return "이미 가입된 휴대폰 번호입니다. 로그인 후 이용해주세요.";
     }
 
     private void validateManualDealerRequest(HealthBoxAdminDealerCreateRequest request) {
@@ -2213,6 +2530,46 @@ public class HealthBoxService {
         if (password.trim().length() < 8) {
             throw new IllegalArgumentException("password must be at least 8 characters");
         }
+    }
+
+    private void validateBuyerSignupConsent(HealthBoxBuyerSignupCreateRequest request) {
+        if (request.getBirthDate() == null) {
+            throw new IllegalArgumentException("생년월일을 입력해주세요.");
+        }
+
+        LocalDate today = LocalDate.now();
+        if (request.getBirthDate().isAfter(today)) {
+            throw new IllegalArgumentException("생년월일을 정확히 입력해주세요.");
+        }
+        if (request.getBirthDate().plusYears(14).isAfter(today)) {
+            throw new IllegalArgumentException("만 14세 미만은 회원가입할 수 없습니다.");
+        }
+        if (!Boolean.TRUE.equals(request.getTermsAgreed())) {
+            throw new IllegalArgumentException("이용약관 동의가 필요합니다.");
+        }
+        if (!Boolean.TRUE.equals(request.getPrivacyAgreed())) {
+            throw new IllegalArgumentException("개인정보 수집·이용 동의가 필요합니다.");
+        }
+        if (!Boolean.TRUE.equals(request.getThirdPartyAgreed())) {
+            throw new IllegalArgumentException("개인정보 제3자 제공 동의가 필요합니다.");
+        }
+        if (!BUYER_SIGNUP_CONSENT_VERSION.equals(request.getConsentDocumentVersion())) {
+            throw new IllegalArgumentException("개인정보 동의 문안 버전을 확인해주세요.");
+        }
+    }
+
+    private void applyBuyerSignupConsent(
+        HealthBoxBuyerSignupApplicationVo application,
+        HealthBoxBuyerSignupCreateRequest request,
+        LocalDateTime consentedAt
+    ) {
+        application.setBirthDate(request.getBirthDate());
+        application.setTermsAgreedAt(consentedAt);
+        application.setPrivacyAgreedAt(consentedAt);
+        application.setThirdPartyAgreedAt(consentedAt);
+        application.setMarketingConsentYn(Boolean.TRUE.equals(request.getMarketingAgreed()) ? "Y" : "N");
+        application.setMarketingConsentUpdatedAt(consentedAt);
+        application.setConsentDocumentVersion(BUYER_SIGNUP_CONSENT_VERSION);
     }
 
     private HealthBoxDealerMallVo resolveActiveDealerMallForLogin(HealthBoxBuyerLoginRequest request) {
@@ -3905,6 +4262,20 @@ public class HealthBoxService {
         return StringUtils.hasText(normalized) ? normalized : null;
     }
 
+    private String normalizeStorefrontLink(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+
+        String normalized = value.trim();
+        if ((normalized.startsWith("/") && !normalized.startsWith("//"))
+            || normalized.matches("(?i)^https?://\\S+$")) {
+            return normalized;
+        }
+
+        throw new IllegalArgumentException("storefront link must be an internal path or an http/https URL");
+    }
+
     private String generateCategoryCode(Long categoryId) {
         return String.format("HB-C-%06d", categoryId);
     }
@@ -3989,6 +4360,19 @@ public class HealthBoxService {
         response.setDisplayName(coalesce(publicConfig.getDisplayName(), dealerMall.getDisplayName()));
         response.setSupportEmail(coalesce(publicConfig.getSupportEmail(), dealerMall.getSupportEmail()));
         response.setSupportPhone(coalesce(publicConfig.getSupportPhone(), dealerMall.getSupportPhone()));
+        response.setLogoUrl(publicConfig.getLogoUrl());
+        response.setFaviconUrl(publicConfig.getFaviconUrl());
+        response.setMainVisualUrl(publicConfig.getMainVisualUrl());
+        response.setMainVisualLinkUrl(publicConfig.getMainVisualLinkUrl());
+        response.setMiddleBannerUrl(publicConfig.getMiddleBannerUrl());
+        response.setMiddleBannerLinkUrl(publicConfig.getMiddleBannerLinkUrl());
+        response.setShareThumbnailUrl(publicConfig.getShareThumbnailUrl());
+        response.setMetaTitle(publicConfig.getMetaTitle());
+        response.setMetaDescription(publicConfig.getMetaDescription());
+        response.setMainNavigationJson(publicConfig.getMainNavigationJson());
+        response.setSearchPlaceholder(publicConfig.getSearchPlaceholder());
+        response.setPolicyText(publicConfig.getPolicyText());
+        response.setCustomerCenterText(publicConfig.getCustomerCenterText());
         return response;
     }
 

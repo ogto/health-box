@@ -11,7 +11,7 @@ import {
   type HealthBoxSalesPolicy,
   type HealthBoxRecord,
 } from "../_lib/health-box-api";
-import { requireAdminSession } from "../_lib/admin-session";
+import { requireWritableAdminSession as requireAdminSession } from "../_lib/admin-auth";
 import {
   parseInformationLines,
   serializeProductCommercePolicy,
@@ -42,6 +42,24 @@ function optionalString(formData: FormData, key: string) {
 
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function formString(formData: FormData, key: string) {
+  const value = formData.get(key);
+  return typeof value === "string" ? value.trim() : undefined;
+}
+
+function storefrontLinkValue(formData: FormData, key: string, label: string) {
+  const value = formString(formData, key);
+  if (value === undefined || value === "") {
+    return value;
+  }
+
+  if (/^\/(?!\/)/.test(value) || /^https?:\/\/\S+$/i.test(value)) {
+    return value;
+  }
+
+  throw new Error(`${label}는 /로 시작하는 내부 경로 또는 http/https 주소로 입력해주세요.`);
 }
 
 function optionalNumber(formData: FormData, key: string) {
@@ -245,10 +263,10 @@ async function findDealerMallWithSlug(slug: string, currentDealerMallId?: number
   });
 }
 
-function redirectIfRequested(formData: FormData) {
+function redirectIfRequested(formData: FormData, defaultToast?: string) {
   const redirectTo = optionalString(formData, "redirectTo");
   if (redirectTo) {
-    const toast = optionalString(formData, "toast");
+    const toast = optionalString(formData, "toast") || defaultToast;
     const toastError = optionalString(formData, "toastError");
     if (toast) {
       redirect(buildRedirectWithMessage(redirectTo, "toast", toast));
@@ -263,9 +281,12 @@ function redirectIfRequested(formData: FormData) {
 }
 
 function buildRedirectWithMessage(path: string, key: string, value: string) {
+  const hashIndex = path.indexOf("#");
+  const basePath = hashIndex >= 0 ? path.slice(0, hashIndex) : path;
+  const hash = hashIndex >= 0 ? path.slice(hashIndex) : "";
   const params = new URLSearchParams();
   params.set(key, value);
-  return `${path}${path.includes("?") ? "&" : "?"}${params.toString()}`;
+  return `${basePath}${basePath.includes("?") ? "&" : "?"}${params.toString()}${hash}`;
 }
 
 function redirectFormError(formData: FormData, message: string): never {
@@ -557,6 +578,19 @@ async function submitDealerMall(formData: FormData): Promise<CreateDealerMallDia
 export async function saveStorefrontConfigAction(formData: FormData) {
   await requireAdminSession();
   ensureApiConfigured();
+  const mainVisualUrl = formString(formData, "mainVisualUrl");
+  const middleBannerUrl = formString(formData, "middleBannerUrl");
+  let mainVisualLinkUrl: string | undefined;
+  let middleBannerLinkUrl: string | undefined;
+  try {
+    mainVisualLinkUrl = storefrontLinkValue(formData, "mainVisualLinkUrl", "메인 비주얼 링크");
+    middleBannerLinkUrl = storefrontLinkValue(formData, "middleBannerLinkUrl", "중간 배너 링크");
+  } catch (error) {
+    redirectFormError(
+      formData,
+      error instanceof Error ? error.message : "비주얼 링크 주소를 확인해주세요.",
+    );
+  }
 
   const policyText = serializeStorefrontPolicyBundle({
     message: optionalString(formData, "policyText") || "",
@@ -610,8 +644,10 @@ export async function saveStorefrontConfigAction(formData: FormData) {
       id: optionalNumber(formData, "id") ?? 0,
       logoUrl: optionalString(formData, "logoUrl"),
       faviconUrl: optionalString(formData, "faviconUrl"),
-      mainVisualUrl: optionalString(formData, "mainVisualUrl"),
-      middleBannerUrl: optionalString(formData, "middleBannerUrl"),
+      mainVisualUrl,
+      mainVisualLinkUrl,
+      middleBannerUrl,
+      middleBannerLinkUrl,
       shareThumbnailUrl: optionalString(formData, "shareThumbnailUrl"),
       metaTitle: optionalString(formData, "metaTitle"),
       metaDescription: optionalString(formData, "metaDescription"),
@@ -626,7 +662,7 @@ export async function saveStorefrontConfigAction(formData: FormData) {
   revalidatePath("/notice");
   revalidatePath("/mypage");
   revalidatePath("/admin/storefront");
-  redirectIfRequested(formData);
+  redirectIfRequested(formData, "홈페이지 설정을 저장했습니다.");
 }
 
 export async function saveDealerMallPublicConfigAction(formData: FormData) {
@@ -678,7 +714,7 @@ export async function saveDealerMallPublicConfigAction(formData: FormData) {
   });
 
   revalidatePath("/admin/dealers");
-  redirectIfRequested(formData);
+  redirectIfRequested(formData, "딜러몰 정보를 저장했습니다.");
 }
 
 export async function createDealerMallAction(formData: FormData) {
@@ -711,39 +747,59 @@ export async function approveDealerApplicationAction(formData: FormData) {
   await requireAdminSession();
   ensureApiConfigured();
   const applicationId = requiredString(formData, "applicationId");
+  const redirectTo = optionalString(formData, "redirectTo") || "/admin/dealers#dealer-applications";
   if (!applicationId) {
     throw new Error("applicationId is required");
   }
 
-  await healthBoxFetch(`/health-box/admin/dealer-applications/${applicationId}/approve`, {
-    method: "POST",
-    body: {
-      reviewMemo: optionalString(formData, "reviewMemo"),
-    },
-  });
+  try {
+    await healthBoxFetch(`/health-box/admin/dealer-applications/${applicationId}/approve`, {
+      method: "POST",
+      body: {
+        reviewMemo: optionalString(formData, "reviewMemo"),
+      },
+    });
+  } catch (error) {
+    const rawMessage = actionErrorMessage(error, "딜러 승인 중 오류가 발생했습니다.");
+    const message = /slug already exists/i.test(rawMessage)
+      ? "희망 딜러몰 주소가 이미 사용 중입니다. 신청 정보를 확인해주세요."
+      : rawMessage.replace(/^HealthBox API \d+:\s*/, "").replace(/^Error:\s*/, "").trim();
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", message));
+  }
 
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/dealers");
+  redirect(buildRedirectWithMessage(redirectTo, "toast", "딜러 신청을 승인하고 딜러몰을 생성했습니다."));
 }
 
 export async function rejectDealerApplicationAction(formData: FormData) {
   await requireAdminSession();
   ensureApiConfigured();
   const applicationId = requiredString(formData, "applicationId");
+  const redirectTo = optionalString(formData, "redirectTo") || "/admin/dealers#dealer-applications";
   if (!applicationId) {
     throw new Error("applicationId is required");
   }
 
-  await healthBoxFetch(`/health-box/admin/dealer-applications/${applicationId}/reject`, {
-    method: "POST",
-    body: {
-      rejectReason: optionalString(formData, "rejectReason") || "운영 검토 보류",
-      reviewMemo: optionalString(formData, "reviewMemo"),
-    },
-  });
+  try {
+    await healthBoxFetch(`/health-box/admin/dealer-applications/${applicationId}/reject`, {
+      method: "POST",
+      body: {
+        rejectReason: optionalString(formData, "rejectReason") || "운영 검토 보류",
+        reviewMemo: optionalString(formData, "reviewMemo"),
+      },
+    });
+  } catch (error) {
+    const message = actionErrorMessage(error, "딜러 신청 반려 중 오류가 발생했습니다.")
+      .replace(/^HealthBox API \d+:\s*/, "")
+      .replace(/^Error:\s*/, "")
+      .trim();
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", message));
+  }
 
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/dealers");
+  redirect(buildRedirectWithMessage(redirectTo, "toast", "딜러 신청을 반려했습니다."));
 }
 
 export async function approveBuyerSignupApplicationAction(formData: FormData) {
@@ -774,30 +830,43 @@ export async function approveBuyerSignupApplicationAction(formData: FormData) {
   }
 
   if (approvalError) {
-    redirect(buildRedirectWithMessage(redirectTo, "memberApprovalError", approvalError));
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", approvalError));
   }
 
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/members");
+  redirect(buildRedirectWithMessage(redirectTo, "toast", "회원 가입을 승인했습니다."));
 }
 
 export async function rejectBuyerSignupApplicationAction(formData: FormData) {
   await requireAdminSession();
   ensureApiConfigured();
   const applicationId = requiredString(formData, "applicationId");
+  const redirectTo = optionalString(formData, "redirectTo") || "/admin/members";
   if (!applicationId) {
-    throw new Error("applicationId is required");
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", "회원 신청 정보가 올바르지 않습니다."));
   }
 
-  await healthBoxFetch(`/health-box/admin/buyer-signup-applications/${applicationId}/reject`, {
-    method: "POST",
-    body: {
-      rejectReason: optionalString(formData, "rejectReason") || "가입 정보 재확인 필요",
-    },
-  });
+  try {
+    await healthBoxFetch(`/health-box/admin/buyer-signup-applications/${applicationId}/reject`, {
+      method: "POST",
+      body: {
+        rejectReason: optionalString(formData, "rejectReason") || "가입 정보 재확인 필요",
+      },
+    });
+  } catch (error) {
+    redirect(
+      buildRedirectWithMessage(
+        redirectTo,
+        "toastError",
+        actionErrorMessage(error, "회원 신청을 반려하지 못했습니다."),
+      ),
+    );
+  }
 
   revalidatePath("/admin/dashboard");
   revalidatePath("/admin/members");
+  redirect(buildRedirectWithMessage(redirectTo, "toast", "회원 가입 신청을 반려했습니다."));
 }
 
 export async function saveNoticeAction(formData: FormData) {
@@ -836,7 +905,7 @@ export async function saveNoticeAction(formData: FormData) {
   });
 
   revalidatePath("/admin/notices");
-  redirectIfRequested(formData);
+  redirectIfRequested(formData, id ? "공지를 수정했습니다." : "공지를 등록했습니다.");
 }
 
 export async function deleteNoticeAction(formData: FormData) {
@@ -1008,7 +1077,7 @@ async function saveProduct(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/products/best");
   revalidatePath("/products/recommend");
-  redirectIfRequested(formData);
+  redirectIfRequested(formData, productId ? "상품 수정을 완료했습니다." : "상품 등록을 완료했습니다.");
 }
 
 export async function saveProductAction(formData: FormData) {
@@ -1096,7 +1165,7 @@ export async function saveCategoryAction(formData: FormData) {
   revalidatePath("/admin/categories");
   revalidatePath("/admin/products");
   revalidatePath("/admin/products/new");
-  redirectIfRequested(formData);
+  redirectIfRequested(formData, optionalNumber(formData, "id") ? "카테고리를 수정했습니다." : "카테고리를 추가했습니다.");
 }
 
 export async function saveCategoryOrderAction(formData: FormData) {
@@ -1126,7 +1195,7 @@ export async function saveCategoryOrderAction(formData: FormData) {
   revalidatePath("/admin/categories");
   revalidatePath("/admin/products");
   revalidatePath("/admin/products/new");
-  redirectIfRequested(formData);
+  redirectIfRequested(formData, "카테고리 순서를 저장했습니다.");
 }
 
 export async function deleteCategoryAction(formData: FormData) {
@@ -1135,7 +1204,7 @@ export async function deleteCategoryAction(formData: FormData) {
 
   const categoryId = optionalNumber(formData, "id");
   if (!categoryId) {
-    throw new Error("삭제할 카테고리 ID가 없습니다.");
+    redirectFormError(formData, "삭제할 카테고리 정보가 없습니다.");
   }
 
   await healthBoxFetch(`/health-box/admin/categories/${categoryId}`, {
@@ -1145,7 +1214,7 @@ export async function deleteCategoryAction(formData: FormData) {
   revalidatePath("/admin/categories");
   revalidatePath("/admin/products");
   revalidatePath("/admin/products/new");
-  redirectIfRequested(formData);
+  redirectIfRequested(formData, "카테고리를 삭제했습니다.");
 }
 
 export async function saveSalesPolicyTemplateAction(input: {
@@ -1297,7 +1366,7 @@ export async function cancelOrderAction(formData: FormData) {
   const orderId = requiredString(formData, "orderId");
   const cancellationRequestId = requiredString(formData, "cancellationRequestId");
   if (!orderId || !cancellationRequestId) {
-    throw new Error("취소 요청 정보가 없습니다.");
+    redirectFormError(formData, "취소 요청 정보가 없습니다.");
   }
 
   await healthBoxFetch(`/health-box/admin/orders/${orderId}/cancel`, {
@@ -1305,7 +1374,7 @@ export async function cancelOrderAction(formData: FormData) {
   });
 
   revalidatePath("/admin/orders");
-  redirectIfRequested(formData);
+  redirectIfRequested(formData, "주문 전체 취소를 완료했습니다.");
 }
 
 export async function partialCancelOrderAction(formData: FormData) {
@@ -1317,7 +1386,7 @@ export async function partialCancelOrderAction(formData: FormData) {
   const orderItemId = optionalNumber(formData, "orderItemId");
   const quantity = optionalNumber(formData, "quantity");
   if (!orderId || !cancellationRequestId || !orderItemId || !quantity) {
-    throw new Error("부분취소할 주문상품과 수량을 선택해주세요.");
+    redirectFormError(formData, "부분취소할 주문상품과 수량을 선택해주세요.");
   }
 
   await healthBoxFetch(`/health-box/admin/orders/${orderId}/partial-cancel`, {
@@ -1329,7 +1398,7 @@ export async function partialCancelOrderAction(formData: FormData) {
   });
 
   revalidatePath("/admin/orders");
-  redirectIfRequested(formData);
+  redirectIfRequested(formData, "주문 부분 취소를 완료했습니다.");
 }
 
 export async function updateShipmentStatusAction(formData: FormData) {
@@ -1338,7 +1407,7 @@ export async function updateShipmentStatusAction(formData: FormData) {
 
   const shipmentId = requiredString(formData, "shipmentId");
   if (!shipmentId) {
-    throw new Error("shipmentId is required");
+    redirectFormError(formData, "배송 처리 정보가 올바르지 않습니다.");
   }
 
   const shipmentStatus = optionalString(formData, "shipmentStatus");
@@ -1368,7 +1437,7 @@ export async function updateShipmentStatusAction(formData: FormData) {
   });
 
   revalidatePath("/admin/orders");
-  redirectIfRequested(formData);
+  redirectIfRequested(formData, "배송 상태를 저장했습니다.");
 }
 
 export async function bulkPrepareShipmentsAction(formData: FormData) {
@@ -1397,5 +1466,62 @@ export async function bulkPrepareShipmentsAction(formData: FormData) {
   );
 
   revalidatePath("/admin/orders");
-  redirectIfRequested(formData);
+  redirectIfRequested(formData, `${shipmentIds.length}건을 상품 준비 상태로 변경했습니다.`);
+}
+
+export async function saveAdminStaffAction(formData: FormData) {
+  await requireAdminSession();
+  ensureApiConfigured();
+
+  const redirectTo = "/admin/staff";
+  const id = optionalNumber(formData, "id");
+  const name = requiredString(formData, "name");
+  const loginId = requiredString(formData, "loginId");
+  const phone = requiredString(formData, "phone");
+  const password = optionalString(formData, "password");
+  const scopeType = optionalString(formData, "scopeType") === "DEALER" ? "DEALER" : "HQ";
+  const dealerMallId = scopeType === "DEALER" ? optionalNumber(formData, "dealerMallId") : undefined;
+
+  if (!name || !loginId || !phone) {
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", "직원 이름, 로그인 아이디, 휴대폰 번호를 입력해주세요."));
+  }
+  if (!id && !password) {
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", "새 직원의 초기 비밀번호를 입력해주세요."));
+  }
+  if (scopeType === "DEALER" && !dealerMallId) {
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", "소속 딜러몰을 선택해주세요."));
+  }
+
+  try {
+    await healthBoxFetch("/health-box/admin/staff", {
+      method: "PUT",
+      body: {
+        dealerMallId,
+        email: optionalString(formData, "email"),
+        id,
+        loginId,
+        memo: optionalString(formData, "memo"),
+        name,
+        password,
+        permissionCodes: stringValues(formData, "permissionCodes"),
+        phone,
+        positionName: optionalString(formData, "positionName"),
+        roleType: optionalString(formData, "roleType") === "OWNER" ? "OWNER" : "STAFF",
+        scopeType,
+        status: optionalString(formData, "status") === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+      },
+    });
+  } catch (error) {
+    console.error("[saveAdminStaffAction]", error);
+    redirect(
+      buildRedirectWithMessage(
+        redirectTo,
+        "toastError",
+        actionErrorMessage(error, "직원 정보를 저장하지 못했습니다."),
+      ),
+    );
+  }
+
+  revalidatePath(redirectTo);
+  redirect(buildRedirectWithMessage(redirectTo, "toast", id ? "직원 정보와 권한을 수정했습니다." : "직원 계정을 추가했습니다."));
 }

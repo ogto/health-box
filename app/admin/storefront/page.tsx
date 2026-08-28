@@ -1,19 +1,23 @@
 import Image from "next/image";
-import Link from "next/link";
 
 import { saveStorefrontConfigAction } from "../../_actions/health-box-admin";
 import { BrandLogo } from "../../_components/brand-logo";
 import { AdminHeader } from "../../_components/admin/admin-header";
 import { AdminStorefrontMenuEditor } from "../../_components/admin/admin-storefront-menu-editor";
+import { AdminStorefrontWorkspace } from "../../_components/admin/admin-storefront-workspace";
+import { AdminStorefrontVisualUpload } from "../../_components/admin/admin-storefront-visual-upload";
+import { AdminReadOnlyNotice } from "../../_components/admin/admin-read-only-notice";
 import { AdminSubmitButton } from "../../_components/admin/admin-submit-button";
-import { AdminBadge, AdminMetrics, AdminPanel } from "../../_components/admin/admin-ui";
+import { AdminMetrics, AdminPanel } from "../../_components/admin/admin-ui";
 import type { AdminMetric } from "../../_lib/admin-data";
 import {
   fetchAdminNotices,
+  fetchAdminDealerMalls,
   fetchAdminProducts,
   fetchAdminPublicSiteConfig,
   hasHealthBoxApi,
 } from "../../_lib/health-box-api";
+import { getAdminSession } from "../../_lib/admin-auth";
 import { mapNoticeRows, mapProductRows } from "../../_lib/health-box-presenters";
 import { resolveStorefrontNavigationItems, storefrontConfig } from "../../_lib/storefront-config";
 import { formatZipRangeLines, parseStorefrontPolicyBundle } from "../../_lib/storefront-policy";
@@ -21,17 +25,29 @@ import { formatZipRangeLines, parseStorefrontPolicyBundle } from "../../_lib/sto
 const previewTabs = ["베스트", "균형있는", "건강하게", "체중조절"] as const;
 
 export default async function AdminStorefrontPage() {
-  const [remoteConfig, remoteProductPage, remoteNotices] = hasHealthBoxApi()
+  const session = await getAdminSession();
+  const dealerAdmin = session?.scopeType === "DEALER";
+  const [remoteConfig, remoteProductPage, remoteNotices, dealerMalls] = hasHealthBoxApi()
     ? await Promise.all([
         fetchAdminPublicSiteConfig(),
-        fetchAdminProducts({ page: 1, size: 200 }),
+        fetchAdminProducts(
+          { page: 1, size: 200 },
+          dealerAdmin ? { adminAccess: "public" } : undefined,
+        ),
         fetchAdminNotices(),
+        dealerAdmin ? fetchAdminDealerMalls() : Promise.resolve([]),
       ])
-    : [null, null, null];
+    : [null, null, null, null];
   const productOptions = mapProductRows(remoteProductPage).items;
   const previewProducts = productOptions.slice(0, 4);
+  const latestProductImage = previewProducts[0]?.image || storefrontConfig.assets.heroImage;
   const previewNotices = mapNoticeRows(remoteNotices).slice(0, 3);
   const policyBundle = parseStorefrontPolicyBundle(remoteConfig?.policyText);
+  const rootDomain = process.env.STORE_ROOT_DOMAIN?.trim() || "everybuy.co.kr";
+  const dealerSlug = dealerAdmin && dealerMalls?.[0]
+    ? String(dealerMalls[0].slug || "").trim()
+    : "";
+  const publicStoreUrl = `https://${dealerSlug ? `${dealerSlug}.` : ""}${rootDomain}`;
 
   const pageConfig = {
     metadata: {
@@ -46,16 +62,20 @@ export default async function AdminStorefrontPage() {
     assets: {
       ...storefrontConfig.assets,
       logoUrl: remoteConfig?.logoUrl || "",
-      heroImage: remoteConfig?.mainVisualUrl || storefrontConfig.assets.heroImage,
+      heroImage: remoteConfig?.mainVisualUrl || latestProductImage,
+      heroHref: remoteConfig?.mainVisualLinkUrl || "",
       bannerImage: remoteConfig?.middleBannerUrl || storefrontConfig.assets.bannerImage,
-      shareImage: remoteConfig?.shareThumbnailUrl || storefrontConfig.assets.shareImage,
+      bannerHref: remoteConfig?.middleBannerLinkUrl || "",
+      shareImage:
+        remoteConfig?.shareThumbnailUrl ||
+        remoteConfig?.mainVisualUrl ||
+        storefrontConfig.assets.shareImage,
       faviconPath: remoteConfig?.faviconUrl || storefrontConfig.assets.faviconPath,
     },
     navigation: resolveStorefrontNavigationItems(
       remoteConfig?.mainNavigationJson || remoteConfig?.navigationJson || remoteConfig?.menuJson,
     ),
     supportText: remoteConfig?.customerCenterText || storefrontConfig.home.supportItems[0]?.value || "",
-    syncTargets: storefrontConfig.syncTargets,
   };
 
   const storefrontMetrics: AdminMetric[] = [
@@ -66,21 +86,21 @@ export default async function AdminStorefrontPage() {
       tone: "blue",
     },
     {
-      label: "공유 자산",
-      value: "5개",
-      hint: "로고 · 비주얼 · 배너 · 썸네일 · 파비콘",
+      label: "메인 비주얼",
+      value: remoteConfig?.mainVisualUrl ? "직접 등록" : "최신 상품 자동",
+      hint: "권장 1920 × 720px",
       tone: "cyan",
     },
     {
-      label: "저장 대상",
-      value: "공통 설정",
-      hint: "공개몰 전체 반영",
+      label: dealerAdmin ? "관리 모드" : "저장 대상",
+      value: dealerAdmin ? "조회 전용" : "공통 설정",
+      hint: dealerAdmin ? "변경은 본사 관리자에게 요청" : "공개몰 전체 반영",
       tone: "green",
     },
     {
       label: "연동 상태",
       value: hasHealthBoxApi() ? "API 연결" : "API 미연결",
-      hint: hasHealthBoxApi() ? "cloud-api 저장 가능" : "환경변수 필요",
+      hint: hasHealthBoxApi() ? "건강창고 전용 API 저장 가능" : "환경변수 필요",
       tone: hasHealthBoxApi() ? "gold" : "rose",
     },
   ];
@@ -88,20 +108,26 @@ export default async function AdminStorefrontPage() {
   return (
     <div className="admin-page">
       <AdminHeader
-        title="홈페이지관리"
+        title={dealerAdmin ? "홈페이지조회" : "홈페이지관리"}
         actions={
-          <Link className="admin-button secondary" href="/">
-            미리보기
-          </Link>
+          <a className="admin-button secondary" href={publicStoreUrl} rel="noreferrer" target="_blank">
+            공개몰 열기
+          </a>
         }
       />
 
       <AdminMetrics items={storefrontMetrics} />
 
-      <div className="admin-form-layout admin-storefront-layout">
-        <form action={saveStorefrontConfigAction} className="admin-form-main">
-          <input name="id" type="hidden" value={String(remoteConfig?.id || "")} />
-          <AdminPanel title="검색 / 정책 문구">
+      {dealerAdmin ? <AdminReadOnlyNotice scopeName={session?.scopeName} /> : null}
+
+      <AdminStorefrontWorkspace
+        publicStoreUrl={publicStoreUrl}
+        readOnly={dealerAdmin}
+        settings={
+          <form action={saveStorefrontConfigAction} className="admin-form-main">
+            <input name="id" type="hidden" value={String(remoteConfig?.id || "")} />
+            <input name="redirectTo" type="hidden" value="/admin/storefront" />
+            <AdminPanel title="검색 / 정책 문구">
             <div className="admin-field-grid two">
               <label className="admin-field span-two">
                 <span>검색 문구</span>
@@ -129,7 +155,7 @@ export default async function AdminStorefrontPage() {
                 />
               </label>
             </div>
-          </AdminPanel>
+            </AdminPanel>
 
           <AdminPanel
             title="배송비 정책"
@@ -300,21 +326,59 @@ export default async function AdminStorefrontPage() {
                 <span>로고 이미지 URL</span>
                 <input className="admin-input" defaultValue={remoteConfig?.logoUrl || ""} name="logoUrl" type="url" />
               </label>
-              <label className="admin-field">
+              <div className="admin-field span-two">
                 <span>메인 비주얼</span>
-                <input className="admin-input" defaultValue={remoteConfig?.mainVisualUrl || ""} name="mainVisualUrl" type="url" />
-              </label>
-              <label className="admin-field">
+                <AdminStorefrontVisualUpload
+                  assetLabel="메인 비주얼"
+                  defaultValue={remoteConfig?.mainVisualUrl || ""}
+                  fallbackAlt="최신 상품 자동 노출 미리보기"
+                  fallbackImageUrl={latestProductImage}
+                  fallbackStatusLabel="최신 상품 이미지 자동 노출"
+                  fieldName="mainVisualUrl"
+                  recommendedSize="1920 × 720px"
+                />
+                <label className="admin-field">
+                  <span>클릭 링크</span>
+                  <input
+                    className="admin-input"
+                    defaultValue={remoteConfig?.mainVisualLinkUrl || ""}
+                    name="mainVisualLinkUrl"
+                    placeholder="/products/best 또는 https://..."
+                    type="text"
+                  />
+                  <small className="admin-field-hint">비워두면 이미지가 클릭되지 않습니다.</small>
+                </label>
+              </div>
+              <div className="admin-field span-two">
                 <span>중간 배너</span>
-                <input className="admin-input" defaultValue={remoteConfig?.middleBannerUrl || ""} name="middleBannerUrl" type="url" />
-              </label>
+                <AdminStorefrontVisualUpload
+                  assetLabel="중간 배너"
+                  defaultValue={remoteConfig?.middleBannerUrl || ""}
+                  fallbackAlt="기본 중간 배너 미리보기"
+                  fallbackImageUrl={storefrontConfig.assets.bannerImage}
+                  fallbackStatusLabel="기본 중간 배너"
+                  fieldName="middleBannerUrl"
+                  recommendedSize="1920 × 384px"
+                />
+                <label className="admin-field">
+                  <span>클릭 링크</span>
+                  <input
+                    className="admin-input"
+                    defaultValue={remoteConfig?.middleBannerLinkUrl || ""}
+                    name="middleBannerLinkUrl"
+                    placeholder="/promotion 또는 https://..."
+                    type="text"
+                  />
+                  <small className="admin-field-hint">비워두면 이미지가 클릭되지 않습니다.</small>
+                </label>
+              </div>
             </div>
           </AdminPanel>
 
           <div className="admin-action-stack">
             {hasHealthBoxApi() ? (
               <AdminSubmitButton className="admin-button" pendingLabel="저장중...">
-                공통 설정 저장
+                {dealerAdmin ? "딜러몰 설정 저장" : "공통 설정 저장"}
               </AdminSubmitButton>
             ) : (
               <button className="admin-button" disabled type="button">
@@ -322,9 +386,9 @@ export default async function AdminStorefrontPage() {
               </button>
             )}
           </div>
-        </form>
-
-        <div className="admin-form-side">
+          </form>
+        }
+        preview={
           <AdminPanel title="미리보기">
             <div className="admin-storefront-preview-card">
               <div className="admin-storefront-mini-shell">
@@ -369,7 +433,7 @@ export default async function AdminStorefrontPage() {
                 </div>
 
                 <div className="admin-storefront-mini-body">
-                  <div className="admin-storefront-mini-hero-grid">
+                  <div className="admin-storefront-mini-hero-grid is-single">
                     <div className="admin-storefront-mini-lead-card">
                       <Image
                         alt={storefrontConfig.assets.heroAlt}
@@ -378,27 +442,6 @@ export default async function AdminStorefrontPage() {
                         sizes="(max-width: 1024px) 100vw, 260px"
                         src={pageConfig.assets.heroImage}
                       />
-                      <div className="admin-storefront-mini-overlay">
-                        <span>MAIN VISUAL</span>
-                        <strong>{storefrontConfig.home.hero.titleLines.join(" ")}</strong>
-                        <p>{storefrontConfig.home.hero.description}</p>
-                      </div>
-                    </div>
-
-                    <div className="admin-storefront-mini-side-list">
-                      <article className="admin-storefront-mini-side-card">
-                        <Image
-                          alt={storefrontConfig.home.banner.title}
-                          className="object-cover"
-                          fill
-                          sizes="(max-width: 1024px) 100vw, 180px"
-                          src={pageConfig.assets.bannerImage}
-                        />
-                        <div className="admin-storefront-mini-side-copy">
-                          <strong>{storefrontConfig.home.banner.title}</strong>
-                          <p>{storefrontConfig.home.banner.description}</p>
-                        </div>
-                      </article>
                     </div>
                   </div>
 
@@ -508,23 +551,8 @@ export default async function AdminStorefrontPage() {
               </div>
             </div>
           </AdminPanel>
-
-          <AdminPanel title="적용 범위">
-            <div className="admin-list">
-              {pageConfig.syncTargets.map((target) => (
-                <div className="admin-list-row" key={target}>
-                  <div className="admin-row-stack">
-                    <strong>{target}</strong>
-                  </div>
-                  <div className="admin-list-meta">
-                    <AdminBadge tone="blue">공통 반영</AdminBadge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </AdminPanel>
-        </div>
-      </div>
+        }
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { saveNoticeAction } from "../../../../_actions/health-box-admin";
 import { AdminHeader } from "../../../../_components/admin/admin-header";
@@ -13,6 +13,7 @@ import {
   type HealthBoxRecord,
 } from "../../../../_lib/health-box-api";
 import { findNoticeBySlug, mapNoticeRows } from "../../../../_lib/health-box-presenters";
+import { getAdminSession } from "../../../../_lib/admin-auth";
 
 function toNoticeRow(record: HealthBoxRecord | null) {
   if (!record) {
@@ -32,7 +33,10 @@ export default async function AdminNoticeEditPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const { slug } = await params;
+  const [{ slug }, session] = await Promise.all([params, getAdminSession()]);
+  if (session?.scopeType === "DEALER") {
+    redirect(`/admin/notices/${slug}`);
+  }
   const fallbackNoticeId = extractNoticeIdFromFallbackSlug(slug);
   const notices = hasHealthBoxApi() ? await fetchAdminNotices() : null;
   const listedNotice = findNoticeBySlug(mapNoticeRows(notices), slug);

@@ -1,0 +1,1 @@
+export const BUYER_SIGNUP_CONSENT_VERSION = "v1.0";

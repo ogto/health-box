@@ -93,28 +93,8 @@ function itemImageUrl(item: HealthBoxRecord) {
   return String(item.thumbnailUrl || item.imageUrl || item.mediaUrl || "");
 }
 
-function orderImageUrl(order: HealthBoxRecord) {
-  const item = orderItems(order).find((orderItem) => itemImageUrl(orderItem));
-  return item ? itemImageUrl(item) : "";
-}
-
-function itemInitial(order: HealthBoxRecord) {
-  return orderItemSummary(order).trim().charAt(0) || "상";
-}
-
 function itemInitialFromItem(item: HealthBoxRecord) {
   return String(item.productNameSnapshot || "상품").trim().charAt(0) || "상";
-}
-
-function orderItemSummary(order: HealthBoxRecord) {
-  const items = orderItems(order);
-  if (!items.length) {
-    return "주문 상품 정보 없음";
-  }
-
-  const first = items[0];
-  const productName = String(first.productNameSnapshot || "상품명 없음");
-  return items.length > 1 ? `${productName} 외 ${items.length - 1}건` : productName;
 }
 
 function itemOptionText(item: HealthBoxRecord) {
@@ -165,11 +145,6 @@ function MemberOrderOptionDisplay({ item }: { item: HealthBoxRecord }) {
       ))}
     </div>
   );
-}
-
-function orderQuantitySummary(order: HealthBoxRecord) {
-  const quantity = orderItems(order).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-  return quantity > 0 ? `총 ${quantity}개` : "수량 정보 없음";
 }
 
 function orderSearchText(order: HealthBoxRecord) {

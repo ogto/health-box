@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
-type AdminToastTone = "error" | "success";
+export type AdminToastTone = "error" | "info" | "success";
 
 type AdminToastItem = {
   id: number;
@@ -12,21 +12,35 @@ type AdminToastItem = {
 };
 
 const TOAST_DURATION_MS = 3200;
+const ERROR_TOAST_PARAMS = ["toastError", "createError", "memberApprovalError", "staffError"] as const;
+const SUCCESS_TOAST_PARAMS = ["toast", "staffSaved"] as const;
+
+export function dispatchAdminToast(message: string, tone: AdminToastTone = "success") {
+  const trimmedMessage = message.trim();
+  if (!trimmedMessage || typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent("admin-toast", {
+      detail: { message: trimmedMessage, tone },
+    }),
+  );
+}
 
 function messageFromSearchParams(searchParams: URLSearchParams) {
-  const toast = searchParams.get("toast");
-  if (toast) {
-    return { message: toast, tone: "success" as const };
+  for (const key of ERROR_TOAST_PARAMS) {
+    const message = searchParams.get(key);
+    if (message) {
+      return { message, tone: "error" as const };
+    }
   }
 
-  const toastError = searchParams.get("toastError");
-  if (toastError) {
-    return { message: toastError, tone: "error" as const };
-  }
-
-  const createError = searchParams.get("createError");
-  if (createError) {
-    return { message: createError, tone: "error" as const };
+  for (const key of SUCCESS_TOAST_PARAMS) {
+    const message = searchParams.get(key);
+    if (message) {
+      return { message, tone: "success" as const };
+    }
   }
 
   if (searchParams.get("createStatus") === "success") {
@@ -38,13 +52,14 @@ function messageFromSearchParams(searchParams: URLSearchParams) {
 
 function removeToastParams(pathname: string, searchParams: URLSearchParams) {
   const nextParams = new URLSearchParams(searchParams);
-  nextParams.delete("toast");
-  nextParams.delete("toastError");
+  for (const key of [...ERROR_TOAST_PARAMS, ...SUCCESS_TOAST_PARAMS]) {
+    nextParams.delete(key);
+  }
   nextParams.delete("createStatus");
-  nextParams.delete("createError");
 
   const query = nextParams.toString();
-  window.history.replaceState(null, "", query ? `${pathname}?${query}` : pathname);
+  const hash = window.location.hash;
+  window.history.replaceState(null, "", `${query ? `${pathname}?${query}` : pathname}${hash}`);
 }
 
 export function AdminToastViewport() {
@@ -124,10 +139,10 @@ export function AdminToastViewport() {
   return (
     <div aria-live="polite" className="admin-toast-viewport">
       {toasts.map((toast) => (
-        <div className={`admin-toast is-${toast.tone}`} key={toast.id} role="status">
+        <div className={`admin-toast is-${toast.tone}`} key={toast.id} role={toast.tone === "error" ? "alert" : "status"}>
           <span className="admin-toast-dot" />
           <div>
-            <strong>{toast.tone === "error" ? "처리 실패" : "처리 완료"}</strong>
+            <strong>{toast.tone === "error" ? "처리 실패" : toast.tone === "info" ? "안내" : "처리 완료"}</strong>
             <p>{toast.message}</p>
           </div>
           <button

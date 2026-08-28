@@ -43,8 +43,10 @@ type StorefrontConfigShape = {
     logoUrl?: string;
     heroImage: string;
     heroAlt: string;
+    heroHref?: string;
     bannerImage: string;
     bannerAlt: string;
+    bannerHref?: string;
     shareImage: string;
     faviconPath: string;
     logoType: string;
@@ -74,7 +76,6 @@ type StorefrontConfigShape = {
       value: string;
     }>;
   };
-  syncTargets: readonly string[];
 };
 
 type DealerRuntime = {
@@ -88,6 +89,7 @@ type DealerRuntime = {
 };
 
 export type StorefrontRuntime = StorefrontConfigShape & {
+  configuredMainVisualUrl?: string;
   dealer: DealerRuntime | null;
   host: {
     hostname: string;
@@ -99,6 +101,13 @@ export type StorefrontRuntime = StorefrontConfigShape & {
 const DEFAULT_ROOT_DOMAIN = "everybuy.co.kr";
 const DEFAULT_SUPPORT_PHONE = "010-3796-3719";
 const RESERVED_SUBDOMAINS = new Set(["admin", "www"]);
+const STOREFRONT_IMAGE_HOSTS = new Set([
+  "api.everybuy.co.kr",
+  "cdn.1472.ai",
+  "cloud.1472.ai",
+  "ecimg.cafe24img.com",
+  "images.pexels.com",
+]);
 
 const dealerPresets: Record<string, DealerPreset> = {
   dealer: {
@@ -117,6 +126,27 @@ function getRootDomain() {
 
 function normalizeHostname(rawHost: string) {
   return rawHost.split(",")[0]?.trim().replace(/:\d+$/, "").toLowerCase() || "";
+}
+
+function resolveStorefrontImageUrl(value: string | null | undefined) {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (normalized.startsWith("/") && !normalized.startsWith("//")) {
+    return normalized;
+  }
+
+  try {
+    const url = new URL(normalized);
+    const hostname = url.hostname.toLowerCase();
+    const allowedProtocol = url.protocol === "https:" ||
+      (url.protocol === "http:" && hostname === "cloud.1472.ai");
+    return allowedProtocol && STOREFRONT_IMAGE_HOSTS.has(hostname) ? normalized : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function prettifySlug(slug: string) {
@@ -202,31 +232,56 @@ export const getStorefrontRuntime = cache(async (): Promise<StorefrontRuntime> =
         fetchDealerPublicBySlug(resolvedSlug),
       ])
     : [null, null];
-  const policyBundle = parseStorefrontPolicyBundle(publicSiteConfig?.policyText);
+  const policyBundle = parseStorefrontPolicyBundle(
+    dealerPublicConfig?.policyText || publicSiteConfig?.policyText,
+  );
+  const configuredMainVisualUrl =
+    resolveStorefrontImageUrl(dealerPublicConfig?.mainVisualUrl) ||
+    resolveStorefrontImageUrl(publicSiteConfig?.mainVisualUrl);
+  const configuredMiddleBannerUrl =
+    resolveStorefrontImageUrl(dealerPublicConfig?.middleBannerUrl) ||
+    resolveStorefrontImageUrl(publicSiteConfig?.middleBannerUrl);
 
   const mergedConfig: StorefrontConfigShape = {
     ...storefrontConfig,
     metadata: {
-      title: publicSiteConfig?.metaTitle || storefrontConfig.metadata.title,
-      description: publicSiteConfig?.metaDescription || storefrontConfig.metadata.description,
+      title: dealerPublicConfig?.metaTitle || publicSiteConfig?.metaTitle || storefrontConfig.metadata.title,
+      description:
+        dealerPublicConfig?.metaDescription || publicSiteConfig?.metaDescription || storefrontConfig.metadata.description,
     },
     brand: {
       ...storefrontConfig.brand,
       searchPlaceholder:
-        publicSiteConfig?.searchPlaceholder || storefrontConfig.brand.searchPlaceholder,
+        dealerPublicConfig?.searchPlaceholder ||
+        publicSiteConfig?.searchPlaceholder ||
+        storefrontConfig.brand.searchPlaceholder,
       policyMessage: policyBundle.message || storefrontConfig.brand.policyMessage,
     },
     commerce: policyBundle.commerce,
     assets: {
       ...storefrontConfig.assets,
-      logoUrl: publicSiteConfig?.logoUrl || undefined,
-      heroImage: publicSiteConfig?.mainVisualUrl || storefrontConfig.assets.heroImage,
-      bannerImage: publicSiteConfig?.middleBannerUrl || storefrontConfig.assets.bannerImage,
-      shareImage: publicSiteConfig?.shareThumbnailUrl || storefrontConfig.assets.shareImage,
-      faviconPath: publicSiteConfig?.faviconUrl || storefrontConfig.assets.faviconPath,
+      logoUrl: dealerPublicConfig?.logoUrl || publicSiteConfig?.logoUrl || undefined,
+      heroImage: configuredMainVisualUrl || storefrontConfig.assets.heroImage,
+      heroHref:
+        dealerPublicConfig?.mainVisualLinkUrl?.trim() ||
+        publicSiteConfig?.mainVisualLinkUrl?.trim() ||
+        undefined,
+      bannerImage: configuredMiddleBannerUrl || storefrontConfig.assets.bannerImage,
+      bannerHref:
+        dealerPublicConfig?.middleBannerLinkUrl?.trim() ||
+        publicSiteConfig?.middleBannerLinkUrl?.trim() ||
+        undefined,
+      shareImage:
+        dealerPublicConfig?.shareThumbnailUrl ||
+        publicSiteConfig?.shareThumbnailUrl ||
+        (!dealerPublicConfig ? configuredMainVisualUrl : undefined) ||
+        storefrontConfig.assets.shareImage,
+      faviconPath:
+        dealerPublicConfig?.faviconUrl || publicSiteConfig?.faviconUrl || storefrontConfig.assets.faviconPath,
     },
     navigation: resolveStorefrontNavigationItems(
-      publicSiteConfig?.mainNavigationJson ||
+      dealerPublicConfig?.mainNavigationJson ||
+        publicSiteConfig?.mainNavigationJson ||
         publicSiteConfig?.navigationJson ||
         publicSiteConfig?.menuJson,
     ),
@@ -236,7 +291,11 @@ export const getStorefrontRuntime = cache(async (): Promise<StorefrontRuntime> =
       supportItems: [
         {
           title: "고객센터",
-          value: publicSiteConfig?.customerCenterText || storefrontConfig.home.supportItems[0]?.value || "",
+          value:
+            dealerPublicConfig?.customerCenterText ||
+            publicSiteConfig?.customerCenterText ||
+            storefrontConfig.home.supportItems[0]?.value ||
+            "",
         },
         storefrontConfig.home.supportItems[1],
         storefrontConfig.home.supportItems[2],
@@ -289,6 +348,7 @@ export const getStorefrontRuntime = cache(async (): Promise<StorefrontRuntime> =
   if (!resolvedDealer) {
     return {
       ...mergedConfig,
+      configuredMainVisualUrl,
       host: {
         hostname: hostname || rootDomain,
         rootDomain,
@@ -300,15 +360,16 @@ export const getStorefrontRuntime = cache(async (): Promise<StorefrontRuntime> =
 
   return {
     ...mergedConfig,
+    configuredMainVisualUrl,
     metadata: {
       title: `${resolvedDealer.mallName} | 건강창고`,
-      description: `${resolvedDealer.displayName} 회원을 위한 건강창고 전용 딜러몰입니다. 회원 승인 후 가격 확인 및 주문이 가능합니다.`,
+      description: `${resolvedDealer.displayName} 회원을 위한 건강창고 전용 딜러몰입니다. 회원가입 후 바로 가격 확인 및 주문이 가능합니다.`,
     },
     brand: {
       ...mergedConfig.brand,
       kicker: resolvedDealer.mallName,
       searchPlaceholder: `${resolvedDealer.displayName} 회원 전용 상품을 검색하세요`,
-      policyMessage: `${resolvedDealer.displayName} 회원 승인 후 가격 확인 및 구매 가능`,
+      policyMessage: `${resolvedDealer.displayName} 회원가입 후 가격 확인 및 구매 가능`,
       memberLabel: `${resolvedDealer.displayName} 회원`,
     },
     home: {
@@ -318,7 +379,7 @@ export const getStorefrontRuntime = cache(async (): Promise<StorefrontRuntime> =
         kicker: resolvedDealer.mallName,
         titleLines: [`${resolvedDealer.displayName} 회원 전용`, "건강 루틴 셀렉션"],
         description: `${resolvedDealer.mallName}을 통해 가입한 회원을 위한 건강식품 셀렉션입니다. 상품과 배송은 건강창고 본사에서 통합 운영합니다.`,
-        tags: [`${resolvedDealer.displayName} 전용`, "회원 승인 후 구매", "건강창고 본사 출고"],
+        tags: [`${resolvedDealer.displayName} 전용`, "회원가입 후 구매", "건강창고 본사 출고"],
       },
       banner: {
         ...mergedConfig.home.banner,

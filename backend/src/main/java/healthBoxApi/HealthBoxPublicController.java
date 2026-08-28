@@ -16,10 +16,15 @@ import healthBoxApi.dto.HealthBoxOrderQuoteResponse;
 import healthBoxApi.dto.HealthBoxProductInquiryRequest;
 import healthBoxApi.dto.HealthBoxProductInquiryResponse;
 import healthBoxApi.dto.HealthBoxBuyerSignupCreateRequest;
+import healthBoxApi.dto.HealthBoxBuyerSignupAvailabilityRequest;
+import healthBoxApi.dto.HealthBoxBuyerSignupAvailabilityResponse;
 import healthBoxApi.dto.HealthBoxDealerContextResponse;
+import healthBoxApi.dto.HealthBoxDealerApplicationCreateRequest;
 import healthBoxApi.dto.HealthBoxDealerPublicResponse;
 import healthBoxApi.vo.HealthBoxBuyerSignupApplicationVo;
+import healthBoxApi.vo.HealthBoxDealerApplicationVo;
 import healthBoxApi.vo.HealthBoxPublicSiteConfigVo;
+import healthBoxApi.vo.HealthBoxNoticeVo;
 import healthBoxApi.payload.ApiResponse;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -30,6 +35,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.http.HttpStatus;
 
 import java.util.List;
 
@@ -42,6 +50,12 @@ public class HealthBoxPublicController {
 
     public HealthBoxPublicController(HealthBoxService service) {
         this.service = service;
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiResponse handleInvalidPublicRequest(IllegalArgumentException error) {
+        return new ApiResponse(false, error.getMessage());
     }
 
     @ApiOperation(value = "host 기준 딜러몰 조회", notes = "요청 host를 기준으로 딜러몰 컨텍스트를 조회한다.")
@@ -60,6 +74,21 @@ public class HealthBoxPublicController {
     @GetMapping("/public-site-config")
     public HealthBoxPublicSiteConfigVo getPublicSiteConfig() {
         return service.getPublicSiteConfig();
+    }
+
+    @ApiOperation(value = "공개 공지 목록 조회", notes = "본사몰 또는 딜러몰에 게시된 공지를 조회한다.")
+    @GetMapping("/notices")
+    public List<HealthBoxNoticeVo> getNotices(@RequestParam(required = false) Long dealerMallId) {
+        return service.getPostedNotices(dealerMallId != null && dealerMallId > 0 ? dealerMallId : null);
+    }
+
+    @ApiOperation(value = "공개 공지 상세 조회", notes = "본사몰 또는 딜러몰에 게시된 공지 상세를 조회한다.")
+    @GetMapping("/notices/{noticeId}")
+    public HealthBoxNoticeVo getNotice(
+        @PathVariable Long noticeId,
+        @RequestParam(required = false) Long dealerMallId
+    ) {
+        return service.getNotice(noticeId, dealerMallId != null && dealerMallId > 0 ? dealerMallId : null, true);
     }
 
     @ApiOperation(value = "상품 문의 목록 조회", notes = "비밀글은 작성자 세션으로 조회할 때만 원문을 반환한다.")
@@ -89,10 +118,26 @@ public class HealthBoxPublicController {
         return service.getDealerMallPublicConfig(slug);
     }
 
-    @ApiOperation(value = "구매 회원 가입 신청", notes = "공개몰에서 구매 회원 가입 신청을 생성한다.")
+    @ApiOperation(value = "딜러 신청", notes = "본사몰에서 신규 딜러 신청을 접수한다.")
+    @PostMapping("/dealer-applications")
+    public ApiResponse createDealerApplication(@RequestBody HealthBoxDealerApplicationCreateRequest request) {
+        HealthBoxDealerApplicationVo application = service.createDealerApplication(request);
+        return new ApiResponse(true, "dealer application created", application.getId());
+    }
+
+    @ApiOperation(value = "구매 회원 가입", notes = "공개몰에서 구매 회원 계정을 즉시 생성하고 활성화한다.")
     @PostMapping("/buyer-signup-applications")
-    public HealthBoxBuyerSignupApplicationVo createBuyerSignupApplication(@RequestBody HealthBoxBuyerSignupCreateRequest request) {
-        return service.createBuyerSignupApplication(request);
+    public ApiResponse createBuyerSignupApplication(@RequestBody HealthBoxBuyerSignupCreateRequest request) {
+        HealthBoxBuyerSignupApplicationVo application = service.createBuyerSignupApplication(request);
+        return new ApiResponse(true, "buyer signup completed", application.getId());
+    }
+
+    @ApiOperation(value = "구매 회원 가입 중복 확인", notes = "공개몰 가입 범위에서 이메일 또는 휴대폰 번호 사용 가능 여부를 확인한다.")
+    @PostMapping("/buyer-signup-availability")
+    public HealthBoxBuyerSignupAvailabilityResponse getBuyerSignupAvailability(
+        @RequestBody HealthBoxBuyerSignupAvailabilityRequest request
+    ) {
+        return service.getBuyerSignupAvailability(request);
     }
 
     @ApiOperation(value = "구매 회원 로그인", notes = "공개몰 구매 회원 로그인을 처리한다.")

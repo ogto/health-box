@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { BrandLogo } from "../brand-logo";
 
 function resolveNextPath(nextPath?: string) {
-  if (!nextPath || !nextPath.startsWith("/admin")) {
+  if (!nextPath || !nextPath.startsWith("/") || nextPath.startsWith("//")) {
     return "/admin/dashboard";
   }
 
@@ -17,6 +17,7 @@ export function AdminLoginForm({ nextPath }: { nextPath?: string }) {
   const router = useRouter();
   const safeNextPath = useMemo(() => resolveNextPath(nextPath), [nextPath]);
 
+  const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,7 +31,7 @@ export function AdminLoginForm({ nextPath }: { nextPath?: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ loginId, password }),
       });
 
       const data = await response.json();
@@ -61,16 +62,27 @@ export function AdminLoginForm({ nextPath }: { nextPath?: string }) {
           />
 
           <div className="admin-login-brand-copy">
-            <p>HEALTH-BOX ADMIN</p>
             <h1>건강창고 관리자</h1>
-            <span>운영 화면 접근을 위해 관리자 비밀번호를 입력해주세요.</span>
           </div>
         </div>
 
         <div className="admin-login-form">
           <label className="admin-field">
+            <span>관리자 아이디</span>
+            <input
+              autoCapitalize="none"
+              autoComplete="username"
+              className="admin-input admin-login-input"
+              onChange={(event) => setLoginId(event.target.value)}
+              placeholder="관리자 아이디 입력"
+              type="text"
+              value={loginId}
+            />
+          </label>
+          <label className="admin-field">
             <span>관리자 비밀번호</span>
             <input
+              autoComplete="current-password"
               className="admin-input admin-login-input"
               onChange={(event) => setPassword(event.target.value)}
               onKeyDown={(event) => {

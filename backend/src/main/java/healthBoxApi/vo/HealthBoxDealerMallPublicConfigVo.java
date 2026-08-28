@@ -38,5 +38,44 @@ public class HealthBoxDealerMallPublicConfigVo extends HealthBoxBaseVo {
 
     @Column(name = "ACTIVE_YN", nullable = false, length = 1)
     private String activeYn = "Y";
+
+    @Column(name = "LOGO_URL", length = 1000)
+    private String logoUrl;
+
+    @Column(name = "FAVICON_URL", length = 1000)
+    private String faviconUrl;
+
+    @Column(name = "MAIN_VISUAL_URL", length = 1000)
+    private String mainVisualUrl;
+
+    @Column(name = "MAIN_VISUAL_LINK_URL", length = 1000)
+    private String mainVisualLinkUrl;
+
+    @Column(name = "MIDDLE_BANNER_URL", length = 1000)
+    private String middleBannerUrl;
+
+    @Column(name = "MIDDLE_BANNER_LINK_URL", length = 1000)
+    private String middleBannerLinkUrl;
+
+    @Column(name = "SHARE_THUMBNAIL_URL", length = 1000)
+    private String shareThumbnailUrl;
+
+    @Column(name = "META_TITLE", length = 255)
+    private String metaTitle;
+
+    @Column(name = "META_DESCRIPTION", length = 1000)
+    private String metaDescription;
+
+    @Column(name = "MAIN_NAVIGATION_JSON", columnDefinition = "LONGTEXT")
+    private String mainNavigationJson;
+
+    @Column(name = "SEARCH_PLACEHOLDER", length = 255)
+    private String searchPlaceholder;
+
+    @Column(name = "POLICY_TEXT", columnDefinition = "LONGTEXT")
+    private String policyText;
+
+    @Column(name = "CUSTOMER_CENTER_TEXT", columnDefinition = "LONGTEXT")
+    private String customerCenterText;
 }
 

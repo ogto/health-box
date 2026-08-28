@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import javax.persistence.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Getter
@@ -51,5 +52,26 @@ public class HealthBoxBuyerSignupApplicationVo extends HealthBoxBaseVo {
 
     @Column(name = "INBOUND_CHANNEL", length = 50)
     private String inboundChannel;
+
+    @Column(name = "BIRTH_DATE")
+    private LocalDate birthDate;
+
+    @Column(name = "TERMS_AGREED_AT")
+    private LocalDateTime termsAgreedAt;
+
+    @Column(name = "PRIVACY_AGREED_AT")
+    private LocalDateTime privacyAgreedAt;
+
+    @Column(name = "THIRD_PARTY_AGREED_AT")
+    private LocalDateTime thirdPartyAgreedAt;
+
+    @Column(name = "MARKETING_CONSENT_YN", nullable = false, length = 1)
+    private String marketingConsentYn = "N";
+
+    @Column(name = "MARKETING_CONSENT_UPDATED_AT")
+    private LocalDateTime marketingConsentUpdatedAt;
+
+    @Column(name = "CONSENT_DOCUMENT_VERSION", length = 20)
+    private String consentDocumentVersion;
 }
 

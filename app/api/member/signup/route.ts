@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import {
-  fetchAdminBuyerSignupApplications,
-  fetchAdminDealerMallMembers,
-  fetchAdminMembers,
   fetchDealerPublicBySlug,
   healthBoxFetch,
-  stringValue,
 } from "../../../_lib/health-box-api";
+import { BUYER_SIGNUP_CONSENT_VERSION } from "@/lib/buyer-consent";
 
 function normalizePhone(value: unknown) {
   return String(value || "").replace(/[^0-9]/g, "");
@@ -17,23 +14,30 @@ function normalizeEmail(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
 
-function buildSignupSlug(name: string, dealerSlug?: string) {
-  const base = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9가-힣\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .slice(0, 24);
-
-  return `${dealerSlug || "member"}-${base || "signup"}-${Date.now()}`;
-}
-
 function extractErrorMessage(error: unknown) {
   const rawMessage = error instanceof Error ? error.message : String(error);
-  return rawMessage
+  const cleanedMessage = rawMessage
     .replace(/^HealthBox API \d+:\s*/, "")
     .replace(/^Error:\s*/, "")
     .trim();
+
+  try {
+    const payload = JSON.parse(cleanedMessage);
+    if (typeof payload?.message === "string" && payload.message.trim()) {
+      return payload.message.trim();
+    }
+  } catch {
+    // The API may return a plain-text validation message.
+  }
+
+  return cleanedMessage;
+}
+
+function extractErrorStatus(error: unknown) {
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  const match = /^HealthBox API (\d+):/.exec(rawMessage);
+  const status = Number(match?.[1] || 0);
+  return status >= 400 && status < 500 ? status : 500;
 }
 
 export async function POST(request: NextRequest) {
@@ -46,6 +50,12 @@ export async function POST(request: NextRequest) {
     const email = normalizeEmail(body.email);
     const phone = normalizePhone(body.phone);
     const password = String(body.password || "");
+    const birthDate = String(body.birthDate || "").trim();
+    const termsAgreed = body.termsAgreed === true;
+    const privacyAgreed = body.privacyAgreed === true;
+    const thirdPartyAgreed = body.thirdPartyAgreed === true;
+    const marketingAgreed = body.marketingAgreed === true;
+    const consentDocumentVersion = String(body.consentDocumentVersion || "").trim();
     const resolvedDealerMallId =
       hqMall ? 0 :
       requestedDealerMallId ||
@@ -73,6 +83,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) {
+      return NextResponse.json(
+        { ok: false, message: "생년월일을 입력해주세요." },
+        { status: 400 },
+      );
+    }
+
+    if (!termsAgreed || !privacyAgreed || !thirdPartyAgreed) {
+      return NextResponse.json(
+        { ok: false, message: "필수 약관과 개인정보 동의 항목에 동의해주세요." },
+        { status: 400 },
+      );
+    }
+
+    if (consentDocumentVersion !== BUYER_SIGNUP_CONSENT_VERSION) {
+      return NextResponse.json(
+        { ok: false, message: "개인정보 동의 문안 버전을 확인해주세요." },
+        { status: 400 },
+      );
+    }
+
     if (!hqMall && !resolvedDealerMallId) {
       return NextResponse.json(
         {
@@ -80,54 +111,6 @@ export async function POST(request: NextRequest) {
           message: "딜러몰 정보를 확인할 수 없습니다. 다시 시도해주세요.",
         },
         { status: 400 },
-      );
-    }
-
-    const members = hqMall
-      ? ((await fetchAdminMembers()) || []).filter((member) => Number(member.dealerMallId ?? 0) === 0)
-      : (await fetchAdminDealerMallMembers(resolvedDealerMallId)) || [];
-    const existingMember = members.find((member) => {
-      const memberPhone = normalizePhone(stringValue(member, "phone"));
-      const memberEmail = normalizeEmail(stringValue(member, "email"));
-      return memberPhone === phone || memberEmail === email;
-    });
-
-    if (existingMember) {
-      const existingMemberEmail = normalizeEmail(stringValue(existingMember, "email"));
-      return NextResponse.json(
-        {
-          ok: false,
-          message: existingMemberEmail === email
-            ? "이미 승인된 회원 이메일입니다. 로그인 후 이용해주세요."
-            : "이미 승인된 회원 휴대폰 번호입니다. 로그인 후 이용해주세요.",
-        },
-        { status: 409 },
-      );
-    }
-
-    const applications = (await fetchAdminBuyerSignupApplications()) || [];
-    const existingApplication = applications.find((application) => {
-      const applicationDealerMallId = Number(application.dealerMallId ?? 0);
-      const applicationPhone = normalizePhone(stringValue(application, "phone"));
-      const applicationEmail = normalizeEmail(stringValue(application, "email"));
-      const applicationStatus = stringValue(application, "status");
-      return (
-        (!applicationStatus || /^PENDING$/i.test(applicationStatus)) &&
-        applicationDealerMallId === resolvedDealerMallId &&
-        (applicationPhone === phone || applicationEmail === email)
-      );
-    });
-
-    if (existingApplication) {
-      const existingApplicationEmail = normalizeEmail(stringValue(existingApplication, "email"));
-      return NextResponse.json(
-        {
-          ok: false,
-          message: existingApplicationEmail === email
-            ? "이미 가입 신청된 이메일입니다. 승인 후 로그인해주세요."
-            : "이미 가입 신청된 휴대폰 번호입니다. 승인 후 로그인해주세요.",
-        },
-        { status: 409 },
       );
     }
 
@@ -139,21 +122,28 @@ export async function POST(request: NextRequest) {
         phone,
         email,
         password,
+        birthDate,
+        termsAgreed,
+        privacyAgreed,
+        thirdPartyAgreed,
+        marketingAgreed,
+        consentDocumentVersion,
         inboundChannel: hqMall ? "hq-public" : "dealer-public",
-        slug: hqMall ? undefined : buildSignupSlug(name, dealerSlug),
+        slug: hqMall ? undefined : dealerSlug,
       },
     });
 
-    return NextResponse.json({ ok: true, message: "가입 신청이 접수되었습니다." });
+    return NextResponse.json({ ok: true, message: "회원가입이 완료되었습니다. 바로 로그인해주세요." });
   } catch (error) {
     const message = extractErrorMessage(error);
+    const status = extractErrorStatus(error);
     return NextResponse.json(
       {
         ok: false,
-        message: message || "회원가입 신청 중 오류가 발생했습니다.",
+        message: message || "회원가입 중 오류가 발생했습니다.",
         detail: error instanceof Error ? error.message : String(error),
       },
-      { status: 500 },
+      { status },
     );
   }
 }

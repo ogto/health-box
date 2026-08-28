@@ -9,6 +9,7 @@ import {
 } from "../../../_actions/health-box-admin";
 import { AdminConfirmSubmitButton } from "../../../_components/admin/admin-confirm-submit-button";
 import { AdminHeader } from "../../../_components/admin/admin-header";
+import { AdminReadOnlyNotice } from "../../../_components/admin/admin-read-only-notice";
 import { AdminShippingStatusForm } from "../../../_components/admin/admin-shipping-status-form";
 import { AdminBadge, AdminPanel } from "../../../_components/admin/admin-ui";
 import {
@@ -19,6 +20,7 @@ import {
   stringValue,
   toneFromStatus,
 } from "../../../_lib/health-box-api";
+import { getAdminSession } from "../../../_lib/admin-auth";
 
 function formatWon(value: unknown) {
   const amount = Number(value || 0);
@@ -158,7 +160,8 @@ export default async function AdminOrderDetailPage({
 }: {
   params: Promise<{ orderId: string }>;
 }) {
-  const { orderId } = await params;
+  const [{ orderId }, session] = await Promise.all([params, getAdminSession()]);
+  const readOnly = session?.scopeType === "DEALER";
   const numericOrderId = Number(orderId);
 
   if (!hasHealthBoxApi() || !Number.isFinite(numericOrderId)) {
@@ -193,6 +196,8 @@ export default async function AdminOrderDetailPage({
   return (
     <div className="admin-page">
       <AdminHeader title="주문 상세" />
+
+      {readOnly ? <AdminReadOnlyNotice scopeName={session?.scopeName} /> : null}
 
       <div className="admin-order-detail-topbar">
         <Link className="admin-button secondary" href="/admin/orders">
@@ -283,8 +288,14 @@ export default async function AdminOrderDetailPage({
         </AdminPanel>
 
         <div className="admin-order-process-grid">
-          <AdminPanel title="배송 처리">
-            {shipmentId ? (
+          <AdminPanel title={readOnly ? "배송 현황" : "배송 처리"}>
+            {readOnly ? (
+              <div className="admin-status-stack">
+                <div className="admin-status-row"><span>배송 상태</span><strong>{shipmentStatusLabel(shipmentStatus)}</strong></div>
+                <div className="admin-status-row"><span>택배사</span><strong>{stringValue(order, "courierCompany") || "-"}</strong></div>
+                <div className="admin-status-row"><span>송장 번호</span><strong>{stringValue(order, "trackingNo") || "-"}</strong></div>
+              </div>
+            ) : shipmentId ? (
               <AdminShippingStatusForm
                 courierCompany={stringValue(order, "courierCompany")}
                 deliveredAt={dateTimeLocalValue(order.deliveredAt)}
@@ -300,7 +311,7 @@ export default async function AdminOrderDetailPage({
             )}
           </AdminPanel>
 
-          <AdminPanel title="취소 처리">
+          {!readOnly ? <AdminPanel title="취소 처리">
             <div className="admin-status-stack">
               <form action={cancelOrderAction} id="admin-order-cancel-form">
                 <input name="cancellationRequestId" type="hidden" value={fullCancellationRequestId} />
@@ -357,7 +368,7 @@ export default async function AdminOrderDetailPage({
                 <p className="admin-row-muted">부분 취소 가능한 남은 상품 수량이 없습니다.</p>
               )}
             </div>
-          </AdminPanel>
+          </AdminPanel> : null}
         </div>
       </div>
     </div>

@@ -6,6 +6,7 @@ import healthBoxApi.dto.HealthBoxOrderPartialCancelRequest;
 import healthBoxApi.dto.HealthBoxOrderDetailResponse;
 import healthBoxApi.dto.HealthBoxShipmentStatusRequest;
 import healthBoxApi.vo.HealthBoxShipmentVo;
+import healthBoxApi.config.HealthBoxAdminAccessContext;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,32 +17,44 @@ import java.util.List;
 public class HealthBoxAdminOrderController {
 
     private final HealthBoxService service;
+    private final HealthBoxAdminAccessContext accessContext;
 
-    public HealthBoxAdminOrderController(HealthBoxService service) {
+    public HealthBoxAdminOrderController(HealthBoxService service, HealthBoxAdminAccessContext accessContext) {
         this.service = service;
+        this.accessContext = accessContext;
     }
 
     @ApiOperation(value = "딜러몰별 주문 목록 조회", notes = "특정 딜러몰 귀속 주문 목록을 조회한다.")
     @GetMapping("/dealer-malls/{dealerMallId}/orders")
     public List<HealthBoxOrderDetailResponse> getOrdersByDealerMall(@PathVariable Long dealerMallId) {
+        accessContext.requirePermission("ORDER_VIEW");
+        accessContext.requireDealerMallAccess(dealerMallId);
         return service.getOrdersByDealerMall(dealerMallId);
     }
 
     @ApiOperation(value = "전체 주문 목록 조회", notes = "전체 주문 목록을 조회한다.")
     @GetMapping("/orders")
     public List<HealthBoxOrderDetailResponse> getOrders() {
-        return service.getOrders();
+        accessContext.requirePermission("ORDER_VIEW");
+        return accessContext.isDealer()
+            ? service.getOrdersByDealerMall(accessContext.getDealerMallId())
+            : service.getOrders();
     }
 
     @ApiOperation(value = "주문 상세 조회", notes = "관리자용 주문 상세를 조회한다.")
     @GetMapping("/orders/{orderId}")
     public HealthBoxOrderDetailResponse getOrder(@PathVariable Long orderId) {
-        return service.getOrderDetail(orderId);
+        accessContext.requirePermission("ORDER_VIEW");
+        HealthBoxOrderDetailResponse order = service.getOrderDetail(orderId);
+        accessContext.requireDealerMallAccess(order.getDealerMallId());
+        return order;
     }
 
     @ApiOperation(value = "주문 취소", notes = "주문을 취소하고 SKU 재고를 복구한다.")
     @PostMapping("/orders/{orderId}/cancel")
     public HealthBoxOrderDetailResponse cancelOrder(@PathVariable Long orderId) {
+        accessContext.requirePermission("ORDER_PROCESS");
+        accessContext.requireDealerMallAccess(service.getOrderDetail(orderId).getDealerMallId());
         return service.cancelOrder(orderId);
     }
 
@@ -51,6 +64,8 @@ public class HealthBoxAdminOrderController {
         @PathVariable Long orderId,
         @RequestBody HealthBoxOrderPartialCancelRequest request
     ) {
+        accessContext.requirePermission("ORDER_PROCESS");
+        accessContext.requireDealerMallAccess(service.getOrderDetail(orderId).getDealerMallId());
         return service.partialCancelOrder(orderId, request);
     }
 
@@ -60,6 +75,8 @@ public class HealthBoxAdminOrderController {
         @PathVariable Long shipmentId,
         @RequestBody HealthBoxShipmentStatusRequest request
     ) {
+        accessContext.requirePermission("ORDER_PROCESS");
+        accessContext.requireDealerMallAccess(service.getOrderDetailByShipmentId(shipmentId).getDealerMallId());
         return service.updateShipmentStatus(shipmentId, request);
     }
 }

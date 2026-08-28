@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import type { CreateDealerMallDialogState } from "../../_actions/health-box-admin";
 import { AdminDealerDomainField } from "./admin-dealer-domain-field";
 import { AdminSubmitButton } from "./admin-submit-button";
+import { dispatchAdminToast } from "./admin-toast";
 
 type DealerDomainOption = {
   id: number;
@@ -129,10 +130,16 @@ function AdminDealerCreateDialogForm({
 
   useEffect(() => {
     if (state.status === "success") {
+      dispatchAdminToast(state.message || "딜러몰을 추가했습니다.");
       router.refresh();
       onSuccess();
+      return;
     }
-  }, [onSuccess, router, state.status]);
+
+    if (state.status === "error") {
+      dispatchAdminToast(state.message || "딜러몰을 추가하지 못했습니다.", "error");
+    }
+  }, [onSuccess, router, state.message, state.status]);
 
   return (
     <form action={formAction} className="admin-status-stack">

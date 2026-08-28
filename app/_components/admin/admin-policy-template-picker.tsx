@@ -11,6 +11,7 @@ import {
   saveDeliveryPolicyTemplateAction,
   saveSalesPolicyTemplateAction,
 } from "../../_actions/health-box-admin";
+import { dispatchAdminToast } from "./admin-toast";
 
 type PolicyTemplateType = "delivery" | "sales";
 
@@ -238,7 +239,9 @@ function PolicyTemplateManagerDialog({
           );
           setActiveTemplateId(detailedTemplate.id);
         } catch (error) {
-          setMessage(error instanceof Error ? error.message : "템플릿 상세 조회 중 오류가 발생했습니다.");
+          const errorMessage = error instanceof Error ? error.message : "템플릿 상세 조회 중 오류가 발생했습니다.";
+          setMessage(errorMessage);
+          dispatchAdminToast(errorMessage, "error");
         }
       })();
     });
@@ -303,9 +306,12 @@ function PolicyTemplateManagerDialog({
           const nextTemplates = draftTemplates.some((template) => template.id === activeTemplateId)
             ? draftTemplates.map((template) => (template.id === activeTemplateId ? savedTemplate : template))
             : [...draftTemplates, savedTemplate];
+          dispatchAdminToast(`${type === "sales" ? "판매" : "배송"}정책 템플릿을 저장했습니다.`);
           closeWithTemplate(nextTemplates, savedTemplate.id);
         } catch (error) {
-          setMessage(error instanceof Error ? error.message : "템플릿 저장 중 오류가 발생했습니다.");
+          const errorMessage = error instanceof Error ? error.message : "템플릿 저장 중 오류가 발생했습니다.";
+          setMessage(errorMessage);
+          dispatchAdminToast(errorMessage, "error");
         }
       })();
     });
@@ -342,8 +348,11 @@ function PolicyTemplateManagerDialog({
           setActiveTemplateId(nextSelectedTemplateId);
           setTemplateToDelete(null);
           onTemplatesChange(nextTemplates, nextSelectedTemplateId);
+          dispatchAdminToast(`${type === "sales" ? "판매" : "배송"}정책 템플릿을 삭제했습니다.`);
         } catch (error) {
-          setMessage(error instanceof Error ? error.message : "템플릿 삭제 중 오류가 발생했습니다.");
+          const errorMessage = error instanceof Error ? error.message : "템플릿 삭제 중 오류가 발생했습니다.";
+          setMessage(errorMessage);
+          dispatchAdminToast(errorMessage, "error");
         }
       })();
     });

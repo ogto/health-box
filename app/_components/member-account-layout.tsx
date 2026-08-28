@@ -35,7 +35,7 @@ export function MemberAccountLayout({
       <aside className="account-sidebar">
         <div className="account-profile">
           <h2>{session.name || session.loginId || brand.memberLabel}님</h2>
-          <p>{dealer ? `${dealer.mallName} 승인 회원` : "승인 회원"}</p>
+          <p>{dealer ? `${dealer.mallName} 회원` : "건강창고 회원"}</p>
         </div>
 
         <nav className="account-menu" aria-label="마이페이지 메뉴">

@@ -28,7 +28,7 @@ export const storefrontConfig = {
     kicker: "건강기능식품 셀렉트샵",
     searchScopeLabel: "전체 카테고리",
     searchPlaceholder: "상품명, 브랜드명, 기능성 키워드를 검색하세요",
-    policyMessage: "비회원 가격 비노출 · 회원 승인 후 구매 가능",
+    policyMessage: "비회원 가격 비노출 · 가입 후 바로 구매 가능",
     memberLabel: "건강창고 회원",
   },
   assets: {
@@ -78,7 +78,7 @@ export const storefrontConfig = {
       },
       {
         title: "운영 정책",
-        value: "회원 승인 이후 가격 및 구매 기능 노출",
+        value: "회원가입 이후 가격 및 구매 기능 노출",
       },
       {
         title: "배송 안내",
@@ -86,11 +86,6 @@ export const storefrontConfig = {
       },
     ],
   },
-  syncTargets: [
-    "StoreShell 기반 전체 공개 페이지의 헤더, 검색 문구, 회원 정책 문구",
-    "홈 메인 비주얼과 중간 프로모션 배너",
-    "기본 메타 타이틀, 설명, 공유용 썸네일",
-  ],
 } as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {

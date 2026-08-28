@@ -322,7 +322,7 @@ export const fetchStoreCategories = cache(async () => {
       }));
   }
 
-  const categories = await fetchAdminCategories({ revalidate: 60 });
+  const categories = await fetchAdminCategories({ revalidate: 60, adminAccess: "public" });
   return (categories || [])
     .filter((category) => category.status !== "INACTIVE")
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
@@ -376,7 +376,8 @@ export const fetchStoreNotices = cache(async () => {
     return fallbackNotices;
   }
 
-  const notices = await fetchStorefrontNotices();
+  const runtime = await getStorefrontRuntime();
+  const notices = await fetchStorefrontNotices(runtime.dealer?.dealerMallId);
   return mapNoticeRows(notices).map(toStoreNotice);
 });
 
@@ -386,11 +387,12 @@ export const fetchStoreNoticeBySlug = cache(async (slug: string) => {
   }
 
   const fallbackNoticeId = extractFallbackRecordId(slug, "notice");
-  const notices = await fetchStorefrontNotices();
+  const runtime = await getStorefrontRuntime();
+  const notices = await fetchStorefrontNotices(runtime.dealer?.dealerMallId);
   const listedNotice = findNoticeBySlug(mapNoticeRows(notices), slug);
   const detailedNotice =
     listedNotice?.recordId || fallbackNoticeId
-      ? toNoticeRow(await fetchStorefrontNotice(listedNotice?.recordId || fallbackNoticeId || 0))
+      ? toNoticeRow(await fetchStorefrontNotice(listedNotice?.recordId || fallbackNoticeId || 0, runtime.dealer?.dealerMallId))
       : null;
   const mergedNotice =
     listedNotice && detailedNotice

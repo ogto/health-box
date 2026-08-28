@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AdminHeader } from "../../../_components/admin/admin-header";
+import { AdminReadOnlyNotice } from "../../../_components/admin/admin-read-only-notice";
 import { AdminBadge } from "../../../_components/admin/admin-ui";
+import { getAdminSession } from "../../../_lib/admin-auth";
 import {
   fetchAdminNotice,
   fetchAdminNotices,
@@ -30,7 +32,8 @@ export default async function AdminNoticeDetailPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const { slug } = await params;
+  const [{ slug }, session] = await Promise.all([params, getAdminSession()]);
+  const readOnly = session?.scopeType === "DEALER";
   const fallbackNoticeId = extractNoticeIdFromFallbackSlug(slug);
   const notices = hasHealthBoxApi() ? await fetchAdminNotices() : null;
   const listedNotice = findNoticeBySlug(mapNoticeRows(notices), slug);
@@ -53,14 +56,16 @@ export default async function AdminNoticeDetailPage({
     <div className="admin-page">
       <AdminHeader
         title="공지 상세"
-        actions={
+        actions={!readOnly ? (
           <div className="admin-inline-actions">
             <Link className="admin-button" href={notice.editHref}>
               수정하기
             </Link>
           </div>
-        }
+        ) : undefined}
       />
+
+      {readOnly ? <AdminReadOnlyNotice scopeName={session?.scopeName} /> : null}
 
       <div className="admin-notice-detail-shell">
         <article className="notice-article admin-notice-article">

@@ -1,12 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { ReactNode, SVGProps } from "react";
+import type { ReactNode } from "react";
 
 import { BrandLogo } from "./brand-logo";
-import { CartCountBadge } from "./cart-count-badge";
 import { HeaderPromoBar } from "./header-promo-bar";
 import { ProductPriceDisplay } from "./product-price-display";
+import { StoreHeaderControls } from "./store-header-controls";
 import { StoreNavigation } from "./store-navigation";
 import type { Notice, Product } from "../_lib/store-data";
 import { fetchStoreCategories } from "../_lib/storefront-content";
@@ -35,35 +35,38 @@ export async function StoreShell({
   const promoLabel = dealer
     ? `${dealer.displayName} 회원 전용 혜택`
     : "회원 전용 혜택과 추천 상품을 확인하세요";
+  const visibleNavigation = navigation.filter((item) => item.visible !== false);
+  const categoryNavigation = visibleNavigation.find((item) => item.style === "category");
+  const menuItems = (categoryNavigation?.children?.length ? categoryNavigation.children : categories)
+    .filter((item) => (!("visible" in item) || item.visible !== false))
+    .map(({ href, key, label }) => ({ href, key, label }));
+  const searchSuggestions = Array.from(
+    new Set([
+      ...categories.map((item) => item.label),
+      ...visibleNavigation.filter((item) => item.style !== "category").map((item) => item.label),
+    ]),
+  ).slice(0, 10);
 
   return (
     <main className="mall-shell">
       <div className="page-wrap">
-        <header className="site-header">
-          <HeaderPromoBar label={promoLabel} />
+        <HeaderPromoBar label={promoLabel} />
 
+        <header className="site-header">
           <div className="header-main">
-            <div className="header-quick-icons">
-              <Link
-                aria-label="마이페이지"
-                className={`icon-button is-plain${activeKey === "mypage" ? " is-active" : ""}`}
-                href="/mypage"
-              >
-                <UserIcon className="h-6 w-6" />
-              </Link>
-              <Link
-                aria-label="장바구니"
-                className={`icon-button is-plain${activeKey === "cart" ? " is-active" : ""}`}
-                href="/cart"
-              >
-                <CartIcon className="h-6 w-6" />
-                <CartCountBadge loggedIn={Boolean(session)} />
-              </Link>
-            </div>
+            <StoreHeaderControls
+              activeKey={activeKey}
+              brandName={brand.name}
+              loggedIn={Boolean(session)}
+              menuItems={menuItems}
+              menuTitle={categoryNavigation?.label || "건강고민별"}
+              searchPlaceholder={brand.searchPlaceholder}
+              searchSuggestions={searchSuggestions}
+            />
 
             <Link
               aria-label={dealer ? `${dealer.mallName} 홈` : `${brand.name} 홈`}
-              className="brand-area is-centered is-logo-only"
+              className="brand-area is-logo-only"
               href="/"
             >
               <BrandLogo
@@ -73,18 +76,6 @@ export async function StoreShell({
                 variant="circle"
               />
             </Link>
-
-            <form action="/search" className="header-search-row" role="search">
-              <div className="search-bar">
-                <label className="search-field">
-                  <SearchIcon className="h-5 w-5" />
-                  <input minLength={2} name="q" placeholder={brand.searchPlaceholder} type="search" />
-                </label>
-                <button className="search-button" type="submit">
-                  검색
-                </button>
-              </div>
-            </form>
           </div>
 
           <div className="header-nav">
@@ -100,6 +91,7 @@ export async function StoreShell({
             <nav aria-label="하단 안내">
               <Link href="/notice">공지사항</Link>
               <Link href="/products/best">상품목록</Link>
+              {!dealer ? <Link href="/dealer-apply">딜러 신청</Link> : null}
               <Link href="/mypage">마이페이지</Link>
             </nav>
           </div>
@@ -199,47 +191,5 @@ export function Breadcrumbs({
         );
       })}
     </nav>
-  );
-}
-
-function SearchIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg fill="none" viewBox="0 0 24 24" {...props}>
-      <path
-        d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
-function UserIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg fill="none" viewBox="0 0 24 24" {...props}>
-      <path
-        d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.8"
-      />
-    </svg>
-  );
-}
-
-function CartIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg fill="none" viewBox="0 0 24 24" {...props}>
-      <path
-        d="M4 5h2l2.2 9.5a1 1 0 0 0 1 .8H17a1 1 0 0 0 1-.78L19.5 8H7.2M8 20h.01M17 20h.01"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.8"
-      />
-    </svg>
   );
 }

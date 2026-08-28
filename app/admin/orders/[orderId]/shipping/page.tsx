@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { updateShipmentStatusAction } from "../../../../_actions/health-box-admin";
 import { AdminConfirmSubmitButton } from "../../../../_components/admin/admin-confirm-submit-button";
@@ -12,6 +12,7 @@ import {
   stringValue,
   toneFromStatus,
 } from "../../../../_lib/health-box-api";
+import { getAdminSession } from "../../../../_lib/admin-auth";
 
 const shipmentStatusOptions = [
   { value: "PENDING", label: "주문 접수" },
@@ -44,8 +45,12 @@ export default async function AdminOrderShippingPage({
 }: {
   params: Promise<{ orderId: string }>;
 }) {
-  const { orderId } = await params;
+  const [{ orderId }, session] = await Promise.all([params, getAdminSession()]);
   const numericOrderId = Number(orderId);
+
+  if (session?.scopeType === "DEALER" && Number.isFinite(numericOrderId)) {
+    redirect(`/admin/orders/${numericOrderId}`);
+  }
 
   if (!hasHealthBoxApi() || !Number.isFinite(numericOrderId)) {
     notFound();

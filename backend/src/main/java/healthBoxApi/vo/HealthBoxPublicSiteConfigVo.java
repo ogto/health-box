@@ -27,8 +27,14 @@ public class HealthBoxPublicSiteConfigVo extends HealthBoxBaseVo {
     @Column(name = "MAIN_VISUAL_URL", length = 255)
     private String mainVisualUrl;
 
+    @Column(name = "MAIN_VISUAL_LINK_URL", length = 1000)
+    private String mainVisualLinkUrl;
+
     @Column(name = "MIDDLE_BANNER_URL", length = 255)
     private String middleBannerUrl;
+
+    @Column(name = "MIDDLE_BANNER_LINK_URL", length = 1000)
+    private String middleBannerLinkUrl;
 
     @Column(name = "SHARE_THUMBNAIL_URL", length = 255)
     private String shareThumbnailUrl;

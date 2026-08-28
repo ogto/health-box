@@ -2,6 +2,9 @@ import "server-only";
 
 import { cache } from "react";
 
+import { getAdminSession } from "./admin-auth";
+import type { AdminSession } from "./admin-session";
+
 export type HealthBoxRecord = Record<string, unknown>;
 
 export type HealthBoxDealerContextResponse = {
@@ -24,6 +27,19 @@ export type HealthBoxDealerPublicResponse = {
   displayName?: string;
   supportEmail?: string;
   supportPhone?: string;
+  logoUrl?: string;
+  faviconUrl?: string;
+  mainVisualUrl?: string;
+  mainVisualLinkUrl?: string;
+  middleBannerUrl?: string;
+  middleBannerLinkUrl?: string;
+  shareThumbnailUrl?: string;
+  metaTitle?: string;
+  metaDescription?: string;
+  mainNavigationJson?: string;
+  searchPlaceholder?: string;
+  policyText?: string;
+  customerCenterText?: string;
 };
 
 export type HealthBoxPublicSiteConfig = {
@@ -32,7 +48,9 @@ export type HealthBoxPublicSiteConfig = {
   logoUrl?: string;
   faviconUrl?: string;
   mainVisualUrl?: string;
+  mainVisualLinkUrl?: string;
   middleBannerUrl?: string;
+  middleBannerLinkUrl?: string;
   shareThumbnailUrl?: string;
   metaTitle?: string;
   metaDescription?: string;
@@ -109,6 +127,41 @@ export type HealthBoxPageResponse<T> = {
   size: number;
 };
 
+export type HealthBoxAdminStaff = {
+  id?: number;
+  scopeType?: string;
+  dealerMallId?: number | null;
+  scopeName?: string;
+  name?: string;
+  loginId?: string;
+  phone?: string;
+  email?: string;
+  positionName?: string;
+  roleType?: string;
+  status?: string;
+  joinedAt?: string;
+  lastLoginAt?: string;
+  memo?: string;
+  permissionCodes?: string[];
+};
+
+export type HealthBoxAdminAuditLog = {
+  id?: number;
+  actorStaffId?: number | null;
+  actorName?: string;
+  actorScope?: string;
+  actionCode?: string;
+  actionLabel?: string;
+  targetType?: string;
+  targetId?: string;
+  targetLabel?: string;
+  detailText?: string;
+  requestMethod?: string;
+  requestPath?: string;
+  resultStatus?: string;
+  createdAt?: string;
+};
+
 const API_BASE_URL = process.env.HEALTH_BOX_API_BASE_URL?.trim().replace(/\/+$/, "") || "";
 const PUBLIC_REVALIDATE_SECONDS = 60;
 
@@ -183,6 +236,7 @@ export async function healthBoxFetch<T>(
     body?: unknown;
     headers?: HeadersInit;
     revalidate?: number;
+    adminAccess?: "session" | "public" | "login";
   },
 ): Promise<T> {
   if (!API_BASE_URL) {
@@ -191,14 +245,41 @@ export async function healthBoxFetch<T>(
 
   const method = options?.method || "GET";
   const isRead = method === "GET" && !options?.body;
+  const requestHeaders = healthBoxInternalHeaders(options?.headers);
+  if (options?.body && !requestHeaders.has("Content-Type")) {
+    requestHeaders.set("Content-Type", "application/json");
+  }
+  if (path.startsWith("/health-box/admin/")) {
+    const adminAccess = options?.adminAccess || "session";
+    if (adminAccess === "public") {
+      requestHeaders.set("X-Health-Box-Admin-System-Request", "PUBLIC_READ");
+    } else if (adminAccess === "session") {
+      const session = await getAdminSession();
+      if (!session) {
+        throw new Error("관리자 로그인이 필요합니다.");
+      }
+      requestHeaders.set("X-Health-Box-Admin-Actor", encodeURIComponent(session.name));
+      requestHeaders.set(
+        "X-Health-Box-Admin-Actor-Scope",
+        session.scopeType === "DEALER" && session.dealerMallId
+          ? encodeURIComponent(`${session.scopeName} (#${session.dealerMallId})`)
+          : encodeURIComponent("본사몰"),
+      );
+      requestHeaders.set("X-Health-Box-Admin-Scope-Type", session.scopeType);
+      requestHeaders.set("X-Health-Box-Admin-Permissions", session.permissionCodes.join(","));
+      if (session.staffId) {
+        requestHeaders.set("X-Health-Box-Admin-Actor-Staff-Id", String(session.staffId));
+      }
+      if (session.dealerMallId) {
+        requestHeaders.set("X-Health-Box-Admin-Dealer-Mall-Id", String(session.dealerMallId));
+      }
+    }
+  }
   const response = await fetch(buildUrl(path, options?.query), {
     method,
     cache: isRead && typeof options?.revalidate === "number" ? undefined : "no-store",
     next: isRead && typeof options?.revalidate === "number" ? { revalidate: options.revalidate } : undefined,
-    headers: healthBoxInternalHeaders({
-      ...(options?.body ? { "Content-Type": "application/json" } : {}),
-      ...options?.headers,
-    }),
+    headers: requestHeaders,
     body: options?.body ? JSON.stringify(options.body) : undefined,
   });
 
@@ -234,6 +315,7 @@ export async function healthBoxFetchOrNull<T>(
     body?: unknown;
     headers?: HeadersInit;
     revalidate?: number;
+    adminAccess?: "session" | "public" | "login";
   },
 ) {
   try {
@@ -287,6 +369,69 @@ export async function fetchAdminMembers() {
   return healthBoxFetchOrNull<HealthBoxRecord[]>("/health-box/admin/members");
 }
 
+export async function authenticateAdminStaff(loginId: string, password: string) {
+  return healthBoxFetch<HealthBoxAdminStaff>("/health-box/admin/auth/login", {
+    method: "POST",
+    body: { loginId, password },
+    adminAccess: "login",
+  });
+}
+
+type AdminAuthEventActor = Pick<
+  AdminSession,
+  | "staffId"
+  | "name"
+  | "scopeType"
+  | "dealerMallId"
+  | "scopeName"
+  | "roleType"
+  | "permissionCodes"
+>;
+
+export async function recordAdminAuthEvent(event: "LOGIN" | "LOGOUT", actor: AdminAuthEventActor) {
+  if (!actor.staffId) {
+    return;
+  }
+
+  const headers = new Headers();
+  headers.set("X-Health-Box-Admin-Actor", encodeURIComponent(actor.name));
+  headers.set(
+    "X-Health-Box-Admin-Actor-Scope",
+    encodeURIComponent(
+      actor.scopeType === "DEALER" && actor.dealerMallId
+        ? `${actor.scopeName} (#${actor.dealerMallId})`
+        : "본사몰",
+    ),
+  );
+  headers.set("X-Health-Box-Admin-Actor-Staff-Id", String(actor.staffId));
+  headers.set("X-Health-Box-Admin-Scope-Type", actor.scopeType);
+  headers.set("X-Health-Box-Admin-Permissions", actor.permissionCodes.join(","));
+  if (actor.dealerMallId) {
+    headers.set("X-Health-Box-Admin-Dealer-Mall-Id", String(actor.dealerMallId));
+  }
+
+  await healthBoxFetch<void>(`/health-box/admin/auth-events/${event.toLowerCase()}`, {
+    method: "POST",
+    body: {
+      staffId: actor.staffId,
+      targetLabel: "관리자 페이지",
+      roleType: actor.roleType,
+    },
+    headers,
+    adminAccess: "login",
+  });
+}
+
+export async function fetchAdminStaff() {
+  return healthBoxFetchOrNull<HealthBoxAdminStaff[]>("/health-box/admin/staff");
+}
+
+export async function fetchAdminAuditLogs(limit = 200) {
+  return healthBoxFetchOrNull<HealthBoxAdminAuditLog[]>("/health-box/admin/audit-logs", {
+    query: { limit },
+  });
+}
+
 export async function fetchAdminDealerMallMembers(dealerMallId: number) {
   return healthBoxFetchOrNull<HealthBoxRecord[]>(`/health-box/admin/dealer-malls/${dealerMallId}/members`);
 }
@@ -319,16 +464,18 @@ export async function fetchAdminProducts(query?: {
   status?: string;
   page?: number;
   size?: number;
-}, options?: { revalidate?: number }) {
+}, options?: { revalidate?: number; adminAccess?: "session" | "public" }) {
   return healthBoxFetchOrNull<HealthBoxPageResponse<HealthBoxRecord>>("/health-box/admin/products", {
     query,
     revalidate: options?.revalidate,
+    adminAccess: options?.adminAccess,
   });
 }
 
-export async function fetchAdminProduct(productId: number, options?: { revalidate?: number }) {
+export async function fetchAdminProduct(productId: number, options?: { revalidate?: number; adminAccess?: "session" | "public" }) {
   return healthBoxFetchOrNull<HealthBoxRecord>(`/health-box/admin/products/${productId}`, {
     revalidate: options?.revalidate,
+    adminAccess: options?.adminAccess,
   });
 }
 
@@ -359,9 +506,10 @@ export async function fetchDealerMallProduct(dealerSlug: string, productSlug: st
   );
 }
 
-export async function fetchAdminCategories(options?: { revalidate?: number }) {
+export async function fetchAdminCategories(options?: { revalidate?: number; adminAccess?: "session" | "public" }) {
   return healthBoxFetchOrNull<HealthBoxCategory[]>("/health-box/admin/categories", {
     revalidate: options?.revalidate,
+    adminAccess: options?.adminAccess,
   });
 }
 
@@ -394,11 +542,12 @@ export async function fetchStorefrontProductPage(query?: {
   page?: number;
   size?: number;
 }) {
-  return fetchAdminProducts(query, { revalidate: PUBLIC_REVALIDATE_SECONDS });
+  return fetchAdminProducts(query, { revalidate: PUBLIC_REVALIDATE_SECONDS, adminAccess: "public" });
 }
 
-export async function fetchStorefrontNotices() {
-  return healthBoxFetchOrNull<HealthBoxRecord[]>("/health-box/admin/notices", {
+export async function fetchStorefrontNotices(dealerMallId?: number | null) {
+  return healthBoxFetchOrNull<HealthBoxRecord[]>("/health-box/public/notices", {
+    query: { dealerMallId: dealerMallId && dealerMallId > 0 ? dealerMallId : undefined },
     revalidate: PUBLIC_REVALIDATE_SECONDS,
   });
 }
@@ -410,11 +559,14 @@ export async function fetchAdminNotice(noticeId: number, options?: { revalidate?
 }
 
 export async function fetchStorefrontProduct(productId: number) {
-  return fetchAdminProduct(productId, { revalidate: PUBLIC_REVALIDATE_SECONDS });
+  return fetchAdminProduct(productId, { revalidate: PUBLIC_REVALIDATE_SECONDS, adminAccess: "public" });
 }
 
-export async function fetchStorefrontNotice(noticeId: number) {
-  return fetchAdminNotice(noticeId, { revalidate: PUBLIC_REVALIDATE_SECONDS });
+export async function fetchStorefrontNotice(noticeId: number, dealerMallId?: number | null) {
+  return healthBoxFetchOrNull<HealthBoxRecord>(`/health-box/public/notices/${noticeId}`, {
+    query: { dealerMallId: dealerMallId && dealerMallId > 0 ? dealerMallId : undefined },
+    revalidate: PUBLIC_REVALIDATE_SECONDS,
+  });
 }
 
 export async function fetchAdminMonthlySales(dealerMallId: number) {

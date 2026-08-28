@@ -8,6 +8,7 @@ import {
   MAX_IMAGE_FILE_SIZE_MB,
   MAX_IMAGE_TOTAL_SIZE_MB,
 } from "@/lib/image-upload-limits";
+import { dispatchAdminToast } from "./admin-toast";
 
 type ExistingProductImage = {
   kind: "existing";
@@ -179,19 +180,25 @@ export function AdminProductImageUpload({
     }
 
     if (images.length + selected.length > MAX_IMAGE_FILE_COUNT) {
-      setMessage(`상품 이미지는 최대 ${MAX_IMAGE_FILE_COUNT}개까지 등록할 수 있습니다.`);
+      const errorMessage = `상품 이미지는 최대 ${MAX_IMAGE_FILE_COUNT}개까지 등록할 수 있습니다.`;
+      setMessage(errorMessage);
+      dispatchAdminToast(errorMessage, "error");
       return;
     }
 
     const invalidType = selected.find((file) => !file.type.startsWith("image/"));
     if (invalidType) {
-      setMessage(`${invalidType.name} 파일은 이미지 형식이 아닙니다.`);
+      const errorMessage = `${invalidType.name} 파일은 이미지 형식이 아닙니다.`;
+      setMessage(errorMessage);
+      dispatchAdminToast(errorMessage, "error");
       return;
     }
 
     const oversizedFile = selected.find((file) => file.size > MAX_IMAGE_FILE_SIZE);
     if (oversizedFile) {
-      setMessage(`${oversizedFile.name} 파일은 ${MAX_IMAGE_FILE_SIZE_MB}MB를 초과합니다.`);
+      const errorMessage = `${oversizedFile.name} 파일은 ${MAX_IMAGE_FILE_SIZE_MB}MB를 초과합니다.`;
+      setMessage(errorMessage);
+      dispatchAdminToast(errorMessage, "error");
       return;
     }
 
@@ -253,9 +260,13 @@ export function AdminProductImageUpload({
 
     if (uploadError) {
       const detail = uploadError instanceof Error ? uploadError.message : "이미지 업로드에 실패했습니다.";
-      setMessage(uploadedCount ? `${uploadedCount}개 업로드 후 중단되었습니다. ${detail}` : detail);
+      const uploadMessage = uploadedCount ? `${uploadedCount}개 업로드 후 중단되었습니다. ${detail}` : detail;
+      setMessage(uploadMessage);
+      dispatchAdminToast(uploadMessage, "error");
     } else {
-      setMessage(`${uploadedCount}개 이미지 업로드 완료`);
+      const uploadMessage = `${uploadedCount}개 이미지 업로드 완료`;
+      setMessage(uploadMessage);
+      dispatchAdminToast(uploadMessage);
     }
 
     for (const image of localImages) {
@@ -275,7 +286,9 @@ export function AdminProductImageUpload({
         return currentIndex !== index;
       }),
     );
-    setMessage("이미지가 제거되었습니다. 상품 수정 버튼을 눌러 저장하세요.");
+    const infoMessage = "이미지가 제거되었습니다. 상품 수정 버튼을 눌러 저장하세요.";
+    setMessage(infoMessage);
+    dispatchAdminToast(infoMessage, "info");
   }
 
   function moveImage(fromIndex: number, toIndex: number) {
@@ -294,7 +307,9 @@ export function AdminProductImageUpload({
       nextImages.splice(toIndex, 0, movedImage);
       return nextImages;
     });
-    setMessage("이미지 순서가 변경되었습니다. 상품 수정 버튼을 눌러 저장하세요.");
+    const infoMessage = "이미지 순서가 변경되었습니다. 상품 수정 버튼을 눌러 저장하세요.";
+    setMessage(infoMessage);
+    dispatchAdminToast(infoMessage, "info");
   }
 
   function handleDrop(event: DragEvent<HTMLDivElement>, dropIndex: number) {

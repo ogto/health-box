@@ -4,8 +4,15 @@ import { AdminNoticeBodyEditor } from "../../../_components/admin/admin-notice-b
 import { AdminSubmitButton } from "../../../_components/admin/admin-submit-button";
 import { AdminBadge, AdminPanel } from "../../../_components/admin/admin-ui";
 import { hasHealthBoxApi } from "../../../_lib/health-box-api";
+import { getAdminSession } from "../../../_lib/admin-auth";
+import { redirect } from "next/navigation";
 
-export default function AdminNoticeNewPage() {
+export default async function AdminNoticeNewPage() {
+  const session = await getAdminSession();
+  if (session?.scopeType === "DEALER") {
+    redirect("/admin/notices");
+  }
+
   return (
     <div className="admin-page">
       <AdminHeader title="공지 작성" />

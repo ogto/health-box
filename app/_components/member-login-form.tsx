@@ -80,16 +80,16 @@ export function MemberLoginForm({
         <h1 className="section-panel-title">회원 로그인</h1>
         <p className="member-auth-copy">
           {hqMall
-            ? "승인된 구매 회원은 본사몰에 로그인할 수 있습니다."
+            ? "가입한 구매 회원은 본사몰에 로그인할 수 있습니다."
             : dealerName
               ? `${dealerName} 회원만 로그인할 수 있습니다.`
-              : "승인된 회원만 로그인할 수 있습니다."}
+              : "가입한 회원만 로그인할 수 있습니다."}
         </p>
       </div>
 
       {signupSuccess ? (
         <div className="member-auth-alert is-success">
-          가입 신청이 접수되었습니다. 승인 후 같은 정보로 로그인해주세요.
+          회원가입이 완료되었습니다. 가입한 정보로 로그인해주세요.
         </div>
       ) : null}
 
@@ -138,6 +138,12 @@ export function MemberLoginForm({
 
         <div className="member-auth-helper-actions">
           <Link href={`/password-reset?next=${encodeURIComponent(safeNextPath)}`}>비밀번호 찾기</Link>
+          {hqMall ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <Link href="/dealer-apply">딜러 신청</Link>
+            </>
+          ) : null}
         </div>
       </div>
     </div>

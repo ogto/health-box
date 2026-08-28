@@ -161,18 +161,30 @@ export function AdminProductOptionsEditor({
           },
         ],
   );
-  const fallbackSku: SkuDraft = skus[0] || {
-    consumerPrice: defaultConsumerPrice || 0,
-    memberPrice: 0,
-    optionValueCodes: [],
-    safetyStock: defaultSafetyStock || 0,
-    settlementBasePrice: defaultSettlementBasePrice || 0,
-    skuName: productName,
-    soldOutYn: "N",
-    status: "ACTIVE",
-    stockQuantity: defaultStockQuantity || 0,
-    supplyPrice: defaultSupplyPrice || 0,
-  };
+  const fallbackSku = useMemo<SkuDraft>(
+    () =>
+      skus[0] || {
+        consumerPrice: defaultConsumerPrice || 0,
+        memberPrice: 0,
+        optionValueCodes: [],
+        safetyStock: defaultSafetyStock || 0,
+        settlementBasePrice: defaultSettlementBasePrice || 0,
+        skuName: productName,
+        soldOutYn: "N",
+        status: "ACTIVE",
+        stockQuantity: defaultStockQuantity || 0,
+        supplyPrice: defaultSupplyPrice || 0,
+      },
+    [
+      defaultConsumerPrice,
+      defaultSafetyStock,
+      defaultSettlementBasePrice,
+      defaultStockQuantity,
+      defaultSupplyPrice,
+      productName,
+      skus,
+    ],
+  );
 
   const cleanGroups = useMemo(
     () => {

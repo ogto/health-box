@@ -3,27 +3,34 @@ import Link from "next/link";
 import { deleteNoticeAction } from "../../_actions/health-box-admin";
 import { AdminConfirmSubmitButton } from "../../_components/admin/admin-confirm-submit-button";
 import { AdminHeader } from "../../_components/admin/admin-header";
+import { AdminReadOnlyNotice } from "../../_components/admin/admin-read-only-notice";
 import { AdminBadge, AdminMetrics, AdminPanel, AdminTable } from "../../_components/admin/admin-ui";
+import { getAdminSession } from "../../_lib/admin-auth";
 import { fetchAdminNotices, hasHealthBoxApi } from "../../_lib/health-box-api";
 import { buildNoticeMetrics, mapNoticeRows } from "../../_lib/health-box-presenters";
 
 export default async function AdminNoticesPage() {
-  const notices = hasHealthBoxApi() ? await fetchAdminNotices() : null;
+  const [session, notices] = await Promise.all([
+    getAdminSession(),
+    hasHealthBoxApi() ? fetchAdminNotices() : Promise.resolve(null),
+  ]);
+  const readOnly = session?.scopeType === "DEALER";
   const metrics = buildNoticeMetrics(notices);
   const rows = mapNoticeRows(notices);
 
   return (
     <div className="admin-page">
       <AdminHeader
-        title="공지관리"
-        actions={
+        title={readOnly ? "공지조회" : "공지관리"}
+        actions={!readOnly ? (
           <Link className="admin-button" href="/admin/notices/new">
             공지 작성
           </Link>
-        }
+        ) : undefined}
       />
 
       <AdminMetrics items={metrics} />
+      {readOnly ? <AdminReadOnlyNotice scopeName={session?.scopeName} /> : null}
 
       <AdminPanel
         title="공지 목록"
@@ -48,7 +55,7 @@ export default async function AdminNoticesPage() {
                 <span className="admin-row-muted">{notice.editor}</span>
                 <span className="admin-row-muted">{notice.date}</span>
                 <AdminBadge className="admin-cell-center" tone={notice.tone}>{notice.status}</AdminBadge>
-                {notice.recordId ? (
+                {!readOnly && notice.recordId ? (
                   <>
                     <form action={deleteNoticeAction} id={deleteFormId}>
                       <input name="id" type="hidden" value={String(notice.recordId)} />
@@ -66,7 +73,7 @@ export default async function AdminNoticesPage() {
                     </AdminConfirmSubmitButton>
                   </>
                 ) : (
-                  <span className="admin-row-muted admin-cell-center">-</span>
+                  <span className="admin-row-muted admin-cell-center">{readOnly ? "조회 전용" : "-"}</span>
                 )}
               </div>
             );

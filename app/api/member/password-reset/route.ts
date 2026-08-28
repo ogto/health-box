@@ -20,11 +20,11 @@ function toFriendlyMessage(message: string) {
   }
 
   if (/buyer member not found/i.test(message)) {
-    return "입력한 정보와 일치하는 승인 회원을 찾을 수 없습니다.";
+    return "입력한 정보와 일치하는 회원을 찾을 수 없습니다.";
   }
 
   if (/buyer account not found/i.test(message)) {
-    return "승인된 회원 정보는 확인됐지만 비밀번호 변경 대상 계정을 찾지 못했습니다. 관리자에게 문의해주세요.";
+    return "회원 정보는 확인됐지만 비밀번호 변경 대상 계정을 찾지 못했습니다. 관리자에게 문의해주세요.";
   }
 
   if (/dealerMallId or slug is required|dealer mall not found|invalid dealer mall/i.test(message)) {

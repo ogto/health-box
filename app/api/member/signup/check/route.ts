@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import {
-  fetchAdminBuyerSignupApplications,
-  fetchAdminDealerMallMembers,
-  fetchAdminMembers,
-  fetchDealerPublicBySlug,
-  stringValue,
+  healthBoxFetch,
 } from "../../../../_lib/health-box-api";
 
 function normalizeEmail(value: unknown) {
@@ -16,11 +12,10 @@ function normalizePhone(value: unknown) {
   return String(value || "").replace(/[^0-9]/g, "");
 }
 
-function valueMatches(type: "email" | "phone", source: unknown, target: string) {
-  return type === "email"
-    ? normalizeEmail(source) === target
-    : normalizePhone(source) === target;
-}
+type SignupAvailabilityResponse = {
+  available: boolean;
+  message: string;
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,11 +24,7 @@ export async function POST(request: NextRequest) {
     const hqMall = Boolean(body.hqMall);
     const dealerSlug = hqMall ? undefined : String(body.dealerSlug || "").trim() || undefined;
     const requestedDealerMallId = Number(body.dealerMallId);
-    const dealerMallId =
-      hqMall ? 0 :
-      requestedDealerMallId ||
-      Number((await fetchDealerPublicBySlug(dealerSlug || ""))?.dealerMallId || 0) ||
-      0;
+    const dealerMallId = hqMall ? 0 : requestedDealerMallId || undefined;
     const value = type === "email" ? normalizeEmail(body.value) : normalizePhone(body.value);
 
     if (!value) {
@@ -43,58 +34,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!hqMall && !dealerMallId) {
+    if (!hqMall && !dealerMallId && !dealerSlug) {
       return NextResponse.json(
         { ok: false, message: "딜러몰 정보를 확인할 수 없습니다." },
         { status: 400 },
       );
     }
 
-    const members = hqMall
-      ? ((await fetchAdminMembers()) || []).filter((member) => Number(member.dealerMallId ?? 0) === 0)
-      : (await fetchAdminDealerMallMembers(dealerMallId)) || [];
-    const duplicatedMember = members.find((member) =>
-      valueMatches(type, stringValue(member, type), value),
+    const result = await healthBoxFetch<SignupAvailabilityResponse>(
+      "/health-box/public/buyer-signup-availability",
+      {
+        method: "POST",
+        body: {
+          dealerMallId,
+          hqMall,
+          slug: dealerSlug,
+          type,
+          value,
+        },
+      },
     );
 
-    if (duplicatedMember) {
-      return NextResponse.json(
-        {
-          available: false,
-          ok: true,
-          message: type === "email" ? "이미 승인된 회원 이메일입니다." : "이미 승인된 회원 휴대폰 번호입니다.",
-        },
-        { status: 200 },
-      );
-    }
-
-    const applications = (await fetchAdminBuyerSignupApplications()) || [];
-    const duplicatedApplication = applications.find((application) => {
-      const applicationStatus = stringValue(application, "status");
-      const applicationDealerMallId = Number(application.dealerMallId ?? 0);
-      const isPending = !applicationStatus || /^PENDING$/i.test(applicationStatus);
-      return (
-        isPending &&
-        applicationDealerMallId === dealerMallId &&
-        valueMatches(type, stringValue(application, type), value)
-      );
-    });
-
-    if (duplicatedApplication) {
-      return NextResponse.json(
-        {
-          available: false,
-          ok: true,
-          message: type === "email" ? "이미 가입 신청된 이메일입니다." : "이미 가입 신청된 휴대폰 번호입니다.",
-        },
-        { status: 200 },
-      );
-    }
-
     return NextResponse.json({
-      available: true,
+      available: result.available,
       ok: true,
-      message: type === "email" ? "사용 가능한 이메일입니다." : "사용 가능한 휴대폰 번호입니다.",
+      message: result.message,
     });
   } catch (error) {
     return NextResponse.json(

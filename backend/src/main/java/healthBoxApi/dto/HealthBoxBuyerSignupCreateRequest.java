@@ -3,6 +3,8 @@ package healthBoxApi.dto;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDate;
+
 @Getter
 @Setter
 public class HealthBoxBuyerSignupCreateRequest {
@@ -20,5 +22,17 @@ public class HealthBoxBuyerSignupCreateRequest {
     private String password;
 
     private String inboundChannel;
+
+    private LocalDate birthDate;
+
+    private Boolean termsAgreed;
+
+    private Boolean privacyAgreed;
+
+    private Boolean thirdPartyAgreed;
+
+    private Boolean marketingAgreed;
+
+    private String consentDocumentVersion;
 }
 

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { bulkPrepareShipmentsAction } from "../../_actions/health-box-admin";
 import { AdminComingSoonButton } from "../../_components/admin/admin-coming-soon-button";
 import { AdminHeader } from "../../_components/admin/admin-header";
+import { AdminReadOnlyNotice } from "../../_components/admin/admin-read-only-notice";
 import { AdminOrderBulkActions } from "../../_components/admin/admin-order-bulk-actions";
 import { AdminOrderExcelDownloadButton } from "../../_components/admin/admin-order-excel-download-button";
 import { AdminTableScrollMirror } from "../../_components/admin/admin-table-scroll-mirror";
@@ -14,6 +15,7 @@ import {
   hasHealthBoxApi,
 } from "../../_lib/health-box-api";
 import { mapDealerRows, mapOrderRows } from "../../_lib/health-box-presenters";
+import { getAdminSession } from "../../_lib/admin-auth";
 
 type OrdersSearchParams = {
   dateFrom?: string;
@@ -128,7 +130,8 @@ export default async function AdminOrdersPage({
 }: {
   searchParams: Promise<OrdersSearchParams>;
 }) {
-  const params = await searchParams;
+  const [params, session] = await Promise.all([searchParams, getAdminSession()]);
+  const readOnly = session?.scopeType === "DEALER";
   const selectedDealerId = Number(params.dealerMallId) || null;
   const today = formatDateInput(new Date());
   const dateFrom = params.dateFrom || dateMonthsBefore(3);
@@ -172,7 +175,9 @@ export default async function AdminOrdersPage({
 
   return (
     <div className="admin-page">
-      <AdminHeader title="주문관리" />
+      <AdminHeader title={readOnly ? "주문조회" : "주문관리"} />
+
+      {readOnly ? <AdminReadOnlyNotice scopeName={session?.scopeName} /> : null}
 
       <AdminPanel title="조회 조건">
         <div className="admin-order-search-panel">
@@ -245,12 +250,12 @@ export default async function AdminOrdersPage({
             <div className="admin-order-list-actions-left">
               <AdminOrderExcelDownloadButton rows={exportRows} />
             </div>
-            <AdminOrderBulkActions formId={bulkPrepareFormId} />
+            {!readOnly ? <AdminOrderBulkActions formId={bulkPrepareFormId} /> : null}
           </div>
         }
         title={`목록 (총 ${filteredOrderRows.length.toLocaleString("ko-KR")}건)`}
       >
-        <form action={bulkPrepareShipmentsAction} id={bulkPrepareFormId}>
+        <form action={readOnly ? undefined : bulkPrepareShipmentsAction} id={bulkPrepareFormId}>
           <input name="redirectTo" type="hidden" value={buildOrdersHref({ dateFrom, dateTo, dealerMallId: selectedDealer?.id, status: selectedStatus })} />
           <AdminTable
             alignments={["center", "left", "left", "center", "center", "left", "left", "left", "center", "right", "center"]}
@@ -266,14 +271,14 @@ export default async function AdminOrdersPage({
             scrollerId={orderTableScrollerId}
           >
             {filteredOrderRows.map((order) => {
-              const selectable = canBulkPrepareShipment(order);
+              const selectable = !readOnly && canBulkPrepareShipment(order);
               const firstItem = order.itemDetails[0];
               const extraCount = Math.max(0, order.itemDetails.length - 1);
               const totalQuantity = order.itemDetails.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
 
               return (
                 <div className="admin-table-row admin-order-table-row" key={order.number}>
-                  <label className="admin-order-check-cell" title={selectable ? "상품 준비 처리 대상 선택" : "상품 준비 처리 대상이 아닙니다."}>
+                  <label className="admin-order-check-cell" title={readOnly ? "조회 전용" : selectable ? "상품 준비 처리 대상 선택" : "상품 준비 처리 대상이 아닙니다."}>
                     <input
                       aria-label={`${order.number} 선택`}
                       disabled={!selectable}
@@ -327,7 +332,7 @@ export default async function AdminOrdersPage({
         </form>
       </AdminPanel>
 
-      <section className="admin-order-management-guide" aria-label="주문 처리 안내">
+      {!readOnly ? <section className="admin-order-management-guide" aria-label="주문 처리 안내">
         <div className="admin-order-management-row">
           <strong>주문관리</strong>
           <AdminComingSoonButton>발주 확인</AdminComingSoonButton>
@@ -348,7 +353,7 @@ export default async function AdminOrdersPage({
           <AdminComingSoonButton>반품접수 후 처리</AdminComingSoonButton>
           <AdminComingSoonButton>교환접수 후 처리</AdminComingSoonButton>
         </div>
-      </section>
+      </section> : null}
     </div>
   );
 }

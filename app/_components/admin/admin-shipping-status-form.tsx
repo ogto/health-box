@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 
 import { updateShipmentStatusAction } from "../../_actions/health-box-admin";
 import { AdminConfirmSubmitButton } from "./admin-confirm-submit-button";
+import { dispatchAdminToast } from "./admin-toast";
 
 const shipmentStatusOptions = [
   { value: "PENDING", label: "주문 접수" },
@@ -54,19 +55,25 @@ export function AdminShippingStatusForm({
 
     if (status === "DELIVERED" && !hasTracking) {
       event.preventDefault();
-      setMessage("배송완료는 송장번호가 등록된 주문만 처리할 수 있습니다. 먼저 배송중으로 저장해주세요.");
+      const errorMessage = "배송완료는 송장번호가 등록된 주문만 처리할 수 있습니다. 먼저 배송중으로 저장해주세요.";
+      setMessage(errorMessage);
+      dispatchAdminToast(errorMessage, "error");
       return;
     }
 
     if (needsTracking && !hasTracking) {
       event.preventDefault();
-      setMessage("배송중으로 변경하려면 택배사와 송장번호를 입력해주세요.");
+      const errorMessage = "배송중으로 변경하려면 택배사와 송장번호를 입력해주세요.";
+      setMessage(errorMessage);
+      dispatchAdminToast(errorMessage, "error");
       return;
     }
 
     if (status === "SHIPPED" && !trackingLocked && (!localCourierCompany.trim() || !localTrackingNo.trim())) {
       event.preventDefault();
-      setMessage("배송중 최초 처리 시 택배사와 송장번호는 필수입니다.");
+      const errorMessage = "배송중 최초 처리 시 택배사와 송장번호는 필수입니다.";
+      setMessage(errorMessage);
+      dispatchAdminToast(errorMessage, "error");
       return;
     }
 

@@ -6,16 +6,17 @@ import { useState, type ReactNode, type SVGProps } from "react";
 import { BrandLogo } from "../brand-logo";
 import { AdminMobileSidebar, AdminSidebar } from "./admin-sidebar";
 import { AdminToastViewport } from "./admin-toast";
+import type { AdminSession } from "../../_lib/admin-session";
 
-export function AdminShell({ children }: { children: ReactNode }) {
+export function AdminShell({ children, session }: { children: ReactNode; session: AdminSession }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className="admin-shell">
-      <AdminMobileSidebar open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
+      <AdminMobileSidebar open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} session={session} />
 
       <div className="admin-frame">
-        <AdminSidebar />
+        <AdminSidebar session={session} />
 
         <main className="admin-main">
           <div className="admin-mobile-bar">

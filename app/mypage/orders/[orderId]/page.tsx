@@ -49,75 +49,6 @@ function formatShortDate(value: unknown) {
   return month && day ? `${Number(month)}/${Number(day)}` : "";
 }
 
-function formatDateTime(value: unknown) {
-  if (Array.isArray(value)) {
-    const [year, month, day, hour, minute] = value;
-    const date = [year, month, day].filter(Boolean).join(".");
-    const time =
-      hour === undefined
-        ? ""
-        : ` ${String(hour).padStart(2, "0")}:${String(minute || 0).padStart(2, "0")}`;
-    return date ? `${date}${time}` : "-";
-  }
-
-  const text = String(value || "");
-  if (!text) {
-    return "-";
-  }
-
-  return text.replace("T", " ").slice(0, 16).replace(/-/g, ".");
-}
-
-function formatTrackingDate(value: unknown) {
-  if (Array.isArray(value)) {
-    const [year, month, day, hour, minute] = value;
-    if (!year || !month || !day) {
-      return "-";
-    }
-    const time =
-      hour === undefined
-        ? ""
-        : ` ${String(hour).padStart(2, "0")}:${String(minute || 0).padStart(2, "0")}`;
-    return `${month}월 ${day}, ${year}${time}`;
-  }
-
-  const text = String(value || "");
-  if (!text) {
-    return "-";
-  }
-
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) {
-    return formatDateTime(value);
-  }
-
-  return `${date.getMonth() + 1}월 ${date.getDate()}, ${date.getFullYear()} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-}
-
-function formatArrivalDate(value: unknown) {
-  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
-  if (Array.isArray(value)) {
-    const [year, month, day] = value;
-    if (!year || !month || !day) {
-      return "";
-    }
-    const date = new Date(Number(year), Number(month) - 1, Number(day));
-    return `${month}/${day}(${weekdays[date.getDay()]})`;
-  }
-
-  const text = String(value || "");
-  if (!text) {
-    return "";
-  }
-
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return `${date.getMonth() + 1}/${date.getDate()}(${weekdays[date.getDay()]})`;
-}
-
 function formatWon(value: unknown) {
   const amount = Number(value || 0);
   return `${amount.toLocaleString("ko-KR")}원`;
@@ -226,42 +157,6 @@ function shouldShowTracking(order: HealthBoxRecord) {
   return /SHIPPED|DELIVERED/.test(shipmentStatus) || Boolean(order.trackingNo);
 }
 
-function deliveryTrackingUrl(order: HealthBoxRecord) {
-  const trackingNo = String(order.trackingNo || "").trim();
-  if (!trackingNo) {
-    return "";
-  }
-
-  const courierCompany = String(order.courierCompany || "택배").trim();
-  return `https://search.naver.com/search.naver?query=${encodeURIComponent(`${courierCompany} ${trackingNo} 배송조회`)}`;
-}
-
-function trackingHeadline(order: HealthBoxRecord) {
-  const shipmentStatus = String(order.shipmentStatus || "").toUpperCase();
-  if (shipmentStatus === "DELIVERED") {
-    const deliveredDate = formatArrivalDate(order.deliveredAt);
-    return deliveredDate ? `${deliveredDate} 도착 완료` : "배송완료";
-  }
-  if (shipmentStatus === "SHIPPED") {
-    return "배송중";
-  }
-  if (shipmentStatus === "PREPARING") {
-    return "상품 준비중";
-  }
-  return customerOrderStatusLabel(order);
-}
-
-function trackingDescription(order: HealthBoxRecord) {
-  const shipmentStatus = String(order.shipmentStatus || "").toUpperCase();
-  if (shipmentStatus === "DELIVERED") {
-    return "고객님이 주문하신 상품이 배송완료 되었습니다.";
-  }
-  if (shipmentStatus === "SHIPPED") {
-    return "고객님이 주문하신 상품이 배송중입니다.";
-  }
-  return "고객님이 주문하신 상품의 배송을 준비하고 있습니다.";
-}
-
 function orderStatusDetail(order: HealthBoxRecord) {
   const shipmentStatus = String(order.shipmentStatus || "").toUpperCase();
   const label = customerOrderStatusLabel(order);
@@ -305,35 +200,6 @@ function orderActionMode(order: HealthBoxRecord) {
     return "delivery";
   }
   return "ready";
-}
-
-function trackingEvents(order: HealthBoxRecord) {
-  const shipmentStatus = String(order.shipmentStatus || "").toUpperCase();
-  const events: Array<{ at: unknown; location: string; status: string }> = [];
-
-  if (shipmentStatus === "DELIVERED") {
-    events.push({
-      at: order.deliveredAt || order.shippedAt || order.orderedAt,
-      location: String(order.baseAddress || "도착지"),
-      status: "배송완료",
-    });
-  }
-
-  if (/SHIPPED|DELIVERED/.test(shipmentStatus)) {
-    events.push({
-      at: order.shippedAt || order.orderedAt,
-      location: String(order.dealerNameSnapshot || "판매처"),
-      status: shipmentStatus === "SHIPPED" ? "배송중" : "배송출발",
-    });
-  }
-
-  events.push({
-    at: order.orderedAt,
-    location: String(order.dealerNameSnapshot || "판매처"),
-    status: "주문 접수",
-  });
-
-  return events;
 }
 
 function itemOptionText(item: HealthBoxRecord) {
@@ -439,7 +305,6 @@ export default async function MemberOrderDetailPage({
   }
 
   const items = orderItems(order);
-  const itemQuantity = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const productTotalAmount = items.reduce((sum, item) => sum + itemLineAmount(item), 0);
   const shippingFee = Number(order.shippingFee || order.deliveryFee || 0);
   const canceledAmount = Number(order.canceledPaymentAmount || 0);

@@ -19,6 +19,9 @@ public class HealthBoxNoticeVo extends HealthBoxBaseVo {
     @Column(name = "ID")
     private Long id;
 
+    @Column(name = "DEALER_MALL_ID")
+    private Long dealerMallId;
+
     @Column(name = "TITLE", nullable = false, length = 255)
     private String title;
 

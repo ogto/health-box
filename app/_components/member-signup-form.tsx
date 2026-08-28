@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { BUYER_SIGNUP_CONSENT_VERSION } from "@/lib/buyer-consent";
+
 function resolveNextPath(nextPath?: string) {
   if (!nextPath || !nextPath.startsWith("/")) {
     return "/mypage";
@@ -24,6 +26,29 @@ function formatPhone(value: string) {
   }
 
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
+function isAtLeastFourteen(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return false;
+  }
+
+  const birthYear = Number(match[1]);
+  const birthMonth = Number(match[2]);
+  const birthDay = Number(match[3]);
+  const birthDate = new Date(birthYear, birthMonth - 1, birthDay);
+  if (
+    birthDate.getFullYear() !== birthYear ||
+    birthDate.getMonth() !== birthMonth - 1 ||
+    birthDate.getDate() !== birthDay
+  ) {
+    return false;
+  }
+
+  const today = new Date();
+  const fourteenthBirthday = new Date(birthYear + 14, birthMonth - 1, birthDay);
+  return birthDate <= today && fourteenthBirthday <= today;
 }
 
 type DuplicateCheckState = {
@@ -50,12 +75,25 @@ export function MemberSignupForm({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [termsAgreed, setTermsAgreed] = useState(false);
+  const [privacyAgreed, setPrivacyAgreed] = useState(false);
+  const [thirdPartyAgreed, setThirdPartyAgreed] = useState(false);
+  const [marketingAgreed, setMarketingAgreed] = useState(false);
   const [phoneCheck, setPhoneCheck] = useState<DuplicateCheckState>({ message: "", status: "idle" });
   const [emailCheck, setEmailCheck] = useState<DuplicateCheckState>({ message: "", status: "idle" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const allAgreed = termsAgreed && privacyAgreed && thirdPartyAgreed && marketingAgreed;
+
+  function setAllAgreements(checked: boolean) {
+    setTermsAgreed(checked);
+    setPrivacyAgreed(checked);
+    setThirdPartyAgreed(checked);
+    setMarketingAgreed(checked);
+  }
 
   async function checkDuplicate(type: "email" | "phone") {
     const value = type === "email" ? email.trim() : phone;
@@ -113,6 +151,21 @@ export function MemberSignupForm({
       return;
     }
 
+    if (!birthDate) {
+      setError("생년월일을 입력해주세요.");
+      return;
+    }
+
+    if (!isAtLeastFourteen(birthDate)) {
+      setError("만 14세 미만은 회원가입할 수 없습니다.");
+      return;
+    }
+
+    if (!termsAgreed || !privacyAgreed || !thirdPartyAgreed) {
+      setError("필수 약관과 개인정보 동의 항목에 동의해주세요.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -126,7 +179,13 @@ export function MemberSignupForm({
           name,
           phone,
           email,
+          birthDate,
           password,
+          termsAgreed,
+          privacyAgreed,
+          thirdPartyAgreed,
+          marketingAgreed,
+          consentDocumentVersion: BUYER_SIGNUP_CONSENT_VERSION,
           hqMall,
         }),
       });
@@ -139,9 +198,9 @@ export function MemberSignupForm({
         return;
       }
 
-      setError(data?.message || "회원가입 신청에 실패했습니다.");
+      setError(data?.message || "회원가입에 실패했습니다.");
     } catch {
-      setError("회원가입 신청 중 오류가 발생했습니다.");
+      setError("회원가입 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
@@ -153,10 +212,10 @@ export function MemberSignupForm({
         <h1 className="section-panel-title">회원가입</h1>
         <p className="member-auth-copy">
           {hqMall
-            ? "본사몰 구매 회원가입을 신청합니다."
+            ? "본사몰 구매 회원으로 가입합니다."
             : dealerName
-              ? `${dealerName} 딜러몰 회원가입 신청`
-              : "구매 회원가입 신청"}
+              ? `${dealerName} 딜러몰 회원가입`
+              : "구매 회원가입"}
         </p>
       </div>
 
@@ -242,10 +301,20 @@ export function MemberSignupForm({
           ) : null}
         </label>
 
+        <label className="member-auth-field">
+          <span>생년월일</span>
+          <input
+            className="member-auth-input"
+            onChange={(event) => setBirthDate(event.target.value)}
+            required
+            type="date"
+            value={birthDate}
+          />
+          <small className="member-auth-field-help">연령 확인에만 사용하며, 만 14세 이상만 가입할 수 있습니다.</small>
+        </label>
+
         <div className="member-auth-alert is-muted">
-          {hqMall
-            ? "승인 후 본사몰에서 로그인할 수 있습니다."
-            : "승인 후 로그인할 때는 가입한 이메일을 사용합니다."}
+          가입이 완료되면 입력한 이메일 또는 휴대폰 번호로 바로 로그인할 수 있습니다.
         </div>
 
         <label className="member-auth-field">
@@ -275,11 +344,109 @@ export function MemberSignupForm({
           />
         </label>
 
+        <fieldset className="member-consent-section">
+          <legend>약관 및 개인정보 동의</legend>
+
+          <div className="member-consent-group">
+            <label className="member-consent-all">
+              <input
+                checked={allAgreed}
+                onChange={(event) => setAllAgreements(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <strong>전체 동의</strong>
+                <small>필수 및 선택 항목을 모두 포함합니다.</small>
+              </span>
+            </label>
+
+            <div className="member-consent-list">
+              <label className="member-consent-row">
+                <input
+                  checked={termsAgreed}
+                  onChange={(event) => setTermsAgreed(event.target.checked)}
+                  type="checkbox"
+                />
+                <span><b>필수</b> 건강창고 딜러몰 이용약관에 동의합니다.</span>
+              </label>
+
+              <div className="member-consent-item">
+                <label className="member-consent-row">
+                  <input
+                    checked={privacyAgreed}
+                    onChange={(event) => setPrivacyAgreed(event.target.checked)}
+                    type="checkbox"
+                  />
+                  <span><b>필수</b> 개인정보 수집·이용 동의</span>
+                </label>
+                <details className="member-consent-details">
+                  <summary>내용보기</summary>
+                  <div>
+                    <p>「개인정보 보호법」 제15조에 따라 아래와 같이 개인정보를 수집·이용합니다.</p>
+                    <ul>
+                      <li><strong>수집 항목:</strong> 이름, 휴대전화번호, 이메일, 생년월일(연령 확인용)</li>
+                      <li><strong>수집 목적:</strong> 회원 가입 및 관리, 서비스 제공, 본인 확인, 고객 문의 응대</li>
+                      <li><strong>보유 기간:</strong> 회원 탈퇴 시까지(단, 관련 법령에 따라 보존이 필요한 경우 해당 기간까지)</li>
+                    </ul>
+                    <p>위 개인정보 수집·이용에 동의하십니까?</p>
+                    <p className="member-consent-note">동의를 거부하실 수 있으나, 거부 시 회원가입이 제한됩니다.</p>
+                  </div>
+                </details>
+              </div>
+
+              <div className="member-consent-item">
+                <label className="member-consent-row">
+                  <input
+                    checked={thirdPartyAgreed}
+                    onChange={(event) => setThirdPartyAgreed(event.target.checked)}
+                    type="checkbox"
+                  />
+                  <span><b>필수</b> 개인정보 제3자 제공 동의</span>
+                </label>
+                <details className="member-consent-details">
+                  <summary>내용보기</summary>
+                  <div>
+                    <ul>
+                      <li><strong>제공받는 자:</strong> 결제대행사(예: 토스페이먼츠), 배송업체</li>
+                      <li><strong>제공 항목:</strong> 이름, 연락처, 배송지 주소</li>
+                      <li><strong>제공 목적:</strong> 결제 처리 및 상품 배송</li>
+                      <li><strong>보유·이용 기간:</strong> 결제·배송 완료 후 즉시 파기(단, 전자상거래법상 보존 의무 기간 제외)</li>
+                    </ul>
+                    <p>위 제3자 제공에 동의하십니까?</p>
+                  </div>
+                </details>
+              </div>
+
+              <div className="member-consent-item">
+                <label className="member-consent-row">
+                  <input
+                    checked={marketingAgreed}
+                    onChange={(event) => setMarketingAgreed(event.target.checked)}
+                    type="checkbox"
+                  />
+                  <span><b className="is-optional">선택</b> 마케팅 정보 수신 동의</span>
+                </label>
+                <details className="member-consent-details">
+                  <summary>내용보기</summary>
+                  <div>
+                    <p>신제품 소식, 이벤트, 할인 혜택 등의 정보를 SMS·이메일·앱 푸시로 받아보시겠습니까?</p>
+                    <p className="member-consent-note">동의하지 않아도 서비스 이용에는 제한이 없습니다.</p>
+                  </div>
+                </details>
+              </div>
+            </div>
+          </div>
+
+          <p className="member-consent-age-notice">
+            본 서비스는 만 14세 이상만 회원가입이 가능합니다. 만 14세 미만은 법정대리인의 동의 없이 가입할 수 없습니다.
+          </p>
+        </fieldset>
+
         {error ? <div className="member-auth-alert is-error">{error}</div> : null}
 
         <div className="member-auth-actions">
           <button className="button-primary" disabled={loading} onClick={() => void handleSubmit()} type="button">
-            {loading ? "접수 중..." : "가입 신청"}
+            {loading ? "가입 중..." : "회원가입"}
           </button>
           <Link className="button-secondary" href={`/login?next=${encodeURIComponent(safeNextPath)}`}>
             로그인

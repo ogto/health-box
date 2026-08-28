@@ -6,23 +6,60 @@ import type { SVGProps } from "react";
 
 import { BrandLogo } from "../brand-logo";
 import { AdminLogoutButton } from "./admin-logout-button";
+import { canAccessAdminPermission, type AdminSession } from "../../_lib/admin-session";
 
-const navItems = [
-  { href: "/admin/dashboard", label: "대시보드", icon: DashboardIcon, keys: ["", "dashboard"] },
-  { href: "/admin/orders", label: "주문관리", icon: OrderIcon, keys: ["orders"] },
-  { href: "/admin/products", label: "상품관리", icon: ProductIcon, keys: ["products", "product"] },
-  { href: "/admin/categories", label: "카테고리", icon: CategoryIcon, keys: ["categories"] },
-  { href: "/admin/sales", label: "매출/정산", icon: SalesIcon, keys: ["sales", "settlements"] },
-  { href: "/admin/members", label: "회원관리", icon: MemberIcon, keys: ["members"] },
-  { href: "/admin/dealers", label: "딜러관리", icon: DealerIcon, keys: ["dealers"] },
+const navGroups = [
   {
-    href: "/admin/storefront",
-    label: "홈페이지관리",
-    icon: StorefrontIcon,
-    keys: ["storefront", "settings", "operation-settings"],
+    label: "운영",
+    items: [
+      { href: "/admin/dashboard", label: "대시보드", icon: DashboardIcon, keys: ["", "dashboard"], permission: "DASHBOARD_VIEW" },
+      { href: "/admin/orders", label: "주문관리", icon: OrderIcon, keys: ["orders"], permission: "ORDER_VIEW" },
+      { href: "/admin/sales", label: "매출/정산", icon: SalesIcon, keys: ["sales", "settlements"], permission: "SALES_VIEW" },
+    ],
   },
-  { href: "/admin/notices", label: "공지관리", icon: NoticeIcon, keys: ["notices", "notice"] },
+  {
+    label: "상품",
+    items: [
+      { href: "/admin/products", label: "상품관리", icon: ProductIcon, keys: ["products", "product"], permission: "PRODUCT_VIEW", hqOnly: true },
+      { href: "/admin/categories", label: "카테고리", icon: CategoryIcon, keys: ["categories"], permission: "CATEGORY_MANAGE", hqOnly: true },
+    ],
+  },
+  {
+    label: "회원·조직",
+    items: [
+      { href: "/admin/members", label: "회원관리", icon: MemberIcon, keys: ["members"], permission: "MEMBER_VIEW" },
+      { href: "/admin/dealers", label: "딜러관리", icon: DealerIcon, keys: ["dealers"], permission: "DEALER_VIEW", hqOnly: true },
+      { href: "/admin/staff", label: "직원관리", icon: StaffIcon, keys: ["staff"], permission: "STAFF_MANAGE" },
+    ],
+  },
+  {
+    label: "콘텐츠",
+    items: [
+      {
+        href: "/admin/storefront",
+        label: "홈페이지관리",
+        icon: StorefrontIcon,
+        keys: ["storefront", "settings", "operation-settings"],
+        permission: "STOREFRONT_MANAGE",
+      },
+      { href: "/admin/notices", label: "공지관리", icon: NoticeIcon, keys: ["notices", "notice"], permission: "NOTICE_MANAGE" },
+    ],
+  },
+  {
+    label: "시스템",
+    items: [
+      { href: "/admin/logs", label: "로그관리", icon: LogIcon, keys: ["logs"], permission: "AUDIT_LOG_VIEW" },
+    ],
+  },
 ] as const;
+
+const dealerReadOnlyLabels: Record<string, string> = {
+  "/admin/orders": "주문조회",
+  "/admin/members": "회원조회",
+  "/admin/staff": "직원조회",
+  "/admin/storefront": "홈페이지조회",
+  "/admin/notices": "공지조회",
+};
 
 function getAdminMenuKeyFromPath(pathname: string | null) {
   const normalizedPath = (pathname || "").split("?")[0].replace(/\/+$/, "");
@@ -35,7 +72,7 @@ function getAdminMenuKeyFromPath(pathname: string | null) {
   return segments[1] || "";
 }
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarContent({ onNavigate, session }: { onNavigate?: () => void; session: AdminSession }) {
   const pathname = usePathname();
   const selectedSegment = useSelectedLayoutSegment();
   const activeMenuKey = selectedSegment || getAdminMenuKeyFromPath(pathname);
@@ -51,27 +88,48 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </Link>
 
       <nav className="admin-sidebar-nav" aria-label="관리자 메뉴">
-        {navItems.map((item) => {
-          const active = (item.keys as readonly string[]).includes(activeMenuKey);
-          const Icon = item.icon;
-
+        {navGroups.map((group) => {
+          const visibleItems = group.items.filter((item) =>
+            (!("hqOnly" in item) || !item.hqOnly || session.scopeType === "HQ") &&
+            canAccessAdminPermission(session, item.permission),
+          );
+          if (!visibleItems.length) return null;
           return (
-            <Link
-              aria-current={active ? "page" : undefined}
-              className={`admin-sidebar-link${active ? " is-active" : ""}`}
-              data-active={active ? "true" : undefined}
-              href={item.href}
-              key={item.href}
-              onClick={onNavigate}
-            >
-              <Icon className="admin-sidebar-link-icon" />
-              <span className="admin-sidebar-link-label">{item.label}</span>
-            </Link>
+          <div aria-label={group.label} className="admin-sidebar-group" key={group.label} role="group">
+            <p className="admin-sidebar-group-label">{group.label}</p>
+            <div className="admin-sidebar-group-links">
+              {visibleItems.map((item) => {
+                const active = (item.keys as readonly string[]).includes(activeMenuKey);
+                const Icon = item.icon;
+                const itemLabel = session.scopeType === "DEALER"
+                  ? dealerReadOnlyLabels[item.href] || item.label
+                  : item.label;
+
+                return (
+                  <Link
+                    aria-current={active ? "page" : undefined}
+                    className={`admin-sidebar-link${active ? " is-active" : ""}`}
+                    data-active={active ? "true" : undefined}
+                    href={item.href}
+                    key={item.href}
+                    onClick={onNavigate}
+                  >
+                    <Icon className="admin-sidebar-link-icon" />
+                    <span className="admin-sidebar-link-label">{itemLabel}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
           );
         })}
       </nav>
 
       <div className="admin-sidebar-footer">
+        <div className="admin-sidebar-session">
+          <strong>{session.scopeName}</strong>
+          <span>{session.name} · {session.roleType === "OWNER" ? "대표자" : "직원"}</span>
+        </div>
         <div className="admin-sidebar-footer-actions">
           <AdminLogoutButton onDone={onNavigate} />
         </div>
@@ -80,10 +138,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export function AdminSidebar() {
+export function AdminSidebar({ session }: { session: AdminSession }) {
   return (
     <aside className="admin-sidebar">
-      <SidebarContent />
+      <SidebarContent session={session} />
     </aside>
   );
 }
@@ -91,9 +149,11 @@ export function AdminSidebar() {
 export function AdminMobileSidebar({
   open,
   onClose,
+  session,
 }: {
   open: boolean;
   onClose: () => void;
+  session: AdminSession;
 }) {
   if (!open) return null;
 
@@ -119,7 +179,7 @@ export function AdminMobileSidebar({
             <CloseIcon />
           </button>
         </div>
-        <SidebarContent onNavigate={onClose} />
+        <SidebarContent onNavigate={onClose} session={session} />
       </aside>
     </div>
   );
@@ -249,6 +309,34 @@ function DealerIcon(props: SVGProps<SVGSVGElement>) {
     <svg fill="none" viewBox="0 0 24 24" {...props}>
       <path
         d="M4 20v-8h5v8M10 20V6h5v14M16 20v-5h4v5M3 20h18"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      />
+    </svg>
+  );
+}
+
+function StaffIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg fill="none" viewBox="0 0 24 24" {...props}>
+      <path
+        d="M8.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm7-1a2.75 2.75 0 1 0 0-5.5A2.75 2.75 0 0 0 15.5 10ZM3 20a5.5 5.5 0 0 1 11 0m0-6.5a4.5 4.5 0 0 1 7 3.75V20"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      />
+    </svg>
+  );
+}
+
+function LogIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg fill="none" viewBox="0 0 24 24" {...props}>
+      <path
+        d="M6 3.5h9l3 3V20H6V3.5Zm9 0v3h3M9 10h6M9 13.5h6M9 17h4"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"

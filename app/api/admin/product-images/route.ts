@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { ADMIN_COOKIE_NAME, getAdminSessionToken } from "../../../_lib/admin-auth";
+import { getAdminSession } from "../../../_lib/admin-auth";
 import { healthBoxInternalHeaders } from "../../../_lib/health-box-api";
 import {
   MAX_IMAGE_FILE_COUNT,
@@ -34,9 +34,9 @@ function getCdnBaseUrl() {
   return explicitBaseUrl?.replace(/\/+$/, "") || new URL(getUploadBaseUrl()).origin;
 }
 
-function isAdminRequest(request: NextRequest) {
-  const token = getAdminSessionToken();
-  return Boolean(token) && request.cookies.get(ADMIN_COOKIE_NAME)?.value === token;
+async function isAdminRequest() {
+  const session = await getAdminSession();
+  return Boolean(session?.scopeType === "HQ" && session.permissionCodes.includes("PRODUCT_MANAGE"));
 }
 
 async function parseUploadResponse(response: Response) {
@@ -95,7 +95,7 @@ function normalizeUploadedFiles(files: UploadedFileResponse[], cdnBaseUrl: strin
 }
 
 export async function POST(request: NextRequest) {
-  if (!isAdminRequest(request)) {
+  if (!(await isAdminRequest())) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 

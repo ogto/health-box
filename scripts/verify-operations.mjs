@@ -75,7 +75,6 @@ function firstProductId(payload) {
 await loadLocalEnvironment();
 
 const apiBaseUrl = requireEnvironment("HEALTH_BOX_API_BASE_URL").replace(/\/$/, "");
-requireEnvironment("ADMIN_PASSWORD", 12);
 requireEnvironment("ADMIN_SESSION_TOKEN", 32);
 requireEnvironment("MEMBER_SESSION_SECRET", 32);
 requireEnvironment("HEALTH_BOX_PAYMENT_PROOF_SECRET", 32);
@@ -186,7 +185,9 @@ if (apiBaseUrl) {
       }
     }
 
-    const productsResult = await request(apiBaseUrl, "/health-box/admin/products?page=1&size=1");
+    const productsResult = await request(apiBaseUrl, "/health-box/admin/products?page=1&size=1", {
+      headers: { "X-Health-Box-Admin-System-Request": "PUBLIC_READ" },
+    });
     const productId = productsResult.response.ok ? firstProductId(productsResult.payload) : null;
     report(productId ? "PASS" : "FAIL", "product API", `HTTP ${productsResult.response.status}`);
     if (!productId) failures.push("product API");
