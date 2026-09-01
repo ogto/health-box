@@ -179,6 +179,22 @@ function AdminOptionDisplay({
   return <span className="admin-option-inline-text">{optionPairs.map((item) => `${item.name}: ${item.value}`).join(", ") || option}</span>;
 }
 
+function activeClaimForTask(order: ReturnType<typeof mapOrderRows>[number], task: string) {
+  const claimType = task === "cancelApproval" ? "CANCEL" : task === "returnProcess" ? "RETURN" : task === "exchangeProcess" ? "EXCHANGE" : "";
+  return claimType ? order.activeClaims.find((claim) => claim.type === claimType) : undefined;
+}
+
+function canSelectForTask(order: ReturnType<typeof mapOrderRows>[number], task: string) {
+  if (!order.id) return false;
+  if (!task || task === "prepare") return canBulkPrepareShipment(order);
+  if (task === "unpaid") return false;
+  if (task === "ship" || task === "delay") return Boolean(order.shipmentId);
+  if (task === "cancelApproval" || task === "returnProcess" || task === "exchangeProcess") {
+    return Boolean(activeClaimForTask(order, task)?.id);
+  }
+  return true;
+}
+
 function orderClaimLabel(order: ReturnType<typeof mapOrderRows>[number]) {
   if (order.activeClaimTypes.includes("CANCEL") || /REQUESTED/i.test(order.claimStatus)) return "취소 요청";
   if (order.activeClaimTypes.includes("RETURN")) return "반품 처리중";
@@ -235,6 +251,31 @@ export default async function AdminOrdersPage({
       status: order.status,
     };
   });
+  const bulkRedirectTo = buildOrdersHref({
+    dateFrom,
+    dateTo,
+    dealerMallId: selectedDealer?.id,
+    status: selectedStatus,
+    task: selectedTask,
+  });
+  const bulkRows = filteredOrderRows
+    .filter((order) => order.id)
+    .map((order) => {
+      const activeClaim = activeClaimForTask(order, selectedTask);
+      return {
+        activeClaim: activeClaim?.id
+          ? { id: activeClaim.id, status: activeClaim.status, type: activeClaim.type }
+          : undefined,
+        baseAddress: order.baseAddress,
+        detailAddress: order.detailAddress,
+        orderId: order.id as number,
+        orderNo: order.number,
+        receiverName: order.receiverName,
+        receiverPhone: order.receiverPhone,
+        shipmentId: order.shipmentId,
+        zipCode: order.zipCode,
+      };
+    });
 
   return (
     <div className="admin-page">
@@ -320,13 +361,20 @@ export default async function AdminOrdersPage({
                 </Link>
               ) : null}
             </div>
-            {!readOnly && (!selectedTask || selectedTask === "prepare") ? <AdminOrderBulkActions formId={bulkPrepareFormId} /> : null}
+            {!readOnly ? (
+              <AdminOrderBulkActions
+                formId={bulkPrepareFormId}
+                redirectTo={bulkRedirectTo}
+                rows={bulkRows}
+                task={selectedTask}
+              />
+            ) : null}
           </div>
         }
-        description={selectedTask ? `${orderTaskLabels[selectedTask]} 대상 주문만 표시합니다. 주문번호를 눌러 상세 처리하세요.` : undefined}
+        description={selectedTask ? `${orderTaskLabels[selectedTask]} 대상 주문입니다. 주문을 선택해 일괄 처리하거나 주문번호를 눌러 개별 처리하세요.` : undefined}
         title={`${selectedTask ? `${orderTaskLabels[selectedTask]} · ` : ""}목록 (총 ${filteredOrderRows.length.toLocaleString("ko-KR")}건)`}
       >
-        <form action={readOnly ? undefined : bulkPrepareShipmentsAction} id={bulkPrepareFormId}>
+        <form action={readOnly || (selectedTask && selectedTask !== "prepare") ? undefined : bulkPrepareShipmentsAction} id={bulkPrepareFormId}>
           <input name="redirectTo" type="hidden" value={buildOrdersHref({ dateFrom, dateTo, dealerMallId: selectedDealer?.id, status: selectedStatus, task: selectedTask })} />
           <AdminTable
             alignments={["center", "left", "left", "center", "center", "left", "left", "left", "center", "right", "center"]}
@@ -342,20 +390,22 @@ export default async function AdminOrdersPage({
             scrollerId={orderTableScrollerId}
           >
             {filteredOrderRows.map((order) => {
-              const selectable = !readOnly && (!selectedTask || selectedTask === "prepare") && canBulkPrepareShipment(order);
+              const selectable = !readOnly && canSelectForTask(order, selectedTask);
               const firstItem = order.itemDetails[0];
               const extraCount = Math.max(0, order.itemDetails.length - 1);
               const totalQuantity = order.itemDetails.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
 
               return (
                 <div className="admin-table-row admin-order-table-row" key={order.number}>
-                  <label className="admin-order-check-cell" title={readOnly ? "조회 전용" : selectable ? "상품 준비 처리 대상 선택" : "상품 준비 처리 대상이 아닙니다."}>
+                  <label className="admin-order-check-cell" title={readOnly ? "조회 전용" : selectable ? `${selectedTask ? orderTaskLabels[selectedTask] : "상품 준비"} 대상 선택` : "현재 작업의 처리 대상이 아닙니다."}>
                     <input
                       aria-label={`${order.number} 선택`}
+                      data-admin-order-select="true"
+                      data-order-id={String(order.id || "")}
                       disabled={!selectable}
-                      name="shipmentId"
+                      name={!selectedTask || selectedTask === "prepare" ? "shipmentId" : undefined}
                       type="checkbox"
-                      value={String(order.shipmentId || "")}
+                      value={!selectedTask || selectedTask === "prepare" ? String(order.shipmentId || "") : String(order.id || "")}
                     />
                   </label>
                   <div className="admin-row-stack">

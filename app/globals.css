@@ -8989,6 +8989,107 @@ select option:disabled {
   flex-wrap: wrap;
 }
 
+.admin-order-selected-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #edf6ef;
+  color: #26713a;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.admin-info-dialog.admin-order-bulk-dialog {
+  width: min(920px, calc(100vw - 32px));
+  max-height: min(88vh, 860px);
+}
+
+.admin-order-bulk-form {
+  display: grid;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.admin-order-bulk-row-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-order-bulk-row-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid #dce5ee;
+  border-radius: 16px;
+  background: #f8fbfd;
+}
+
+.admin-order-bulk-row-card legend {
+  padding: 0 7px;
+  color: #17304b;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.admin-order-bulk-review-list {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid #dce5ee;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.admin-order-bulk-review-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 15px;
+  border-bottom: 1px solid #e7edf3;
+}
+
+.admin-order-bulk-review-list > div:last-child {
+  border-bottom: 0;
+}
+
+.admin-order-bulk-review-list strong {
+  color: #17304b;
+  font-size: 13px;
+}
+
+.admin-order-bulk-review-list span {
+  color: #617286;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-order-bulk-warning {
+  padding: 13px 15px;
+  border: 1px solid #fecdd3;
+  border-radius: 14px;
+  background: #fff1f2;
+  color: #9f1239;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.6;
+}
+
+.admin-order-bulk-dialog-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #e1e8ef;
+  background: #fff;
+}
+
 .admin-order-list-actions {
   display: flex;
   align-items: center;

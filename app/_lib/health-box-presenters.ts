@@ -683,6 +683,14 @@ export function mapOrderRows(orders: HealthBoxRecord[] | null) {
       .filter((claim) => /REQUESTED|APPROVED/i.test(stringValue(claim, "status")))
       .map((claim) => stringValue(claim, "claimType").toUpperCase())
       .filter(Boolean);
+    const activeClaims = claims
+      .filter((claim) => /REQUESTED|APPROVED/i.test(stringValue(claim, "status")))
+      .map((claim) => ({
+        id: idValue(claim, "id", "claimId"),
+        status: stringValue(claim, "status").toUpperCase(),
+        type: stringValue(claim, "claimType").toUpperCase(),
+      }))
+      .filter((claim) => claim.id && claim.type);
 
     return {
       id: idValue(order, "id", "orderId"),
@@ -702,6 +710,12 @@ export function mapOrderRows(orders: HealthBoxRecord[] | null) {
       claimStatus: stringValue(order, "claimStatus"),
       claimTypes,
       activeClaimTypes,
+      activeClaims,
+      receiverName: stringValue(order, "receiverName"),
+      receiverPhone: stringValue(order, "receiverPhone"),
+      zipCode: stringValue(order, "zipCode"),
+      baseAddress: stringValue(order, "baseAddress"),
+      detailAddress: stringValue(order, "detailAddress"),
       tone: tone(`${orderStatus} ${shipmentStatus} ${status}`),
       pendingAgeLabel: pendingAge?.label || "",
       pendingAgeTone: pendingAge?.tone || "cyan",

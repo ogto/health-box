@@ -1623,6 +1623,135 @@ export async function bulkPrepareShipmentsAction(formData: FormData) {
   redirectIfRequested(formData, `${shipmentIds.length}건을 상품 준비 상태로 변경했습니다.`);
 }
 
+const bulkOrderTaskLabels: Record<string, string> = {
+  ship: "발송 처리",
+  delay: "발송 지연 처리",
+  address: "배송지 수정",
+  sellerCancel: "판매자 직접 취소",
+  cancelApproval: "취소 승인",
+  completedCancel: "구매확정 후 취소",
+  claimCreate: "반품·교환 접수",
+  returnProcess: "반품 처리",
+  exchangeProcess: "교환 처리",
+};
+
+export async function bulkOrderTaskAction(formData: FormData) {
+  await requireAdminSession();
+  ensureApiConfigured();
+
+  const task = requiredString(formData, "task");
+  const redirectTo = optionalString(formData, "redirectTo") || "/admin/orders";
+  const orderIds = Array.from(
+    new Set(
+      formData
+        .getAll("selectedOrderId")
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => value.trim())
+        .filter((value) => /^\d+$/.test(value)),
+    ),
+  );
+
+  if (!bulkOrderTaskLabels[task]) {
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", "지원하지 않는 일괄 처리 작업입니다."));
+  }
+  if (!orderIds.length) {
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", "처리할 주문을 선택해주세요."));
+  }
+
+  const sharedReason = optionalString(formData, "reason");
+  const expectedShipDate = optionalString(formData, "expectedShipDate");
+  const claimType = optionalString(formData, "claimType")?.toUpperCase();
+  if (task === "delay" && !sharedReason) {
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", "발송 지연 사유를 입력해주세요."));
+  }
+  if (task === "claimCreate" && (!sharedReason || !claimType || !["RETURN", "EXCHANGE"].includes(claimType))) {
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", "반품·교환 종류와 접수 사유를 입력해주세요."));
+  }
+
+  const failures: string[] = [];
+  let successCount = 0;
+
+  for (const orderId of orderIds) {
+    const orderLabel = optionalString(formData, `orderLabel:${orderId}`) || orderId;
+    try {
+      if (task === "ship") {
+        const shipmentId = requiredString(formData, `shipmentId:${orderId}`);
+        const courierCompany = requiredString(formData, `courierCompany:${orderId}`);
+        const trackingNo = requiredString(formData, `trackingNo:${orderId}`);
+        if (!shipmentId || !courierCompany || !trackingNo) {
+          throw new Error("택배사와 송장번호를 모두 입력해주세요.");
+        }
+        await healthBoxFetch(`/health-box/admin/shipments/${shipmentId}/status`, {
+          method: "PUT",
+          body: { shipmentStatus: "SHIPPED", courierCompany, trackingNo },
+        });
+      } else if (task === "delay") {
+        const shipmentId = requiredString(formData, `shipmentId:${orderId}`);
+        if (!shipmentId) {
+          throw new Error("배송 정보가 없습니다.");
+        }
+        await healthBoxFetch(`/health-box/admin/shipments/${shipmentId}/delay`, {
+          method: "POST",
+          body: { reason: sharedReason, expectedShipDate },
+        });
+      } else if (task === "address") {
+        const receiverName = requiredString(formData, `receiverName:${orderId}`);
+        const receiverPhone = requiredString(formData, `receiverPhone:${orderId}`);
+        const baseAddress = requiredString(formData, `baseAddress:${orderId}`);
+        if (!receiverName || !receiverPhone || !baseAddress) {
+          throw new Error("수령인, 연락처, 기본 주소를 모두 입력해주세요.");
+        }
+        await healthBoxFetch(`/health-box/admin/orders/${orderId}/shipping-address`, {
+          method: "PUT",
+          body: {
+            receiverName,
+            receiverPhone,
+            zipCode: optionalString(formData, `zipCode:${orderId}`),
+            baseAddress,
+            detailAddress: optionalString(formData, `detailAddress:${orderId}`),
+          },
+        });
+      } else if (task === "sellerCancel" || task === "completedCancel") {
+        await healthBoxFetch(`/health-box/admin/orders/${orderId}/cancel`, { method: "POST" });
+      } else if (task === "claimCreate") {
+        await healthBoxFetch(`/health-box/admin/orders/${orderId}/claims`, {
+          method: "POST",
+          body: { claimType, reason: sharedReason },
+        });
+      } else {
+        const claimId = requiredString(formData, `claimId:${orderId}`);
+        const currentClaimStatus = requiredString(formData, `claimStatus:${orderId}`).toUpperCase();
+        if (!claimId) {
+          throw new Error("처리할 요청 정보가 없습니다.");
+        }
+        const nextStatus = task === "cancelApproval"
+          ? "APPLIED"
+          : currentClaimStatus === "REQUESTED"
+            ? "APPROVED"
+            : "COMPLETED";
+        await healthBoxFetch(`/health-box/admin/orders/${orderId}/claims/${claimId}/status`, {
+          method: "PUT",
+          body: { status: nextStatus },
+        });
+      }
+      successCount += 1;
+    } catch (error) {
+      failures.push(`${orderLabel}: ${orderActionErrorMessage(error, "처리에 실패했습니다.")}`);
+    }
+  }
+
+  revalidatePath("/admin/orders");
+  const label = bulkOrderTaskLabels[task];
+  if (failures.length) {
+    const failureSummary = failures.slice(0, 2).join(" / ");
+    const moreCount = Math.max(0, failures.length - 2);
+    const message = `${label} ${successCount}건 완료, ${failures.length}건 실패: ${failureSummary}${moreCount ? ` 외 ${moreCount}건` : ""}`;
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", message));
+  }
+
+  redirect(buildRedirectWithMessage(redirectTo, "toastSuccess", `${label} ${successCount}건을 완료했습니다.`));
+}
+
 export async function saveAdminStaffAction(formData: FormData) {
   await requireAdminSession();
   ensureApiConfigured();
