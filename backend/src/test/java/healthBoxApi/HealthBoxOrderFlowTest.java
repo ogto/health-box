@@ -64,6 +64,7 @@ class HealthBoxOrderFlowTest {
     @Mock private HealthBoxNoticeRepository noticeRepository;
     @Mock private HealthBoxProductInquiryRepository productInquiryRepository;
     @Mock private HealthBoxOrderRepository orderRepository;
+    @Mock private HealthBoxOrderNumberService orderNumberService;
     @Mock private HealthBoxOrderItemRepository orderItemRepository;
     @Mock private HealthBoxPaymentRepository paymentRepository;
     @Mock private HealthBoxPaymentCancelRequestRepository paymentCancelRequestRepository;
@@ -100,6 +101,7 @@ class HealthBoxOrderFlowTest {
             }
             return order;
         });
+        when(orderNumberService.nextOrderNo(any(LocalDateTime.class))).thenReturn("20260901-0001");
         when(orderItemRepository.save(any(HealthBoxOrderItemVo.class))).thenAnswer(invocation -> {
             HealthBoxOrderItemVo item = invocation.getArgument(0);
             item.setId(84L);
@@ -127,11 +129,9 @@ class HealthBoxOrderFlowTest {
         assertEquals("everybuy.co.kr", order.getDealerSlugSnapshot());
         assertEquals("본사몰", order.getDealerNameSnapshot());
         assertEquals(Integer.valueOf(60000), order.getTotalPaymentAmount());
-        assertTrue(order.getOrderNo().matches("\\d{16}"));
-        assertTrue(order.getOrderNo().endsWith("00000042"));
+        assertEquals("20260901-0001", order.getOrderNo());
         assertEquals(Integer.valueOf(19), sku.getStockQuantity());
         verify(dealerMallRepository, never()).findById(any());
-        verify(orderRepository, never()).countByOrderedAtBetween(any(), any());
         verify(buyerCartItemRepository)
             .deleteByBuyerMemberIdAndDealerMallIdAndSkuId(1L, 0L, 145L);
     }
@@ -422,7 +422,7 @@ class HealthBoxOrderFlowTest {
     private HealthBoxOrderVo paidOrder(String orderStatus) {
         HealthBoxOrderVo order = new HealthBoxOrderVo();
         order.setId(42L);
-        order.setOrderNo("2026090100000042");
+        order.setOrderNo("20260901-0001");
         order.setBuyerMemberId(1L);
         order.setDealerMallId(0L);
         order.setDealerSlugSnapshot("everybuy.co.kr");
@@ -474,7 +474,7 @@ class HealthBoxOrderFlowTest {
         payment.setOrderId(42L);
         payment.setBuyerMemberId(1L);
         payment.setDealerMallId(0L);
-        payment.setOrderNo("2026090100000042");
+        payment.setOrderNo("20260901-0001");
         payment.setProvider("TOSS");
         payment.setPaymentKey("live-payment-key");
         payment.setStatus("PAID");

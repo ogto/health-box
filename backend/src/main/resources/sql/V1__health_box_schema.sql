@@ -304,6 +304,12 @@
         primary key (ID)
     ) engine=InnoDB;
 
+    create table HEALTH_BOX_ORDER_DAILY_SEQUENCE (
+       ORDER_DATE date not null,
+        LAST_SEQUENCE integer not null,
+        primary key (ORDER_DATE)
+    ) engine=InnoDB;
+
     create table HEALTH_BOX_ORDER_ITEM (
        ID bigint not null auto_increment,
         CREATED_AT datetime(6) not null,

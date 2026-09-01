@@ -77,7 +77,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -135,6 +134,7 @@ public class HealthBoxService {
     private final HealthBoxNoticeRepository noticeRepository;
     private final HealthBoxProductInquiryRepository productInquiryRepository;
     private final HealthBoxOrderRepository orderRepository;
+    private final HealthBoxOrderNumberService orderNumberService;
     private final HealthBoxOrderItemRepository orderItemRepository;
     private final HealthBoxPaymentRepository paymentRepository;
     private final HealthBoxPaymentCancelRequestRepository paymentCancelRequestRepository;
@@ -169,6 +169,7 @@ public class HealthBoxService {
         HealthBoxNoticeRepository noticeRepository,
         HealthBoxProductInquiryRepository productInquiryRepository,
         HealthBoxOrderRepository orderRepository,
+        HealthBoxOrderNumberService orderNumberService,
         HealthBoxOrderItemRepository orderItemRepository,
         HealthBoxPaymentRepository paymentRepository,
         HealthBoxPaymentCancelRequestRepository paymentCancelRequestRepository,
@@ -202,6 +203,7 @@ public class HealthBoxService {
         this.noticeRepository = noticeRepository;
         this.productInquiryRepository = productInquiryRepository;
         this.orderRepository = orderRepository;
+        this.orderNumberService = orderNumberService;
         this.orderItemRepository = orderItemRepository;
         this.paymentRepository = paymentRepository;
         this.paymentCancelRequestRepository = paymentCancelRequestRepository;
@@ -1112,7 +1114,7 @@ public class HealthBoxService {
         order.setCanceledPaymentAmount(0);
         order.setOrderNo("TMP-" + UUID.randomUUID());
         order = orderRepository.save(order);
-        order.setOrderNo(generateOrderNo(order.getOrderedAt(), order.getId()));
+        order.setOrderNo(orderNumberService.nextOrderNo(order.getOrderedAt()));
         order = orderRepository.save(order);
 
         for (HealthBoxOrderCreateItemRequest itemRequest : request.getItems()) {
@@ -4048,14 +4050,6 @@ public class HealthBoxService {
             return null;
         }
         return trimmed;
-    }
-
-    private String generateOrderNo(LocalDateTime orderedAt, Long orderId) {
-        if (orderId == null || orderId <= 0) {
-            throw new IllegalArgumentException("persisted order id is required");
-        }
-        LocalDateTime baseDateTime = orderedAt != null ? orderedAt : LocalDateTime.now();
-        return baseDateTime.format(DateTimeFormatter.BASIC_ISO_DATE) + String.format("%08d", orderId);
     }
 
     private OrderDealerScope resolveOrderDealerScope(Long dealerMallId) {

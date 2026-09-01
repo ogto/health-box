@@ -59,6 +59,7 @@ class HealthBoxCartAndSkuStabilityTest {
     @Mock private HealthBoxNoticeRepository noticeRepository;
     @Mock private HealthBoxProductInquiryRepository productInquiryRepository;
     @Mock private HealthBoxOrderRepository orderRepository;
+    @Mock private HealthBoxOrderNumberService orderNumberService;
     @Mock private HealthBoxOrderItemRepository orderItemRepository;
     @Mock private HealthBoxPaymentRepository paymentRepository;
     @Mock private HealthBoxPaymentCancelRequestRepository paymentCancelRequestRepository;
