@@ -11,6 +11,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 import type { Product } from "../_lib/store-data";
 import { addMemberCartItemsToServer, dispatchMemberCartSync, type MemberCartItem } from "../_lib/member-cart";
@@ -613,42 +614,48 @@ export function ProductPurchaseBox({
         </button>
       </div>
       {purchaseMessage ? <div className="member-auth-alert is-muted">{purchaseMessage}</div> : null}
-      {showCartAddedModal ? (
-        <div className="shop-login-modal-backdrop" role="presentation">
-          <div aria-labelledby={`${optionId}-cart-added-title`} aria-modal="true" className="shop-login-modal" role="dialog">
-            <strong id={`${optionId}-cart-added-title`}>장바구니에 담았습니다</strong>
-            <p>장바구니로 이동해서 담은 상품을 확인하시겠어요?</p>
-            <div className="shop-login-modal-actions">
-              <button className="button-secondary" onClick={() => setShowCartAddedModal(false)} type="button">
-                계속 쇼핑하기
-              </button>
-              <button className="button-primary" onClick={() => router.push("/cart")} type="button">
-                장바구니 보기
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      {showLoginPrompt ? (
-        <div className="shop-login-modal-backdrop" role="presentation">
-          <div aria-modal="true" className="shop-login-modal" role="dialog">
-            <strong>아직 회원이 아니신가요?</strong>
-            <p>가입 후 가격을 확인하고 구매할 수 있습니다.</p>
-            <div className="shop-login-modal-actions">
-              <button className="button-secondary" onClick={() => setShowLoginPrompt(false)} type="button">
-                취소
-              </button>
-              <button
-                className="button-primary"
-                onClick={() => router.push(`/login?next=${encodeURIComponent(`/product/${productSlug}`)}`)}
-                type="button"
-              >
-                확인
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {showCartAddedModal && typeof document !== "undefined"
+        ? createPortal(
+            <div className="shop-login-modal-backdrop" role="presentation">
+              <div aria-labelledby={`${optionId}-cart-added-title`} aria-modal="true" className="shop-login-modal" role="dialog">
+                <strong id={`${optionId}-cart-added-title`}>장바구니에 담았습니다</strong>
+                <p>장바구니로 이동해서 담은 상품을 확인하시겠어요?</p>
+                <div className="shop-login-modal-actions">
+                  <button className="button-secondary" onClick={() => setShowCartAddedModal(false)} type="button">
+                    계속 쇼핑하기
+                  </button>
+                  <button className="button-primary" onClick={() => router.push("/cart")} type="button">
+                    장바구니 보기
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+      {showLoginPrompt && typeof document !== "undefined"
+        ? createPortal(
+            <div className="shop-login-modal-backdrop" role="presentation">
+              <div aria-modal="true" className="shop-login-modal" role="dialog">
+                <strong>아직 회원이 아니신가요?</strong>
+                <p>가입 후 가격을 확인하고 구매할 수 있습니다.</p>
+                <div className="shop-login-modal-actions">
+                  <button className="button-secondary" onClick={() => setShowLoginPrompt(false)} type="button">
+                    취소
+                  </button>
+                  <button
+                    className="button-primary"
+                    onClick={() => router.push(`/login?next=${encodeURIComponent(`/product/${productSlug}`)}`)}
+                    type="button"
+                  >
+                    확인
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

@@ -42,7 +42,7 @@ export default async function CheckoutPage() {
         />
 
         {session ? (
-          <MemberAccountLayout activeKey="cart" runtime={runtime} session={session}>
+          <MemberAccountLayout activeKey="cart" runtime={runtime} session={session} variant="cart">
             {content}
           </MemberAccountLayout>
         ) : (

@@ -53,7 +53,7 @@ export default async function CartPage() {
         />
 
         {session ? (
-          <MemberAccountLayout activeKey="cart" runtime={runtime} session={session}>
+          <MemberAccountLayout activeKey="cart" runtime={runtime} session={session} variant="cart">
             {cartContent}
           </MemberAccountLayout>
         ) : (

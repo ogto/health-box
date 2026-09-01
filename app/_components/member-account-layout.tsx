@@ -19,11 +19,13 @@ const accountMenu: Array<{ key: MemberAccountKey | "home"; href: string; label: 
 export function MemberAccountLayout({
   activeKey,
   children,
+  variant = "default",
   runtime,
   session,
 }: {
   activeKey: MemberAccountKey;
   children: ReactNode;
+  variant?: "cart" | "default";
   runtime: StorefrontRuntime;
   session: MemberSession;
 }) {
@@ -31,7 +33,7 @@ export function MemberAccountLayout({
   const brand = runtime.brand;
 
   return (
-    <div className="account-layout">
+    <div className={`account-layout${variant === "cart" ? " account-layout-cart" : ""}`}>
       <aside className="account-sidebar">
         <div className="account-profile">
           <h2>{session.name || session.loginId || brand.memberLabel}님</h2>
