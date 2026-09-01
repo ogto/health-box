@@ -5022,11 +5022,11 @@ select option:disabled {
   .account-layout-cart > .account-sidebar {
     position: fixed;
     z-index: 20;
-    top: 180px;
+    top: 250px;
     left: max(16px, calc((100vw - 1288px) / 2 - 206px));
     display: block;
     width: 184px;
-    max-height: calc(100vh - 200px);
+    max-height: calc(100vh - 270px);
     overflow-y: auto;
     padding: 12px;
     box-shadow: 0 16px 38px rgba(16, 34, 53, 0.08);
