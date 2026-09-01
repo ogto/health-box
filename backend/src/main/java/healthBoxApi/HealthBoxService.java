@@ -91,6 +91,7 @@ public class HealthBoxService {
     private static final long SINGLETON_PUBLIC_SITE_CONFIG_ID = 1L;
     private static final long DEFAULT_HQ_ID = 1L;
     private static final long HQ_BUYER_DEALER_MALL_ID = 0L;
+    private static final String HQ_ORDER_DEALER_NAME = "본사몰";
     private static final String BUYER_SIGNUP_CONSENT_VERSION = "v1.0";
     private static final String DEALER_APPLICATION_CONSENT_VERSION = "v1.0";
     private static final String ROOT_HOST = "everybuy.co.kr";
@@ -1062,6 +1063,7 @@ public class HealthBoxService {
             return existingOrder;
         }
 
+        OrderDealerScope dealerScope = resolveOrderDealerScope(request.getDealerMallId());
         HealthBoxBuyerAddressVo buyerAddress = resolveOrderAddress(request, buyerMember);
         String shippingZipCode = buyerAddress.getZipCode();
 
@@ -1074,17 +1076,14 @@ public class HealthBoxService {
         validateRequestedCommerceAmounts(request, verifiedCommerceAmounts);
         validateConfirmedTossPayment(request, verifiedCommerceAmounts.totalPaymentAmount);
 
-        HealthBoxDealerMallVo dealerMall = dealerMallRepository.findById(request.getDealerMallId())
-            .orElseThrow(() -> new IllegalArgumentException("dealer mall not found. id=" + request.getDealerMallId()));
-
         List<HealthBoxOrderItemVo> savedItems = new ArrayList<>();
         int productAmount = 0;
 
         HealthBoxOrderVo order = new HealthBoxOrderVo();
         order.setBuyerMemberId(buyerMember.getId());
-        order.setDealerMallId(dealerMall.getId());
-        order.setDealerSlugSnapshot(dealerMall.getSlug());
-        order.setDealerNameSnapshot(dealerMall.getMallName());
+        order.setDealerMallId(dealerScope.dealerMallId);
+        order.setDealerSlugSnapshot(dealerScope.slug);
+        order.setDealerNameSnapshot(dealerScope.name);
         order.setOrdererName(request.getOrdererName().trim());
         order.setOrdererPhone(normalizePhone(request.getOrdererPhone()));
         order.setReceiverName(buyerAddress.getReceiverName());
@@ -1103,7 +1102,7 @@ public class HealthBoxService {
         order.setCanceledPaymentAmount(0);
         order.setOrderNo("TMP-" + UUID.randomUUID());
         order = orderRepository.save(order);
-        order.setOrderNo(generateOrderNo(order.getOrderedAt()));
+        order.setOrderNo(generateOrderNo(order.getOrderedAt(), order.getId()));
         order = orderRepository.save(order);
 
         for (HealthBoxOrderCreateItemRequest itemRequest : request.getItems()) {
@@ -1169,6 +1168,14 @@ public class HealthBoxService {
             shipmentItemRepository.save(shipmentItem);
         }
 
+        for (HealthBoxOrderCreateItemRequest itemRequest : request.getItems()) {
+            buyerCartItemRepository.deleteByBuyerMemberIdAndDealerMallIdAndSkuId(
+                buyerMember.getId(),
+                dealerScope.dealerMallId,
+                itemRequest.getSkuId()
+            );
+        }
+
         return buildOrderDetailResponse(order, shipment, savedItems);
     }
 
@@ -1179,6 +1186,7 @@ public class HealthBoxService {
             request.getDealerMallId(),
             request.getSessionToken()
         );
+        resolveOrderDealerScope(request.getDealerMallId());
 
         int productAmount = calculateOrderItemsAmount(request.getItems());
         CommerceAmounts commerceAmounts = resolveCommerceAmounts(productAmount, request.getZipCode(), request.getDealerMallId());
@@ -1284,6 +1292,9 @@ public class HealthBoxService {
         }
         if (request.getDealerMallId() == null) {
             throw new IllegalArgumentException("dealerMallId is required");
+        }
+        if (request.getDealerMallId() < HQ_BUYER_DEALER_MALL_ID) {
+            throw new IllegalArgumentException("dealerMallId must be zero or positive");
         }
         if (!StringUtils.hasText(request.getSessionToken())) {
             throw new IllegalArgumentException("sessionToken is required");
@@ -1558,6 +1569,18 @@ public class HealthBoxService {
             this.discountAmount = discountAmount;
             this.totalPaymentAmount = totalPaymentAmount;
             this.freeShippingThreshold = freeShippingThreshold;
+        }
+    }
+
+    private static final class OrderDealerScope {
+        private final Long dealerMallId;
+        private final String slug;
+        private final String name;
+
+        private OrderDealerScope(Long dealerMallId, String slug, String name) {
+            this.dealerMallId = dealerMallId;
+            this.slug = slug;
+            this.name = name;
         }
     }
 
@@ -3721,15 +3744,33 @@ public class HealthBoxService {
         return trimmed;
     }
 
-    private String generateOrderNo(LocalDateTime orderedAt) {
-        LocalDateTime baseDateTime = orderedAt != null ? orderedAt : LocalDateTime.now();
-        LocalDateTime startOfDay = baseDateTime.toLocalDate().atStartOfDay();
-        LocalDateTime endOfDay = startOfDay.plusDays(1);
-        long sequence = orderRepository.countByOrderedAtBetween(startOfDay, endOfDay) + 1;
-        if (sequence > 9999) {
-            throw new IllegalStateException("daily order sequence exceeded. date=" + baseDateTime.toLocalDate());
+    private String generateOrderNo(LocalDateTime orderedAt, Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            throw new IllegalArgumentException("persisted order id is required");
         }
-        return baseDateTime.format(DateTimeFormatter.BASIC_ISO_DATE) + String.format("%04d", sequence);
+        LocalDateTime baseDateTime = orderedAt != null ? orderedAt : LocalDateTime.now();
+        return baseDateTime.format(DateTimeFormatter.BASIC_ISO_DATE) + String.format("%08d", orderId);
+    }
+
+    private OrderDealerScope resolveOrderDealerScope(Long dealerMallId) {
+        if (dealerMallId == null || dealerMallId < HQ_BUYER_DEALER_MALL_ID) {
+            throw new IllegalArgumentException("dealerMallId must be zero or positive");
+        }
+        if (dealerMallId == HQ_BUYER_DEALER_MALL_ID) {
+            return new OrderDealerScope(HQ_BUYER_DEALER_MALL_ID, ROOT_HOST, HQ_ORDER_DEALER_NAME);
+        }
+
+        HealthBoxDealerMallVo dealerMall = dealerMallRepository.findById(dealerMallId)
+            .orElseThrow(() -> new IllegalArgumentException("dealer mall not found. id=" + dealerMallId));
+        if (!"ACTIVE".equalsIgnoreCase(dealerMall.getStatus()) && !"APPROVED".equalsIgnoreCase(dealerMall.getStatus())) {
+            throw new IllegalArgumentException("dealer mall is inactive. id=" + dealerMallId);
+        }
+
+        return new OrderDealerScope(
+            dealerMall.getId(),
+            dealerMall.getSlug(),
+            coalesce(dealerMall.getMallName(), dealerMall.getDisplayName())
+        );
     }
 
     private HealthBoxOrderDetailResponse buildOrderDetailResponse(HealthBoxOrderVo order) {

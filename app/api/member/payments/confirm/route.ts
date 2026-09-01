@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { healthBoxFetch } from "@/app/_lib/health-box-api";
-import { getMemberSession } from "@/app/_lib/member-auth";
+import { getMemberSession, type MemberSession } from "@/app/_lib/member-auth";
 import {
   fetchMemberOrderQuote,
   memberOrderItemsFingerprint,
@@ -29,12 +29,11 @@ function paymentMatches(payment: Record<string, unknown>, paymentKey: string, or
   );
 }
 
-async function createOrder(body: Record<string, unknown>, payment: Record<string, unknown>) {
-  const session = await getMemberSession();
-  if (!session?.memberId || session.dealerMallId == null || !session.sessionToken) {
-    throw new Error("로그인 정보가 만료되었습니다.");
-  }
-
+async function createOrder(
+  body: Record<string, unknown>,
+  payment: Record<string, unknown>,
+  session: MemberSession,
+) {
   const items = normalizeMemberOrderItems(body.items);
   const quote = await fetchMemberOrderQuote(session, items, body.zipCode as string);
   const methodName = tossPaymentMethodName(payment);
@@ -76,12 +75,16 @@ async function createOrder(body: Record<string, unknown>, payment: Record<string
   });
 }
 
-async function createOrderWithRetry(body: Record<string, unknown>, payment: Record<string, unknown>) {
+async function createOrderWithRetry(
+  body: Record<string, unknown>,
+  payment: Record<string, unknown>,
+  session: MemberSession,
+) {
   try {
-    return await createOrder(body, payment);
+    return await createOrder(body, payment, session);
   } catch (firstError) {
     try {
-      return await createOrder(body, payment);
+      return await createOrder(body, payment, session);
     } catch {
       throw firstError;
     }
@@ -168,15 +171,31 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      const order = await createOrderWithRetry(body, confirmedPayment);
+      const order = await createOrderWithRetry(body, confirmedPayment, session);
+      console.info("[member-payments] order persisted after payment confirmation", {
+        dealerMallId: session.dealerMallId,
+        memberId: session.memberId,
+        orderId,
+        orderRecordId: Number(order.id || 0) || undefined,
+      });
       return NextResponse.json({ ok: true, message: "결제와 주문 접수가 완료되었습니다.", order });
     } catch (orderError) {
-      console.error("[member-payments] order persistence failed after payment confirmation", orderError);
+      console.error("[member-payments] order persistence failed after payment confirmation", {
+        dealerMallId: session.dealerMallId,
+        error: orderError,
+        memberId: session.memberId,
+        orderId,
+      });
       try {
         await cancelTossPayment({
           paymentKey,
           cancelReason: "주문 접수 실패에 따른 자동 취소",
           requestId: `order-create-failed:${orderId}`,
+        });
+        console.warn("[member-payments] payment canceled after order persistence failure", {
+          dealerMallId: session.dealerMallId,
+          memberId: session.memberId,
+          orderId,
         });
         return NextResponse.json(
           { ok: false, message: "주문 접수에 실패해 승인된 결제를 자동으로 전액 취소했습니다." },
@@ -185,8 +204,9 @@ export async function POST(request: NextRequest) {
       } catch (cancelError) {
         console.error("[member-payments] automatic cancellation failed", {
           cancelError,
+          dealerMallId: session.dealerMallId,
+          memberId: session.memberId,
           orderId,
-          paymentKey,
         });
         return NextResponse.json(
           {
@@ -205,7 +225,6 @@ export async function POST(request: NextRequest) {
       code: error instanceof TossPaymentsError ? error.code : undefined,
       message,
       orderId,
-      paymentKey,
     });
     return NextResponse.json(
       {
