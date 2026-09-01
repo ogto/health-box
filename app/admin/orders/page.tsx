@@ -1,7 +1,6 @@
 import Link from "next/link";
 
 import { bulkPrepareShipmentsAction } from "../../_actions/health-box-admin";
-import { AdminComingSoonButton } from "../../_components/admin/admin-coming-soon-button";
 import { AdminHeader } from "../../_components/admin/admin-header";
 import { AdminReadOnlyNotice } from "../../_components/admin/admin-read-only-notice";
 import { AdminOrderBulkActions } from "../../_components/admin/admin-order-bulk-actions";
@@ -22,6 +21,7 @@ type OrdersSearchParams = {
   dateTo?: string;
   dealerMallId?: string;
   status?: string;
+  task?: string;
 };
 
 const bulkPrepareFormId = "admin-order-bulk-prepare-form";
@@ -32,11 +32,13 @@ function buildOrdersHref({
   dateTo,
   dealerMallId,
   status,
+  task,
 }: {
   dateFrom?: string;
   dateTo?: string;
   dealerMallId?: number | null;
   status?: string;
+  task?: string;
 } = {}) {
   const params = new URLSearchParams();
 
@@ -56,13 +58,65 @@ function buildOrdersHref({
     params.set("status", status);
   }
 
+  if (task) {
+    params.set("task", task);
+  }
+
   const query = params.toString();
   return query ? `/admin/orders?${query}` : "/admin/orders";
 }
 
+const orderTaskLabels: Record<string, string> = {
+  prepare: "발주 확인",
+  ship: "발송 처리",
+  delay: "발송 지연 처리",
+  address: "배송지 정보 수정",
+  unpaid: "미결제 확인",
+  sellerCancel: "판매자 직접취소 처리",
+  cancelApproval: "취소 승인처리",
+  completedCancel: "구매확정 후 취소처리",
+  claimCreate: "반품 및 교환접수",
+  returnProcess: "반품접수 후 처리",
+  exchangeProcess: "교환접수 후 처리",
+};
+
+function matchesTask(row: ReturnType<typeof mapOrderRows>[number], task: string) {
+  const orderStatus = String(row.orderStatus || "").toUpperCase();
+  const shipmentStatus = String(row.shipmentStatus || "PENDING").toUpperCase();
+  const paymentStatus = String(row.paymentStatus || "").toUpperCase();
+  const canceled = orderStatus === "CANCELED" || shipmentStatus === "CANCELED" || paymentStatus === "CANCELED";
+
+  switch (task) {
+    case "prepare":
+      return /PENDING|ORDERED|PARTIALLY_CANCELED/.test(shipmentStatus) && !canceled;
+    case "ship":
+      return /PREPARING|DELAYED/.test(shipmentStatus) && !canceled;
+    case "delay":
+      return /PENDING|ORDERED|PARTIALLY_CANCELED|PREPARING|DELAYED/.test(shipmentStatus) && !canceled;
+    case "address":
+      return !/SHIPPED|DELIVERED/.test(shipmentStatus) && !canceled;
+    case "unpaid":
+      return /READY|PENDING|WAITING/.test(paymentStatus);
+    case "sellerCancel":
+      return !canceled;
+    case "cancelApproval":
+      return row.activeClaimTypes.includes("CANCEL");
+    case "completedCancel":
+      return shipmentStatus === "DELIVERED" && !canceled;
+    case "claimCreate":
+      return !canceled;
+    case "returnProcess":
+      return row.activeClaimTypes.includes("RETURN");
+    case "exchangeProcess":
+      return row.activeClaimTypes.includes("EXCHANGE");
+    default:
+      return true;
+  }
+}
+
 function canBulkPrepareShipment(order: ReturnType<typeof mapOrderRows>[number]) {
   const shipmentStatus = String(order.shipmentStatus || "").toUpperCase();
-  return Boolean(order.shipmentId) && (!shipmentStatus || /PENDING|ORDERED|주문\s*접수/.test(shipmentStatus));
+  return Boolean(order.shipmentId) && (!shipmentStatus || /PENDING|ORDERED|PARTIALLY_CANCELED|주문\s*접수/.test(shipmentStatus));
 }
 
 function orderDateText(value: string) {
@@ -125,6 +179,14 @@ function AdminOptionDisplay({
   return <span className="admin-option-inline-text">{optionPairs.map((item) => `${item.name}: ${item.value}`).join(", ") || option}</span>;
 }
 
+function orderClaimLabel(order: ReturnType<typeof mapOrderRows>[number]) {
+  if (order.activeClaimTypes.includes("CANCEL") || /REQUESTED/i.test(order.claimStatus)) return "취소 요청";
+  if (order.activeClaimTypes.includes("RETURN")) return "반품 처리중";
+  if (order.activeClaimTypes.includes("EXCHANGE")) return "교환 처리중";
+  if (/취소|CANCELED/i.test(`${order.orderStatus} ${order.shipmentStatus} ${order.status}`)) return "취소";
+  return "-";
+}
+
 export default async function AdminOrdersPage({
   searchParams,
 }: {
@@ -137,6 +199,7 @@ export default async function AdminOrdersPage({
   const dateFrom = params.dateFrom || dateMonthsBefore(3);
   const dateTo = params.dateTo || today;
   const selectedStatus = params.status || "";
+  const selectedTask = params.task && orderTaskLabels[params.task] ? params.task : "";
   const [dealers, allOrders] = hasHealthBoxApi()
     ? await Promise.all([fetchAdminDealerMalls(), fetchAdminOrders()])
     : [null, null];
@@ -152,7 +215,7 @@ export default async function AdminOrdersPage({
   const filteredOrderRows = orderRows.filter((order) => {
     const key = rowDateKey(order.placedAt);
     const inDateRange = !key || ((!dateFrom || key >= dateFrom) && (!dateTo || key <= dateTo));
-    return inDateRange && matchesStatus(order, selectedStatus);
+    return inDateRange && matchesStatus(order, selectedStatus) && matchesTask(order, selectedTask);
   });
   const exportRows = filteredOrderRows.map((order) => {
     const firstItem = order.itemDetails[0];
@@ -161,11 +224,7 @@ export default async function AdminOrdersPage({
 
     return {
       amount: order.amount,
-      claimStatus: /REQUESTED/i.test(order.claimStatus)
-        ? "취소 요청"
-        : /취소|CANCELED/i.test(`${order.orderStatus} ${order.shipmentStatus} ${order.status}`)
-          ? "취소"
-          : "-",
+      claimStatus: orderClaimLabel(order),
       company: order.company,
       deliveryType: "일반배송",
       option: firstItem?.option || "없음",
@@ -188,14 +247,14 @@ export default async function AdminOrdersPage({
           <div className="admin-filter-chip-set">
             <Link
               className={`admin-button secondary small${selectedDealer ? "" : " is-active"}`}
-              href={buildOrdersHref({ dateFrom, dateTo, status: selectedStatus })}
+              href={buildOrdersHref({ dateFrom, dateTo, status: selectedStatus, task: selectedTask })}
             >
               전체 주문
             </Link>
             {dealerRows.map((dealer) => (
               <Link
                 className={`admin-button secondary small${selectedDealer?.id === dealer.id ? " is-active" : ""}`}
-                href={buildOrdersHref({ dateFrom, dateTo, dealerMallId: dealer.id, status: selectedStatus })}
+                href={buildOrdersHref({ dateFrom, dateTo, dealerMallId: dealer.id, status: selectedStatus, task: selectedTask })}
                 key={dealer.id}
               >
                 {dealer.name}
@@ -212,16 +271,16 @@ export default async function AdminOrdersPage({
               </select>
             </label>
             <div className="admin-order-period-shortcuts">
-              <Link className="admin-button secondary small" href={buildOrdersHref({ dateFrom: today, dateTo: today, dealerMallId: selectedDealer?.id, status: selectedStatus })}>
+              <Link className="admin-button secondary small" href={buildOrdersHref({ dateFrom: today, dateTo: today, dealerMallId: selectedDealer?.id, status: selectedStatus, task: selectedTask })}>
                 오늘
               </Link>
-              <Link className="admin-button secondary small" href={buildOrdersHref({ dateFrom: dateBefore(7), dateTo: today, dealerMallId: selectedDealer?.id, status: selectedStatus })}>
+              <Link className="admin-button secondary small" href={buildOrdersHref({ dateFrom: dateBefore(7), dateTo: today, dealerMallId: selectedDealer?.id, status: selectedStatus, task: selectedTask })}>
                 1주일
               </Link>
-              <Link className="admin-button secondary small" href={buildOrdersHref({ dateFrom: dateMonthsBefore(1), dateTo: today, dealerMallId: selectedDealer?.id, status: selectedStatus })}>
+              <Link className="admin-button secondary small" href={buildOrdersHref({ dateFrom: dateMonthsBefore(1), dateTo: today, dealerMallId: selectedDealer?.id, status: selectedStatus, task: selectedTask })}>
                 1개월
               </Link>
-              <Link className="admin-button secondary small" href={buildOrdersHref({ dateFrom: dateMonthsBefore(3), dateTo: today, dealerMallId: selectedDealer?.id, status: selectedStatus })}>
+              <Link className="admin-button secondary small" href={buildOrdersHref({ dateFrom: dateMonthsBefore(3), dateTo: today, dealerMallId: selectedDealer?.id, status: selectedStatus, task: selectedTask })}>
                 3개월
               </Link>
             </div>
@@ -236,11 +295,13 @@ export default async function AdminOrdersPage({
                 <option value="">전체</option>
                 <option value="PENDING">주문 접수</option>
                 <option value="PREPARING">상품 준비중</option>
+                <option value="DELAYED">발송 지연</option>
                 <option value="SHIPPED">배송중</option>
                 <option value="DELIVERED">배송완료</option>
                 <option value="CANCELED">취소완료</option>
               </select>
             </label>
+            {selectedTask ? <input name="task" type="hidden" value={selectedTask} /> : null}
             <button className="admin-button admin-order-search-button" type="submit">
               검색
             </button>
@@ -253,14 +314,20 @@ export default async function AdminOrdersPage({
           <div className="admin-order-list-actions">
             <div className="admin-order-list-actions-left">
               <AdminOrderExcelDownloadButton rows={exportRows} />
+              {selectedTask ? (
+                <Link className="admin-button secondary small" href={buildOrdersHref({ dateFrom, dateTo, dealerMallId: selectedDealer?.id })}>
+                  처리 필터 해제
+                </Link>
+              ) : null}
             </div>
-            {!readOnly ? <AdminOrderBulkActions formId={bulkPrepareFormId} /> : null}
+            {!readOnly && (!selectedTask || selectedTask === "prepare") ? <AdminOrderBulkActions formId={bulkPrepareFormId} /> : null}
           </div>
         }
-        title={`목록 (총 ${filteredOrderRows.length.toLocaleString("ko-KR")}건)`}
+        description={selectedTask ? `${orderTaskLabels[selectedTask]} 대상 주문만 표시합니다. 주문번호를 눌러 상세 처리하세요.` : undefined}
+        title={`${selectedTask ? `${orderTaskLabels[selectedTask]} · ` : ""}목록 (총 ${filteredOrderRows.length.toLocaleString("ko-KR")}건)`}
       >
         <form action={readOnly ? undefined : bulkPrepareShipmentsAction} id={bulkPrepareFormId}>
-          <input name="redirectTo" type="hidden" value={buildOrdersHref({ dateFrom, dateTo, dealerMallId: selectedDealer?.id, status: selectedStatus })} />
+          <input name="redirectTo" type="hidden" value={buildOrdersHref({ dateFrom, dateTo, dealerMallId: selectedDealer?.id, status: selectedStatus, task: selectedTask })} />
           <AdminTable
             alignments={["center", "left", "left", "center", "center", "left", "left", "left", "center", "right", "center"]}
             className="admin-order-thin-table"
@@ -275,7 +342,7 @@ export default async function AdminOrdersPage({
             scrollerId={orderTableScrollerId}
           >
             {filteredOrderRows.map((order) => {
-              const selectable = !readOnly && canBulkPrepareShipment(order);
+              const selectable = !readOnly && (!selectedTask || selectedTask === "prepare") && canBulkPrepareShipment(order);
               const firstItem = order.itemDetails[0];
               const extraCount = Math.max(0, order.itemDetails.length - 1);
               const totalQuantity = order.itemDetails.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
@@ -326,13 +393,7 @@ export default async function AdminOrdersPage({
                     <strong className="admin-row-price">{order.amount}</strong>
                   </div>
                   <div className="admin-row-stack">
-                    <span>
-                      {/REQUESTED/i.test(order.claimStatus)
-                        ? "취소 요청"
-                        : /취소|CANCELED/i.test(`${order.orderStatus} ${order.shipmentStatus} ${order.status}`)
-                          ? "취소"
-                          : "-"}
-                    </span>
+                    <span>{orderClaimLabel(order)}</span>
                   </div>
                 </div>
               );
@@ -345,23 +406,39 @@ export default async function AdminOrdersPage({
       {!readOnly ? <section className="admin-order-management-guide" aria-label="주문 처리 안내">
         <div className="admin-order-management-row">
           <strong>주문관리</strong>
-          <AdminComingSoonButton>발주 확인</AdminComingSoonButton>
-          <AdminComingSoonButton>발송 처리</AdminComingSoonButton>
-          <AdminComingSoonButton>발송 지연 처리</AdminComingSoonButton>
-          <AdminComingSoonButton>배송지 정보 수정</AdminComingSoonButton>
-          <AdminComingSoonButton>미결제 확인</AdminComingSoonButton>
+          {[["prepare", "발주 확인"], ["ship", "발송 처리"], ["delay", "발송 지연 처리"], ["address", "배송지 정보 수정"], ["unpaid", "미결제 확인"]].map(([task, label]) => (
+            <Link
+              className={selectedTask === task ? "is-active" : undefined}
+              href={buildOrdersHref({ dateFrom, dateTo, dealerMallId: selectedDealer?.id, task })}
+              key={task}
+            >
+              {label}
+            </Link>
+          ))}
         </div>
         <div className="admin-order-management-row">
           <strong>취소관리</strong>
-          <AdminComingSoonButton>판매자 직접취소 처리</AdminComingSoonButton>
-          <AdminComingSoonButton>취소 승인처리</AdminComingSoonButton>
-          <AdminComingSoonButton>구매확정 후 취소처리</AdminComingSoonButton>
+          {[["sellerCancel", "판매자 직접취소 처리"], ["cancelApproval", "취소 승인처리"], ["completedCancel", "구매확정 후 취소처리"]].map(([task, label]) => (
+            <Link
+              className={selectedTask === task ? "is-active" : undefined}
+              href={buildOrdersHref({ dateFrom, dateTo, dealerMallId: selectedDealer?.id, task })}
+              key={task}
+            >
+              {label}
+            </Link>
+          ))}
         </div>
         <div className="admin-order-management-row">
           <strong>반품교환관리</strong>
-          <AdminComingSoonButton>반품 및 교환접수</AdminComingSoonButton>
-          <AdminComingSoonButton>반품접수 후 처리</AdminComingSoonButton>
-          <AdminComingSoonButton>교환접수 후 처리</AdminComingSoonButton>
+          {[["claimCreate", "반품 및 교환접수"], ["returnProcess", "반품접수 후 처리"], ["exchangeProcess", "교환접수 후 처리"]].map(([task, label]) => (
+            <Link
+              className={selectedTask === task ? "is-active" : undefined}
+              href={buildOrdersHref({ dateFrom, dateTo, dealerMallId: selectedDealer?.id, task })}
+              key={task}
+            >
+              {label}
+            </Link>
+          ))}
         </div>
       </section> : null}
     </div>

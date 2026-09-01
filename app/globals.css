@@ -8893,8 +8893,7 @@ select option:disabled {
   font-weight: 900;
 }
 
-.admin-order-management-row a,
-.admin-coming-soon-button {
+.admin-order-management-row a {
   border: 0;
   background: transparent;
   color: #98a7b8;
@@ -8907,9 +8906,62 @@ select option:disabled {
   white-space: nowrap;
 }
 
-.admin-order-management-row a:hover,
-.admin-coming-soon-button:hover {
+.admin-order-management-row a:hover {
   color: #2f7a3d;
+}
+
+.admin-order-management-row a.is-active {
+  color: #1f6b34;
+  text-decoration: underline;
+  text-underline-offset: 5px;
+}
+
+.admin-claim-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-claim-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #dce5ee;
+  border-radius: 12px;
+  background: #f9fbfd;
+}
+
+.admin-claim-card-head,
+.admin-claim-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.admin-claim-card-head {
+  justify-content: space-between;
+}
+
+.admin-claim-card p,
+.admin-claim-card > span {
+  margin: 0;
+  color: #617286;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.admin-claim-create {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #dce5ee;
+}
+
+.admin-claim-create h3 {
+  margin: 0;
+  color: #102235;
+  font-size: 16px;
 }
 
 .admin-order-workspace {

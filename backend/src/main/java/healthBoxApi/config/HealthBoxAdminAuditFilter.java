@@ -110,7 +110,11 @@ public class HealthBoxAdminAuditFilter extends OncePerRequestFilter {
         if (path.matches(".*/dealer-applications/\\d+/reject$")) return action("DEALER_REJECT", "딜러 신청 반려", "DEALER_APPLICATION");
         if (path.matches(".*/buyer-signup-applications/\\d+/approve$")) return action("MEMBER_APPROVE", "회원 가입 승인", "MEMBER_APPLICATION");
         if (path.matches(".*/buyer-signup-applications/\\d+/reject$")) return action("MEMBER_REJECT", "회원 가입 반려", "MEMBER_APPLICATION");
+        if (path.matches(".*/shipments/\\d+/delay$")) return action("SHIPMENT_DELAY", "발송 지연 처리", "SHIPMENT");
         if (path.matches(".*/shipments/\\d+/status$")) return action("SHIPMENT_UPDATE", "배송 처리", "SHIPMENT");
+        if (path.matches(".*/orders/\\d+/shipping-address$")) return action("ORDER_ADDRESS_UPDATE", "주문 배송지 수정", "ORDER");
+        if (path.matches(".*/orders/\\d+/claims$")) return action("ORDER_CLAIM_CREATE", "취소·반품·교환 접수", "ORDER");
+        if (path.matches(".*/orders/\\d+/claims/\\d+/status$")) return action("ORDER_CLAIM_PROCESS", "취소·반품·교환 처리", "ORDER_CLAIM");
         if (path.matches(".*/orders/\\d+/partial-cancel$")) return action("ORDER_PARTIAL_CANCEL", "주문 부분 취소", "ORDER");
         if (path.matches(".*/orders/\\d+/cancel$")) return action("ORDER_CANCEL", "주문 취소", "ORDER");
         if (path.contains("/product-inquiries/") && "PUT".equalsIgnoreCase(method)) return action("INQUIRY_ANSWER", "상품 문의 답변", "PRODUCT_INQUIRY");
@@ -169,6 +173,7 @@ public class HealthBoxAdminAuditFilter extends OncePerRequestFilter {
         }
         List<String> parts = new ArrayList<>();
         addDetail(parts, "처리 상태", firstString(body, "shipmentStatus", "status", "publishStatus"));
+        addDetail(parts, "처리 종류", firstString(body, "claimType"));
         addDetail(parts, "택배사", firstString(body, "courierCompany"));
         addDetail(parts, "송장번호", firstString(body, "trackingNo"));
         addDetail(parts, "반려 사유", firstString(body, "rejectReason"));

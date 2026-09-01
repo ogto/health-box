@@ -7,7 +7,10 @@ import com.google.gson.JsonParser;
 import healthBoxApi.payment.HealthBoxPaymentResponse;
 import healthBoxApi.payment.HealthBoxPaymentService;
 import healthBoxApi.dto.HealthBoxApprovalRequest;
+import healthBoxApi.dto.HealthBoxAdminClaimRequest;
+import healthBoxApi.dto.HealthBoxAdminClaimStatusRequest;
 import healthBoxApi.dto.HealthBoxAdminDealerCreateRequest;
+import healthBoxApi.dto.HealthBoxAdminOrderAddressRequest;
 import healthBoxApi.dto.HealthBoxDealerApplicationCreateRequest;
 import healthBoxApi.dto.HealthBoxBuyerLoginRequest;
 import healthBoxApi.dto.HealthBoxBuyerLoginResponse;
@@ -23,6 +26,7 @@ import healthBoxApi.dto.HealthBoxCartItemRequest;
 import healthBoxApi.dto.HealthBoxCartItemResponse;
 import healthBoxApi.dto.HealthBoxCategoryResponse;
 import healthBoxApi.dto.HealthBoxCategorySaveRequest;
+import healthBoxApi.dto.HealthBoxClaimResponse;
 import healthBoxApi.dto.HealthBoxDealerContextResponse;
 import healthBoxApi.dto.HealthBoxDealerProductDetailResponse;
 import healthBoxApi.dto.HealthBoxDealerProductSummaryResponse;
@@ -55,6 +59,7 @@ import healthBoxApi.dto.HealthBoxProductInquiryRequest;
 import healthBoxApi.dto.HealthBoxProductInquiryResponse;
 import healthBoxApi.dto.HealthBoxRejectRequest;
 import healthBoxApi.dto.HealthBoxShipmentStatusRequest;
+import healthBoxApi.dto.HealthBoxShipmentDelayRequest;
 import healthBoxApi.vo.*;
 import healthBoxApi.repository.*;
 import org.springframework.data.domain.Page;
@@ -1760,6 +1765,17 @@ public class HealthBoxService {
                 buildOrderDetailResponse(order, shipment, orderItemRepository.findByOrderIdOrderByIdAsc(orderId))
             );
         }
+        boolean anotherActiveClaimExists = claimRepository.findByOrderIdOrderByIdDesc(orderId).stream()
+            .anyMatch(claim ->
+                Arrays.asList("RETURN", "EXCHANGE").contains(
+                    defaultText(claim.getClaimType(), "").toUpperCase(Locale.ROOT)
+                ) && Arrays.asList("REQUESTED", "APPROVED").contains(
+                    defaultText(claim.getStatus(), "").toUpperCase(Locale.ROOT)
+                )
+            );
+        if (anotherActiveClaimExists) {
+            throw new IllegalArgumentException("an active return or exchange claim already exists");
+        }
 
         String reason = StringUtils.hasText(request.getReason())
             ? request.getReason().trim()
@@ -2271,13 +2287,224 @@ public class HealthBoxService {
         HealthBoxShipmentVo shipment = shipmentRepository.findById(shipmentId)
             .orElseThrow(() -> new IllegalArgumentException("shipment not found. id=" + shipmentId));
 
-        shipment.setShipmentStatus(request.getShipmentStatus());
-        shipment.setCourierCompany(request.getCourierCompany());
-        shipment.setTrackingNo(request.getTrackingNo());
-        shipment.setShippedAt(request.getShippedAt());
-        shipment.setDeliveredAt(request.getDeliveredAt());
-        shipment.setHandlerAccountId(request.getHandlerAccountId());
+        if (request == null || !StringUtils.hasText(request.getShipmentStatus())) {
+            throw new IllegalArgumentException("shipment status is required");
+        }
+
+        String currentStatus = defaultText(shipment.getShipmentStatus(), "PENDING").toUpperCase(Locale.ROOT);
+        String nextStatus = request.getShipmentStatus().trim().toUpperCase(Locale.ROOT);
+        if ("DELAYED".equals(nextStatus) && !"DELAYED".equals(currentStatus)) {
+            throw new IllegalArgumentException("use the shipment delay endpoint to record a delay reason");
+        }
+        validateShipmentStatusTransition(currentStatus, nextStatus);
+
+        String requestedCourier = trimToNull(request.getCourierCompany());
+        String requestedTrackingNo = trimToNull(request.getTrackingNo());
+        String courier = requestedCourier != null ? requestedCourier : trimToNull(shipment.getCourierCompany());
+        String trackingNo = requestedTrackingNo != null ? requestedTrackingNo : trimToNull(shipment.getTrackingNo());
+        if (("SHIPPED".equals(nextStatus) || "DELIVERED".equals(nextStatus))
+            && (courier == null || trackingNo == null)) {
+            throw new IllegalArgumentException("courier company and tracking number are required for shipping");
+        }
+
+        shipment.setShipmentStatus(nextStatus);
+        shipment.setCourierCompany(courier);
+        shipment.setTrackingNo(trackingNo);
+        if (request.getShippedAt() != null) {
+            shipment.setShippedAt(request.getShippedAt());
+        } else if ("SHIPPED".equals(nextStatus) && shipment.getShippedAt() == null) {
+            shipment.setShippedAt(LocalDateTime.now());
+        }
+        if (request.getDeliveredAt() != null) {
+            shipment.setDeliveredAt(request.getDeliveredAt());
+        } else if ("DELIVERED".equals(nextStatus) && shipment.getDeliveredAt() == null) {
+            shipment.setDeliveredAt(LocalDateTime.now());
+        }
+        if (request.getHandlerAccountId() != null) {
+            shipment.setHandlerAccountId(request.getHandlerAccountId());
+        }
         return shipmentRepository.save(shipment);
+    }
+
+    @Transactional
+    public HealthBoxOrderDetailResponse updateOrderShippingAddress(
+        Long orderId,
+        HealthBoxAdminOrderAddressRequest request
+    ) {
+        HealthBoxOrderVo order = orderRepository.findById(orderId)
+            .orElseThrow(() -> new IllegalArgumentException("order not found. id=" + orderId));
+        HealthBoxShipmentVo shipment = shipmentRepository.findByOrderId(orderId).orElse(null);
+        String shipmentStatus = shipment != null
+            ? defaultText(shipment.getShipmentStatus(), "PENDING").toUpperCase(Locale.ROOT)
+            : "PENDING";
+
+        if (Arrays.asList("SHIPPED", "DELIVERED", "CANCELED").contains(shipmentStatus)) {
+            throw new IllegalArgumentException("shipping address cannot be changed after shipment starts");
+        }
+        if (request == null
+            || !StringUtils.hasText(request.getReceiverName())
+            || !StringUtils.hasText(request.getReceiverPhone())
+            || !StringUtils.hasText(request.getBaseAddress())) {
+            throw new IllegalArgumentException("receiver name, phone, and address are required");
+        }
+
+        order.setReceiverName(request.getReceiverName().trim());
+        order.setReceiverPhone(request.getReceiverPhone().trim());
+        order.setZipCode(trimToNull(request.getZipCode()));
+        order.setBaseAddress(request.getBaseAddress().trim());
+        order.setDetailAddress(trimToNull(request.getDetailAddress()));
+        orderRepository.save(order);
+        return buildOrderDetailResponse(order);
+    }
+
+    @Transactional
+    public HealthBoxOrderDetailResponse delayShipment(Long shipmentId, HealthBoxShipmentDelayRequest request) {
+        HealthBoxShipmentVo shipment = shipmentRepository.findById(shipmentId)
+            .orElseThrow(() -> new IllegalArgumentException("shipment not found. id=" + shipmentId));
+        HealthBoxOrderVo order = orderRepository.findById(shipment.getOrderId())
+            .orElseThrow(() -> new IllegalArgumentException("order not found. id=" + shipment.getOrderId()));
+        String currentStatus = defaultText(shipment.getShipmentStatus(), "PENDING").toUpperCase(Locale.ROOT);
+        if (!Arrays.asList("PENDING", "ORDERED", "PARTIALLY_CANCELED", "PREPARING", "DELAYED").contains(currentStatus)) {
+            throw new IllegalArgumentException("only unshipped orders can be delayed");
+        }
+        if (request == null || !StringUtils.hasText(request.getReason())) {
+            throw new IllegalArgumentException("shipping delay reason is required");
+        }
+
+        String reason = request.getReason().trim();
+        if (request.getExpectedShipDate() != null) {
+            reason = reason + " | 예상 출고일 " + request.getExpectedShipDate();
+        }
+        HealthBoxClaimVo delay = createClaim(order, "DELIVERY_DELAY", "APPLIED", reason);
+        delay.setProcessedAt(LocalDateTime.now());
+        claimRepository.save(delay);
+        shipment.setShipmentStatus("DELAYED");
+        shipmentRepository.save(shipment);
+        return buildOrderDetailResponse(order, shipment, orderItemRepository.findByOrderIdOrderByIdAsc(order.getId()));
+    }
+
+    @Transactional
+    public HealthBoxClaimResponse createAdminClaim(Long orderId, HealthBoxAdminClaimRequest request) {
+        HealthBoxOrderVo order = orderRepository.findById(orderId)
+            .orElseThrow(() -> new IllegalArgumentException("order not found. id=" + orderId));
+        if ("CANCELED".equalsIgnoreCase(order.getOrderStatus())) {
+            throw new IllegalArgumentException("a claim cannot be created for a canceled order");
+        }
+        if (request == null || !StringUtils.hasText(request.getClaimType()) || !StringUtils.hasText(request.getReason())) {
+            throw new IllegalArgumentException("claim type and reason are required");
+        }
+
+        String claimType = request.getClaimType().trim().toUpperCase(Locale.ROOT);
+        if (!Arrays.asList("CANCEL", "RETURN", "EXCHANGE").contains(claimType)) {
+            throw new IllegalArgumentException("unsupported claim type");
+        }
+        boolean activeCustomerClaimExists = claimRepository.findByOrderIdOrderByIdDesc(orderId).stream()
+            .anyMatch(existing ->
+                Arrays.asList("CANCEL", "RETURN", "EXCHANGE").contains(
+                    defaultText(existing.getClaimType(), "").toUpperCase(Locale.ROOT)
+                ) && Arrays.asList("REQUESTED", "APPROVED").contains(
+                    defaultText(existing.getStatus(), "").toUpperCase(Locale.ROOT)
+                )
+            );
+        if (activeCustomerClaimExists) {
+            throw new IllegalArgumentException("an active cancel, return, or exchange claim already exists");
+        }
+
+        return buildClaimResponse(claimRepository.save(
+            createClaim(order, claimType, "REQUESTED", request.getReason().trim())
+        ));
+    }
+
+    @Transactional
+    public HealthBoxClaimResponse processAdminClaim(
+        Long orderId,
+        Long claimId,
+        HealthBoxAdminClaimStatusRequest request
+    ) {
+        HealthBoxClaimVo claim = claimRepository.findWithLockById(claimId)
+            .orElseThrow(() -> new IllegalArgumentException("claim not found. id=" + claimId));
+        if (!Objects.equals(orderId, claim.getOrderId())) {
+            throw new IllegalArgumentException("claim does not belong to order");
+        }
+        if (request == null || !StringUtils.hasText(request.getStatus())) {
+            throw new IllegalArgumentException("claim status is required");
+        }
+
+        String currentStatus = defaultText(claim.getStatus(), "REQUESTED").toUpperCase(Locale.ROOT);
+        String nextStatus = request.getStatus().trim().toUpperCase(Locale.ROOT);
+        String claimType = defaultText(claim.getClaimType(), "").toUpperCase(Locale.ROOT);
+        if (Arrays.asList("REJECTED", "COMPLETED", "APPLIED").contains(currentStatus)) {
+            if (currentStatus.equals(nextStatus)) {
+                return buildClaimResponse(claim);
+            }
+            throw new IllegalArgumentException("completed claim status cannot be changed");
+        }
+        if (!Arrays.asList("APPROVED", "REJECTED", "COMPLETED", "APPLIED").contains(nextStatus)) {
+            throw new IllegalArgumentException("unsupported claim status");
+        }
+        if ("APPROVED".equals(currentStatus) && "APPROVED".equals(nextStatus)) {
+            return buildClaimResponse(claim);
+        }
+        if (StringUtils.hasText(request.getReason())) {
+            claim.setReason(limitText(defaultText(claim.getReason(), "") + " | 처리 메모: " + request.getReason().trim(), 500));
+        }
+
+        if ("REJECTED".equals(nextStatus)) {
+            claim.setStatus("REJECTED");
+            claim.setProcessedAt(LocalDateTime.now());
+            return buildClaimResponse(claimRepository.save(claim));
+        }
+
+        if ("CANCEL".equals(claimType) && ("APPLIED".equals(nextStatus) || "COMPLETED".equals(nextStatus))) {
+            cancelOrder(orderId);
+            claim.setStatus("APPLIED");
+            claim.setProcessedAt(LocalDateTime.now());
+            return buildClaimResponse(claimRepository.save(claim));
+        }
+
+        if ("RETURN".equals(claimType) && "COMPLETED".equals(nextStatus)) {
+            if (!"APPROVED".equals(currentStatus)) {
+                throw new IllegalArgumentException("return claim must be approved before completion");
+            }
+            cancelOrder(orderId);
+            claim.setStatus("COMPLETED");
+            claim.setProcessedAt(LocalDateTime.now());
+            return buildClaimResponse(claimRepository.save(claim));
+        }
+
+        if ("EXCHANGE".equals(claimType) && "APPROVED".equals(nextStatus)) {
+            HealthBoxShipmentVo shipment = shipmentRepository.findByOrderId(orderId).orElse(null);
+            if (shipment != null) {
+                String originalDelivery = Arrays.asList(shipment.getCourierCompany(), shipment.getTrackingNo()).stream()
+                    .filter(StringUtils::hasText)
+                    .collect(Collectors.joining(" "));
+                if (StringUtils.hasText(originalDelivery)) {
+                    claim.setReason(limitText(defaultText(claim.getReason(), "") + " | 기존 배송 " + originalDelivery, 500));
+                }
+                shipment.setShipmentStatus("PREPARING");
+                shipment.setCourierCompany(null);
+                shipment.setTrackingNo(null);
+                shipment.setShippedAt(null);
+                shipment.setDeliveredAt(null);
+                shipmentRepository.save(shipment);
+            }
+        }
+        if ("EXCHANGE".equals(claimType) && "COMPLETED".equals(nextStatus)) {
+            if (!"APPROVED".equals(currentStatus)) {
+                throw new IllegalArgumentException("exchange claim must be approved before completion");
+            }
+            HealthBoxShipmentVo shipment = shipmentRepository.findByOrderId(orderId).orElse(null);
+            if (shipment == null || !"DELIVERED".equalsIgnoreCase(shipment.getShipmentStatus())) {
+                throw new IllegalArgumentException("exchange can be completed after replacement delivery");
+            }
+            claim.setProcessedAt(LocalDateTime.now());
+        }
+
+        claim.setStatus(nextStatus);
+        if ("COMPLETED".equals(nextStatus) || "APPLIED".equals(nextStatus)) {
+            claim.setProcessedAt(LocalDateTime.now());
+        }
+        return buildClaimResponse(claimRepository.save(claim));
     }
 
     public List<HealthBoxMonthlySalesSummaryVo> getMonthlySalesSummaries(Long dealerMallId) {
@@ -3861,16 +4088,61 @@ public class HealthBoxService {
             && ("PENDING".equals(shipmentStatus) || "ORDERED".equals(shipmentStatus));
     }
 
+    private void validateShipmentStatusTransition(String currentStatus, String nextStatus) {
+        if (currentStatus.equals(nextStatus)) {
+            return;
+        }
+        if ("CANCELED".equals(currentStatus)) {
+            throw new IllegalArgumentException("canceled shipment status cannot be changed");
+        }
+
+        Map<String, List<String>> allowed = new HashMap<>();
+        allowed.put("PENDING", Arrays.asList("PREPARING", "DELAYED"));
+        allowed.put("ORDERED", Arrays.asList("PREPARING", "DELAYED"));
+        allowed.put("PARTIALLY_CANCELED", Arrays.asList("PREPARING", "DELAYED"));
+        allowed.put("PREPARING", Arrays.asList("DELAYED", "SHIPPED"));
+        allowed.put("DELAYED", Arrays.asList("PREPARING", "SHIPPED"));
+        allowed.put("SHIPPED", Collections.singletonList("DELIVERED"));
+        allowed.put("DELIVERED", Collections.emptyList());
+
+        if (!allowed.getOrDefault(currentStatus, Collections.emptyList()).contains(nextStatus)) {
+            throw new IllegalArgumentException("invalid shipment status transition: " + currentStatus + " -> " + nextStatus);
+        }
+    }
+
     private HealthBoxClaimVo createCancelClaim(HealthBoxOrderVo order, String status, String reason) {
+        return createClaim(order, "CANCEL", status, reason);
+    }
+
+    private HealthBoxClaimVo createClaim(HealthBoxOrderVo order, String claimType, String status, String reason) {
         HealthBoxClaimVo claim = new HealthBoxClaimVo();
         claim.setOrderId(order.getId());
         claim.setDealerMallId(order.getDealerMallId());
         claim.setBuyerMemberId(order.getBuyerMemberId());
-        claim.setClaimType("CANCEL");
+        claim.setClaimType(claimType);
         claim.setStatus(status);
         claim.setAmount(order.getRemainingPaymentAmount() != null ? order.getRemainingPaymentAmount() : 0);
-        claim.setReason(reason);
+        claim.setReason(limitText(reason, 500));
         return claim;
+    }
+
+    private String limitText(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
+    }
+
+    private HealthBoxClaimResponse buildClaimResponse(HealthBoxClaimVo claim) {
+        HealthBoxClaimResponse response = new HealthBoxClaimResponse();
+        response.setId(claim.getId());
+        response.setClaimType(claim.getClaimType());
+        response.setStatus(claim.getStatus());
+        response.setAmount(claim.getAmount());
+        response.setReason(claim.getReason());
+        response.setRequestedAt(claim.getCreatedAt());
+        response.setProcessedAt(claim.getProcessedAt());
+        return response;
     }
 
     private void markCancelClaimApplied(Long orderId) {
@@ -3958,6 +4230,11 @@ public class HealthBoxService {
             response.setClaimReason(claim.getReason());
             response.setClaimRequestedAt(claim.getCreatedAt());
         }
+        response.setClaims(
+            claimRepository.findByOrderIdOrderByIdDesc(order.getId()).stream()
+                .map(this::buildClaimResponse)
+                .collect(Collectors.toList())
+        );
         response.setItems(items.stream().map(this::buildOrderItemResponse).collect(Collectors.toList()));
         return response;
     }

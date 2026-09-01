@@ -5,10 +5,14 @@ import { randomUUID } from "node:crypto";
 
 import {
   cancelOrderAction,
+  createOrderClaimAction,
+  delayShipmentAction,
   partialCancelOrderAction,
+  processOrderClaimAction,
 } from "../../../_actions/health-box-admin";
 import { AdminConfirmSubmitButton } from "../../../_components/admin/admin-confirm-submit-button";
 import { AdminHeader } from "../../../_components/admin/admin-header";
+import { AdminOrderAddressForm } from "../../../_components/admin/admin-order-address-form";
 import { AdminReadOnlyNotice } from "../../../_components/admin/admin-read-only-notice";
 import { AdminShippingStatusForm } from "../../../_components/admin/admin-shipping-status-form";
 import { AdminBadge, AdminPanel } from "../../../_components/admin/admin-ui";
@@ -106,12 +110,44 @@ function shipmentStatusLabel(value: unknown) {
     ORDERED: "주문 접수",
     PENDING: "주문 접수",
     PREPARING: "상품 준비중",
+    DELAYED: "발송 지연",
     SHIPPED: "배송중",
     DELIVERED: "배송완료",
     CANCELED: "취소완료",
     PARTIALLY_CANCELED: "주문 접수",
   };
   return labels[status] || String(value || "-");
+}
+
+function claimTypeLabel(value: unknown) {
+  const labels: Record<string, string> = {
+    CANCEL: "취소",
+    RETURN: "반품",
+    EXCHANGE: "교환",
+    DELIVERY_DELAY: "발송 지연",
+  };
+  const normalized = String(value || "").toUpperCase();
+  return labels[normalized] || String(value || "클레임");
+}
+
+function claimStatusLabel(value: unknown) {
+  const labels: Record<string, string> = {
+    REQUESTED: "접수",
+    APPROVED: "승인",
+    REJECTED: "반려",
+    APPLIED: "처리 완료",
+    COMPLETED: "처리 완료",
+  };
+  const normalized = String(value || "").toUpperCase();
+  return labels[normalized] || String(value || "-");
+}
+
+function claimTone(value: unknown) {
+  const normalized = String(value || "").toUpperCase();
+  if (normalized === "REJECTED") return "rose" as const;
+  if (normalized === "REQUESTED") return "gold" as const;
+  if (normalized === "APPROVED") return "blue" as const;
+  return "green" as const;
 }
 
 function paymentStatusLabel(value: unknown) {
@@ -186,6 +222,7 @@ export default async function AdminOrderDetailPage({
   const statusTone = toneFromStatus(`${orderStatus} ${shipmentStatus} ${claimStatus}`);
   const displayStatus = orderDisplayStatusLabel(orderStatus, paymentStatus, shipmentStatus, claimStatus);
   const items = Array.isArray(order.items) ? (order.items as Array<Record<string, unknown>>) : [];
+  const claims = Array.isArray(order.claims) ? (order.claims as Array<Record<string, unknown>>) : [];
   const shipmentId = idValue(order, "shipmentId");
   const cancelableItems = items.filter((item) => remainingQuantity(item) > 0 && idValue(item, "id"));
   const address = [
@@ -196,6 +233,15 @@ export default async function AdminOrderDetailPage({
     .filter(Boolean)
     .join(" ");
   const detailHref = `/admin/orders/${numericOrderId}`;
+  const normalizedShipmentStatus = shipmentStatus.toUpperCase();
+  const addressEditable = !["SHIPPED", "DELIVERED", "CANCELED"].includes(normalizedShipmentStatus);
+  const delayEligible = ["PENDING", "ORDERED", "PARTIALLY_CANCELED", "PREPARING", "DELAYED"].includes(normalizedShipmentStatus);
+  const orderCanceled = orderStatus.toUpperCase() === "CANCELED" || paymentStatus.toUpperCase() === "CANCELED";
+  const fullCancelLabel = normalizedClaimStatus === "REQUESTED"
+    ? "취소 요청 승인 및 환불"
+    : normalizedShipmentStatus === "DELIVERED"
+      ? "구매확정 후 취소 및 환불"
+      : "판매자 직접 취소";
   const fullCancellationRequestId = randomUUID();
   const partialCancellationRequestId = randomUUID();
 
@@ -323,21 +369,27 @@ export default async function AdminOrderDetailPage({
 
           {!readOnly ? <AdminPanel title="취소 처리">
             <div className="admin-status-stack">
-              <form action={cancelOrderAction} id="admin-order-cancel-form">
-                <input name="cancellationRequestId" type="hidden" value={fullCancellationRequestId} />
-                <input name="orderId" type="hidden" value={String(numericOrderId)} />
-                <input name="redirectTo" type="hidden" value={detailHref} />
-              </form>
-              <AdminConfirmSubmitButton
-                className="admin-button danger"
-                confirmMessage="이 주문을 전체 취소할까요? 남은 수량 기준으로 SKU 재고가 복구됩니다."
-                confirmTitle="주문 전체 취소"
-                form="admin-order-cancel-form"
-                pendingLabel="취소중..."
-                tone="danger"
-              >
-                주문 전체 취소
-              </AdminConfirmSubmitButton>
+              {!orderCanceled ? (
+                <>
+                  <form action={cancelOrderAction} id="admin-order-cancel-form">
+                    <input name="cancellationRequestId" type="hidden" value={fullCancellationRequestId} />
+                    <input name="orderId" type="hidden" value={String(numericOrderId)} />
+                    <input name="redirectTo" type="hidden" value={detailHref} />
+                  </form>
+                  <AdminConfirmSubmitButton
+                    className="admin-button danger"
+                    confirmMessage="결제 승인 취소와 남은 수량의 재고 복구를 즉시 처리할까요?"
+                    confirmTitle={fullCancelLabel}
+                    form="admin-order-cancel-form"
+                    pendingLabel="취소중..."
+                    tone="danger"
+                  >
+                    {fullCancelLabel}
+                  </AdminConfirmSubmitButton>
+                </>
+              ) : (
+                <p className="admin-row-muted">전체 취소와 결제 환불이 완료된 주문입니다.</p>
+              )}
 
               {cancelableItems.length ? (
                 <>
@@ -380,6 +432,186 @@ export default async function AdminOrderDetailPage({
             </div>
           </AdminPanel> : null}
         </div>
+
+        {!readOnly ? (
+          <div className="admin-order-process-grid">
+            <AdminPanel title="배송지 정보 수정">
+              <AdminOrderAddressForm
+                baseAddress={stringValue(order, "baseAddress")}
+                detailAddress={stringValue(order, "detailAddress")}
+                disabled={!addressEditable}
+                orderId={numericOrderId}
+                receiverName={stringValue(order, "receiverName")}
+                receiverPhone={stringValue(order, "receiverPhone")}
+                redirectTo={detailHref}
+                zipCode={stringValue(order, "zipCode")}
+              />
+            </AdminPanel>
+
+            <AdminPanel title="발송 지연 처리">
+              {shipmentId && delayEligible ? (
+                <div className="admin-status-stack">
+                  <form action={delayShipmentAction} className="admin-status-stack" id="admin-order-delay-form">
+                    <input name="shipmentId" type="hidden" value={String(shipmentId)} />
+                    <input name="redirectTo" type="hidden" value={detailHref} />
+                    <label className="admin-field">
+                      <span>지연 사유</span>
+                      <textarea
+                        className="admin-textarea"
+                        maxLength={450}
+                        name="reason"
+                        placeholder="고객에게 안내할 지연 사유를 입력해주세요."
+                        required
+                        rows={4}
+                      />
+                    </label>
+                    <label className="admin-field">
+                      <span>예상 출고일</span>
+                      <input className="admin-input" name="expectedShipDate" type="date" />
+                    </label>
+                  </form>
+                  <AdminConfirmSubmitButton
+                    className="admin-button secondary"
+                    confirmMessage="입력한 사유로 발송 지연 상태를 저장할까요?"
+                    confirmTitle="발송 지연 처리"
+                    form="admin-order-delay-form"
+                    pendingLabel="처리중..."
+                  >
+                    발송 지연 저장
+                  </AdminConfirmSubmitButton>
+                </div>
+              ) : (
+                <p className="admin-row-muted">발송 전 주문만 지연 처리할 수 있습니다.</p>
+              )}
+            </AdminPanel>
+          </div>
+        ) : null}
+
+        <AdminPanel title={readOnly ? "클레임 현황" : "취소·반품·교환 처리"}>
+          <div className="admin-claim-list">
+            {claims.map((claim) => {
+              const claimId = idValue(claim, "id");
+              const type = stringValue(claim, "claimType").toUpperCase();
+              const status = stringValue(claim, "status").toUpperCase();
+              const active = status === "REQUESTED" || status === "APPROVED";
+              const approveStatus = type === "CANCEL" ? "APPLIED" : "APPROVED";
+              const approveFormId = `admin-claim-approve-${claimId}`;
+              const rejectFormId = `admin-claim-reject-${claimId}`;
+              const completeFormId = `admin-claim-complete-${claimId}`;
+
+              return (
+                <article className="admin-claim-card" key={String(claimId || `${type}-${status}`)}>
+                  <div className="admin-claim-card-head">
+                    <strong>{claimTypeLabel(type)}</strong>
+                    <AdminBadge tone={claimTone(status)}>{claimStatusLabel(status)}</AdminBadge>
+                  </div>
+                  <p>{stringValue(claim, "reason") || "접수 사유 없음"}</p>
+                  {numberValue(claim, "amount") ? <span>{formatWon(numberValue(claim, "amount"))}</span> : null}
+
+                  {!readOnly && active && type !== "DELIVERY_DELAY" && claimId ? (
+                    <div className="admin-claim-actions">
+                      {status === "REQUESTED" ? (
+                        <>
+                          <form action={processOrderClaimAction} id={approveFormId}>
+                            <input name="orderId" type="hidden" value={String(numericOrderId)} />
+                            <input name="claimId" type="hidden" value={String(claimId)} />
+                            <input name="status" type="hidden" value={approveStatus} />
+                            <input name="redirectTo" type="hidden" value={detailHref} />
+                          </form>
+                          <AdminConfirmSubmitButton
+                            className="admin-button small"
+                            confirmMessage={type === "CANCEL" ? "취소 요청을 승인하고 결제 환불과 재고 복구를 처리할까요?" : `${claimTypeLabel(type)} 요청을 승인할까요?`}
+                            confirmTitle={`${claimTypeLabel(type)} 승인`}
+                            form={approveFormId}
+                            pendingLabel="처리중..."
+                            tone={type === "CANCEL" ? "danger" : "default"}
+                          >
+                            승인
+                          </AdminConfirmSubmitButton>
+                        </>
+                      ) : null}
+
+                      <form action={processOrderClaimAction} id={rejectFormId}>
+                        <input name="orderId" type="hidden" value={String(numericOrderId)} />
+                        <input name="claimId" type="hidden" value={String(claimId)} />
+                        <input name="status" type="hidden" value="REJECTED" />
+                        <input name="redirectTo" type="hidden" value={detailHref} />
+                      </form>
+                      <AdminConfirmSubmitButton
+                        className="admin-button secondary small"
+                        confirmMessage={`${claimTypeLabel(type)} 요청을 반려할까요?`}
+                        confirmTitle={`${claimTypeLabel(type)} 반려`}
+                        form={rejectFormId}
+                        pendingLabel="처리중..."
+                      >
+                        반려
+                      </AdminConfirmSubmitButton>
+
+                      {status === "APPROVED" && (type === "RETURN" || type === "EXCHANGE") ? (
+                        <>
+                          <form action={processOrderClaimAction} id={completeFormId}>
+                            <input name="orderId" type="hidden" value={String(numericOrderId)} />
+                            <input name="claimId" type="hidden" value={String(claimId)} />
+                            <input name="status" type="hidden" value="COMPLETED" />
+                            <input name="redirectTo" type="hidden" value={detailHref} />
+                          </form>
+                          <AdminConfirmSubmitButton
+                            className="admin-button small"
+                            confirmMessage={type === "RETURN" ? "반품 입고를 확인하고 결제 환불과 재고 복구를 완료할까요?" : "교환 상품 배송완료를 확인하고 교환 처리를 완료할까요?"}
+                            confirmTitle={`${claimTypeLabel(type)} 완료`}
+                            form={completeFormId}
+                            pendingLabel="처리중..."
+                            tone={type === "RETURN" ? "danger" : "default"}
+                          >
+                            처리 완료
+                          </AdminConfirmSubmitButton>
+                        </>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+            {!claims.length ? <p className="admin-row-muted">접수된 취소·반품·교환 또는 발송 지연 이력이 없습니다.</p> : null}
+          </div>
+
+          {!readOnly && !orderCanceled ? (
+            <div className="admin-claim-create">
+              <h3>반품·교환 수동 접수</h3>
+              <form action={createOrderClaimAction} className="admin-status-stack" id="admin-order-claim-create-form">
+                <input name="orderId" type="hidden" value={String(numericOrderId)} />
+                <input name="redirectTo" type="hidden" value={detailHref} />
+                <label className="admin-field">
+                  <span>접수 종류</span>
+                  <select className="admin-select" name="claimType" defaultValue="RETURN">
+                    <option value="RETURN">반품</option>
+                    <option value="EXCHANGE">교환</option>
+                  </select>
+                </label>
+                <label className="admin-field">
+                  <span>접수 사유</span>
+                  <textarea
+                    className="admin-textarea"
+                    maxLength={450}
+                    name="reason"
+                    placeholder="고객 요청 내용과 접수 사유를 입력해주세요."
+                    required
+                    rows={4}
+                  />
+                </label>
+              </form>
+              <AdminConfirmSubmitButton
+                className="admin-button secondary"
+                confirmMessage="입력한 내용으로 반품 또는 교환을 접수할까요?"
+                confirmTitle="클레임 접수"
+                form="admin-order-claim-create-form"
+                pendingLabel="접수중..."
+              >
+                반품·교환 접수
+              </AdminConfirmSubmitButton>
+            </div>
+          ) : null}
+        </AdminPanel>
       </div>
     </div>
   );

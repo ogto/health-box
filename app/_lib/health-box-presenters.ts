@@ -628,6 +628,7 @@ function adminShipmentStatusLabel(value: string) {
   const labels: Record<string, string> = {
     PENDING: "주문 접수",
     PREPARING: "상품 준비중",
+    DELAYED: "발송 지연",
     SHIPPED: "배송중",
     DELIVERED: "배송완료",
     CANCELED: "취소완료",
@@ -676,6 +677,12 @@ export function mapOrderRows(orders: HealthBoxRecord[] | null) {
     const status = adminOrderDisplayStatus(orderStatus, shipmentStatus);
     const pendingAge = orderPendingAgeInfo(order, shipmentStatus, status);
     const fallbackId = idValue(order, "id", "orderId") ?? index + 1;
+    const claims = Array.isArray(order.claims) ? (order.claims as HealthBoxRecord[]) : [];
+    const claimTypes = claims.map((claim) => stringValue(claim, "claimType").toUpperCase()).filter(Boolean);
+    const activeClaimTypes = claims
+      .filter((claim) => /REQUESTED|APPROVED/i.test(stringValue(claim, "status")))
+      .map((claim) => stringValue(claim, "claimType").toUpperCase())
+      .filter(Boolean);
 
     return {
       id: idValue(order, "id", "orderId"),
@@ -693,6 +700,8 @@ export function mapOrderRows(orders: HealthBoxRecord[] | null) {
       shipmentStatus,
       paymentStatus: stringValue(order, "paymentStatus"),
       claimStatus: stringValue(order, "claimStatus"),
+      claimTypes,
+      activeClaimTypes,
       tone: tone(`${orderStatus} ${shipmentStatus} ${status}`),
       pendingAgeLabel: pendingAge?.label || "",
       pendingAgeTone: pendingAge?.tone || "cyan",

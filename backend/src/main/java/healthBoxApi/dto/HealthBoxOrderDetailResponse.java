@@ -46,6 +46,7 @@ public class HealthBoxOrderDetailResponse {
     private String claimStatus;
     private String claimReason;
     private LocalDateTime claimRequestedAt;
+    private List<HealthBoxClaimResponse> claims;
     private List<HealthBoxOrderItemResponse> items;
     private HealthBoxOrderPaymentResponse payment;
 }

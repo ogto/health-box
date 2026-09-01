@@ -9,10 +9,22 @@ import { dispatchAdminToast } from "./admin-toast";
 
 const shipmentStatusOptions = [
   { value: "PENDING", label: "주문 접수" },
+  { value: "PARTIALLY_CANCELED", label: "부분취소 · 주문 접수" },
   { value: "PREPARING", label: "상품 준비중" },
+  { value: "DELAYED", label: "발송 지연" },
   { value: "SHIPPED", label: "배송중" },
   { value: "DELIVERED", label: "배송완료" },
 ];
+
+const allowedNextStatuses: Record<string, string[]> = {
+  PENDING: ["PENDING", "PREPARING"],
+  ORDERED: ["ORDERED", "PREPARING"],
+  PARTIALLY_CANCELED: ["PARTIALLY_CANCELED", "PREPARING"],
+  PREPARING: ["PREPARING", "SHIPPED"],
+  DELAYED: ["DELAYED", "PREPARING", "SHIPPED"],
+  SHIPPED: ["SHIPPED", "DELIVERED"],
+  DELIVERED: ["DELIVERED"],
+};
 
 export function AdminShippingStatusForm({
   courierCompany,
@@ -33,12 +45,16 @@ export function AdminShippingStatusForm({
   shipmentStatus: string;
   trackingNo: string;
 }) {
-  const normalizedInitialStatus = shipmentStatus.toUpperCase() || "PENDING";
+  const rawInitialStatus = shipmentStatus.toUpperCase() || "PENDING";
+  const normalizedInitialStatus = rawInitialStatus === "ORDERED" ? "PENDING" : rawInitialStatus;
   const trackingLocked = Boolean(trackingNo.trim());
   const [status, setStatus] = useState(normalizedInitialStatus);
   const [localCourierCompany, setLocalCourierCompany] = useState(courierCompany);
   const [localTrackingNo, setLocalTrackingNo] = useState(trackingNo);
   const [message, setMessage] = useState("");
+  const availableStatusOptions = shipmentStatusOptions.filter((option) =>
+    (allowedNextStatuses[normalizedInitialStatus] || [normalizedInitialStatus]).includes(option.value),
+  );
 
   const shouldOpenTrackingInputs = useMemo(
     () => !trackingLocked && status === "SHIPPED",
@@ -96,7 +112,7 @@ export function AdminShippingStatusForm({
         <label className="admin-field">
           <span>배송 상태</span>
           <select className="admin-select" name="shipmentStatus" onChange={(event) => setStatus(event.target.value)} value={status}>
-            {shipmentStatusOptions.map((option) => (
+            {availableStatusOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>

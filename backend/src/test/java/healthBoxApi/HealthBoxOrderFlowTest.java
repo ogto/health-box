@@ -7,6 +7,11 @@ import healthBoxApi.dto.HealthBoxOrderPaymentRequest;
 import healthBoxApi.dto.HealthBoxOrderQuoteResponse;
 import healthBoxApi.dto.HealthBoxBuyerOrderCancelRequest;
 import healthBoxApi.dto.HealthBoxOrderCancellationResponse;
+import healthBoxApi.dto.HealthBoxAdminClaimRequest;
+import healthBoxApi.dto.HealthBoxAdminClaimStatusRequest;
+import healthBoxApi.dto.HealthBoxAdminOrderAddressRequest;
+import healthBoxApi.dto.HealthBoxClaimResponse;
+import healthBoxApi.dto.HealthBoxShipmentDelayRequest;
 import healthBoxApi.payment.HealthBoxPaymentResponse;
 import healthBoxApi.payment.HealthBoxPaymentService;
 import healthBoxApi.repository.*;
@@ -20,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -223,6 +229,150 @@ class HealthBoxOrderFlowTest {
         assertEquals("CANCEL", claimCaptor.getValue().getClaimType());
         assertEquals(Integer.valueOf(60000), claimCaptor.getValue().getAmount());
         verify(paymentService, never()).cancelLivePayment(any(), any(), any(), any());
+    }
+
+    @Test
+    void updatesShippingAddressBeforeShipmentStarts() {
+        HealthBoxOrderVo order = paidOrder("ORDERED");
+        HealthBoxShipmentVo shipment = shipment("PREPARING");
+        HealthBoxAdminOrderAddressRequest request = new HealthBoxAdminOrderAddressRequest();
+        request.setReceiverName("새 수령인");
+        request.setReceiverPhone("01099998888");
+        request.setZipCode("03111");
+        request.setBaseAddress("서울특별시 종로구 새주소 1");
+        request.setDetailAddress("101호");
+        when(orderRepository.findById(42L)).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId(42L)).thenReturn(Optional.of(shipment));
+        when(orderRepository.save(any(HealthBoxOrderVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderItemRepository.findByOrderIdOrderByIdAsc(42L)).thenReturn(Collections.singletonList(orderItem()));
+
+        HealthBoxOrderDetailResponse response = service.updateOrderShippingAddress(42L, request);
+
+        assertEquals("새 수령인", response.getReceiverName());
+        assertEquals("서울특별시 종로구 새주소 1", response.getBaseAddress());
+        assertEquals("101호", response.getDetailAddress());
+    }
+
+    @Test
+    void rejectsShippingAddressChangeAfterShipmentStarts() {
+        HealthBoxOrderVo order = paidOrder("ORDERED");
+        HealthBoxAdminOrderAddressRequest request = new HealthBoxAdminOrderAddressRequest();
+        request.setReceiverName("새 수령인");
+        request.setReceiverPhone("01099998888");
+        request.setBaseAddress("서울특별시 종로구 새주소 1");
+        when(orderRepository.findById(42L)).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId(42L)).thenReturn(Optional.of(shipment("SHIPPED")));
+
+        IllegalArgumentException error = assertThrows(
+            IllegalArgumentException.class,
+            () -> service.updateOrderShippingAddress(42L, request)
+        );
+
+        assertTrue(error.getMessage().contains("cannot be changed"));
+    }
+
+    @Test
+    void recordsShipmentDelayAndMovesShipmentToDelayed() {
+        HealthBoxOrderVo order = paidOrder("ORDERED");
+        HealthBoxShipmentVo shipment = shipment("PREPARING");
+        HealthBoxShipmentDelayRequest request = new HealthBoxShipmentDelayRequest();
+        request.setReason("입고 지연");
+        request.setExpectedShipDate(LocalDate.of(2026, 9, 5));
+        when(shipmentRepository.findById(168L)).thenReturn(Optional.of(shipment));
+        when(orderRepository.findById(42L)).thenReturn(Optional.of(order));
+        when(orderItemRepository.findByOrderIdOrderByIdAsc(42L)).thenReturn(Collections.singletonList(orderItem()));
+        when(shipmentRepository.save(any(HealthBoxShipmentVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(claimRepository.save(any(HealthBoxClaimVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        HealthBoxOrderDetailResponse response = service.delayShipment(168L, request);
+
+        ArgumentCaptor<HealthBoxClaimVo> claimCaptor = ArgumentCaptor.forClass(HealthBoxClaimVo.class);
+        verify(claimRepository).save(claimCaptor.capture());
+        assertEquals("DELAYED", response.getShipmentStatus());
+        assertEquals("DELIVERY_DELAY", claimCaptor.getValue().getClaimType());
+        assertTrue(claimCaptor.getValue().getReason().contains("2026-09-05"));
+    }
+
+    @Test
+    void createsAndApprovesExchangeClaimForReplacementShipping() {
+        HealthBoxOrderVo order = paidOrder("ORDERED");
+        HealthBoxShipmentVo shipment = shipment("DELIVERED");
+        shipment.setCourierCompany("CJ대한통운");
+        shipment.setTrackingNo("1234567890");
+        HealthBoxAdminClaimRequest createRequest = new HealthBoxAdminClaimRequest();
+        createRequest.setClaimType("EXCHANGE");
+        createRequest.setReason("상품 파손");
+        when(orderRepository.findById(42L)).thenReturn(Optional.of(order));
+        when(claimRepository.save(any(HealthBoxClaimVo.class))).thenAnswer(invocation -> {
+            HealthBoxClaimVo claim = invocation.getArgument(0);
+            if (claim.getId() == null) claim.setId(77L);
+            return claim;
+        });
+
+        HealthBoxClaimResponse created = service.createAdminClaim(42L, createRequest);
+        HealthBoxClaimVo claim = new HealthBoxClaimVo();
+        claim.setId(created.getId());
+        claim.setOrderId(42L);
+        claim.setDealerMallId(0L);
+        claim.setBuyerMemberId(1L);
+        claim.setClaimType("EXCHANGE");
+        claim.setStatus("REQUESTED");
+        claim.setAmount(60000);
+        claim.setReason("상품 파손");
+        when(claimRepository.findWithLockById(77L)).thenReturn(Optional.of(claim));
+        when(shipmentRepository.findByOrderId(42L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.save(any(HealthBoxShipmentVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        HealthBoxAdminClaimStatusRequest statusRequest = new HealthBoxAdminClaimStatusRequest();
+        statusRequest.setStatus("APPROVED");
+
+        HealthBoxClaimResponse approved = service.processAdminClaim(42L, 77L, statusRequest);
+
+        assertEquals("APPROVED", approved.getStatus());
+        assertEquals("PREPARING", shipment.getShipmentStatus());
+        assertEquals(null, shipment.getTrackingNo());
+        assertTrue(claim.getReason().contains("1234567890"));
+    }
+
+    @Test
+    void completesApprovedReturnWithRefundAndStockRestore() throws Exception {
+        HealthBoxOrderVo order = paidOrder("ORDERED");
+        HealthBoxShipmentVo shipment = shipment("DELIVERED");
+        HealthBoxOrderItemVo item = orderItem();
+        HealthBoxProductSkuVo sku = sku();
+        sku.setStockQuantity(19);
+        HealthBoxClaimVo claim = new HealthBoxClaimVo();
+        claim.setId(88L);
+        claim.setOrderId(42L);
+        claim.setDealerMallId(0L);
+        claim.setBuyerMemberId(1L);
+        claim.setClaimType("RETURN");
+        claim.setStatus("APPROVED");
+        claim.setAmount(60000);
+        claim.setReason("단순 변심");
+        HealthBoxPaymentResponse canceledPayment = new HealthBoxPaymentResponse();
+        canceledPayment.setStatus("CANCELED");
+        when(claimRepository.findWithLockById(88L)).thenReturn(Optional.of(claim));
+        when(orderRepository.findById(42L)).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId(42L)).thenReturn(Optional.of(shipment));
+        when(orderItemRepository.findByOrderIdOrderByIdAsc(42L)).thenReturn(Collections.singletonList(item));
+        when(paymentRepository.findTopByOrderIdOrderByIdDesc(42L)).thenReturn(Optional.of(orderPayment()));
+        when(productSkuRepository.findWithLockById(145L)).thenReturn(Optional.of(sku));
+        when(paymentService.cancelLivePayment("live-payment-key", "판매자 주문 전체 취소", null, "healthbox-full-cancel-42"))
+            .thenReturn(canceledPayment);
+        when(orderRepository.save(any(HealthBoxOrderVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderItemRepository.save(any(HealthBoxOrderItemVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(paymentRepository.save(any(HealthBoxPaymentVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productSkuRepository.save(any(HealthBoxProductSkuVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(shipmentRepository.save(any(HealthBoxShipmentVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(claimRepository.save(any(HealthBoxClaimVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        HealthBoxAdminClaimStatusRequest statusRequest = new HealthBoxAdminClaimStatusRequest();
+        statusRequest.setStatus("COMPLETED");
+
+        HealthBoxClaimResponse completed = service.processAdminClaim(42L, 88L, statusRequest);
+
+        assertEquals("COMPLETED", completed.getStatus());
+        assertEquals("CANCELED", order.getOrderStatus());
+        assertEquals(Integer.valueOf(20), sku.getStockQuantity());
     }
 
     private void mockBuyerSession(Long dealerMallId) {

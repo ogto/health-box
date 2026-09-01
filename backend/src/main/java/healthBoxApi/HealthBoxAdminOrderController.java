@@ -2,8 +2,13 @@ package healthBoxApi;
 
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import healthBoxApi.dto.HealthBoxAdminClaimRequest;
+import healthBoxApi.dto.HealthBoxAdminClaimStatusRequest;
+import healthBoxApi.dto.HealthBoxAdminOrderAddressRequest;
+import healthBoxApi.dto.HealthBoxClaimResponse;
 import healthBoxApi.dto.HealthBoxOrderPartialCancelRequest;
 import healthBoxApi.dto.HealthBoxOrderDetailResponse;
+import healthBoxApi.dto.HealthBoxShipmentDelayRequest;
 import healthBoxApi.dto.HealthBoxShipmentStatusRequest;
 import healthBoxApi.vo.HealthBoxShipmentVo;
 import healthBoxApi.config.HealthBoxAdminAccessContext;
@@ -69,6 +74,40 @@ public class HealthBoxAdminOrderController {
         return service.partialCancelOrder(orderId, request);
     }
 
+    @ApiOperation(value = "주문 배송지 수정", notes = "출고 전 주문의 수령인과 배송지를 수정한다.")
+    @PutMapping("/orders/{orderId}/shipping-address")
+    public HealthBoxOrderDetailResponse updateOrderShippingAddress(
+        @PathVariable Long orderId,
+        @RequestBody HealthBoxAdminOrderAddressRequest request
+    ) {
+        accessContext.requirePermission("ORDER_PROCESS");
+        accessContext.requireDealerMallAccess(service.getOrderDetail(orderId).getDealerMallId());
+        return service.updateOrderShippingAddress(orderId, request);
+    }
+
+    @ApiOperation(value = "주문 클레임 접수", notes = "관리자가 취소·반품·교환 클레임을 접수한다.")
+    @PostMapping("/orders/{orderId}/claims")
+    public HealthBoxClaimResponse createOrderClaim(
+        @PathVariable Long orderId,
+        @RequestBody HealthBoxAdminClaimRequest request
+    ) {
+        accessContext.requirePermission("ORDER_PROCESS");
+        accessContext.requireDealerMallAccess(service.getOrderDetail(orderId).getDealerMallId());
+        return service.createAdminClaim(orderId, request);
+    }
+
+    @ApiOperation(value = "주문 클레임 처리", notes = "클레임을 승인·반려·완료 처리한다.")
+    @PutMapping("/orders/{orderId}/claims/{claimId}/status")
+    public HealthBoxClaimResponse processOrderClaim(
+        @PathVariable Long orderId,
+        @PathVariable Long claimId,
+        @RequestBody HealthBoxAdminClaimStatusRequest request
+    ) {
+        accessContext.requirePermission("ORDER_PROCESS");
+        accessContext.requireDealerMallAccess(service.getOrderDetail(orderId).getDealerMallId());
+        return service.processAdminClaim(orderId, claimId, request);
+    }
+
     @ApiOperation(value = "본사 배송 상태 변경", notes = "배송 상태와 택배 정보를 변경한다.")
     @PutMapping("/shipments/{shipmentId}/status")
     public HealthBoxShipmentVo updateShipmentStatus(
@@ -78,6 +117,17 @@ public class HealthBoxAdminOrderController {
         accessContext.requirePermission("ORDER_PROCESS");
         accessContext.requireDealerMallAccess(service.getOrderDetailByShipmentId(shipmentId).getDealerMallId());
         return service.updateShipmentStatus(shipmentId, request);
+    }
+
+    @ApiOperation(value = "발송 지연 처리", notes = "미출고 주문을 발송 지연 상태로 변경하고 사유를 기록한다.")
+    @PostMapping("/shipments/{shipmentId}/delay")
+    public HealthBoxOrderDetailResponse delayShipment(
+        @PathVariable Long shipmentId,
+        @RequestBody HealthBoxShipmentDelayRequest request
+    ) {
+        accessContext.requirePermission("ORDER_PROCESS");
+        accessContext.requireDealerMallAccess(service.getOrderDetailByShipmentId(shipmentId).getDealerMallId());
+        return service.delayShipment(shipmentId, request);
     }
 }
 

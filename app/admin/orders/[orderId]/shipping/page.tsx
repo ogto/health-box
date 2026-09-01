@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { updateShipmentStatusAction } from "../../../../_actions/health-box-admin";
-import { AdminConfirmSubmitButton } from "../../../../_components/admin/admin-confirm-submit-button";
 import { AdminHeader } from "../../../../_components/admin/admin-header";
+import { AdminShippingStatusForm } from "../../../../_components/admin/admin-shipping-status-form";
 import { AdminBadge, AdminPanel } from "../../../../_components/admin/admin-ui";
 import {
   fetchAdminOrder,
@@ -13,13 +12,6 @@ import {
   toneFromStatus,
 } from "../../../../_lib/health-box-api";
 import { getAdminSession } from "../../../../_lib/admin-auth";
-
-const shipmentStatusOptions = [
-  { value: "PENDING", label: "주문 접수" },
-  { value: "PREPARING", label: "상품 준비중" },
-  { value: "SHIPPED", label: "배송중" },
-  { value: "DELIVERED", label: "배송완료" },
-];
 
 function formatWon(value: unknown) {
   const amount = Number(value || 0);
@@ -32,12 +24,24 @@ function shipmentStatusLabel(value: unknown) {
     ORDERED: "주문 접수",
     PENDING: "주문 접수",
     PREPARING: "상품 준비중",
+    DELAYED: "발송 지연",
     SHIPPED: "배송중",
     DELIVERED: "배송완료",
     CANCELED: "취소완료",
     PARTIALLY_CANCELED: "주문 접수",
   };
   return labels[status] || String(value || "-");
+}
+
+function dateTimeLocalValue(value: unknown) {
+  if (typeof value === "string" && value.trim()) {
+    return value.trim().replace(" ", "T").slice(0, 16);
+  }
+  if (Array.isArray(value) && value.length >= 5) {
+    const [year, month, day, hour, minute] = value;
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  }
+  return "";
 }
 
 export default async function AdminOrderShippingPage({
@@ -106,59 +110,16 @@ export default async function AdminOrderShippingPage({
         </AdminPanel>
 
         <AdminPanel title="배송 정보 입력">
-          <div className="admin-status-stack">
-            <form action={updateShipmentStatusAction} className="admin-status-stack" id={formId}>
-              <input name="shipmentId" type="hidden" value={String(order.shipmentId)} />
-              <input name="redirectTo" type="hidden" value={`/admin/orders/${numericOrderId}/shipping`} />
-
-              <label className="admin-field">
-                <span>배송 상태</span>
-                <select className="admin-select" defaultValue={status.toUpperCase()} name="shipmentStatus">
-                  {shipmentStatusOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="admin-order-form-grid">
-                <label className="admin-field">
-                  <span>택배사</span>
-                  <input className="admin-input" name="courierCompany" placeholder="예: CJ대한통운" type="text" />
-                </label>
-                <label className="admin-field">
-                  <span>송장 번호</span>
-                  <input className="admin-input" name="trackingNo" placeholder="송장 번호를 입력하세요" type="text" />
-                </label>
-              </div>
-
-              <div className="admin-order-form-grid">
-                <label className="admin-field">
-                  <span>출고일시</span>
-                  <input className="admin-input" name="shippedAt" type="datetime-local" />
-                </label>
-                <label className="admin-field">
-                  <span>배송완료일시</span>
-                  <input className="admin-input" name="deliveredAt" type="datetime-local" />
-                </label>
-              </div>
-            </form>
-
-            <div className="admin-order-shipping-actions">
-              <Link className="admin-button secondary" href={backHref}>
-                취소
-              </Link>
-              <AdminConfirmSubmitButton
-                confirmMessage="입력한 배송 상태와 송장 정보를 저장할까요?"
-                confirmTitle="배송 상태 저장"
-                form={formId}
-                pendingLabel="저장중..."
-              >
-                배송 상태 저장
-              </AdminConfirmSubmitButton>
-            </div>
-          </div>
+          <AdminShippingStatusForm
+            courierCompany={stringValue(order, "courierCompany")}
+            deliveredAt={dateTimeLocalValue(order.deliveredAt)}
+            formId={formId}
+            redirectTo={`/admin/orders/${numericOrderId}/shipping`}
+            shippedAt={dateTimeLocalValue(order.shippedAt)}
+            shipmentId={String(order.shipmentId)}
+            shipmentStatus={status}
+            trackingNo={stringValue(order, "trackingNo")}
+          />
         </AdminPanel>
       </div>
     </div>
