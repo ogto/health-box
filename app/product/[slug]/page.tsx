@@ -169,6 +169,7 @@ export default async function ProductDetailPage({
               memberPrice={product.memberPrice}
               priceExposurePolicy={product.priceExposurePolicy}
               productImage={product.image}
+              productId={product.id}
               productSlug={product.slug}
               skus={product.skus}
               title={product.title}
@@ -352,6 +353,7 @@ export default async function ProductDetailPage({
               memberPrice={product.memberPrice}
               priceExposurePolicy={product.priceExposurePolicy}
               productImage={product.image}
+              productId={product.id}
               productSlug={product.slug}
               skus={product.skus}
               title={product.title}

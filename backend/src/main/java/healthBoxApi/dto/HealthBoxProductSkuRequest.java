@@ -8,6 +8,7 @@ import java.util.List;
 @Getter
 @Setter
 public class HealthBoxProductSkuRequest {
+    private Long id;
     private String skuCode;
     private String skuName;
     private String status;

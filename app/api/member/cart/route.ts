@@ -9,6 +9,7 @@ function toCartItem(item: HealthBoxRecord) {
   return {
     image: stringValue(item, "thumbnailUrl", "imageUrl"),
     optionLabel,
+    productId: numberValue(item, "productId") || undefined,
     productSlug: stringValue(item, "productSlug", "slug"),
     productTitle: stringValue(item, "productTitle", "productName", "productNameSnapshot"),
     quantity: Math.max(1, numberValue(item, "quantity") || 0),
@@ -61,6 +62,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
+    const productId = Number(body.productId || 0);
     const skuId = Number(body.skuId || 0);
     const quantity = Number(body.quantity || 0);
 
@@ -74,6 +76,7 @@ export async function PUT(request: NextRequest) {
         buyerMemberId: session.memberId,
         dealerMallId: session.dealerMallId,
         sessionToken: session.sessionToken,
+        productId: productId || undefined,
         skuId,
         quantity: Math.max(0, Math.min(99, quantity)),
       },

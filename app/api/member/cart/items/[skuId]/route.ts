@@ -8,6 +8,7 @@ function toCartItem(item: HealthBoxRecord) {
   return {
     image: stringValue(item, "thumbnailUrl", "imageUrl"),
     optionLabel: stringValue(item, "optionSummary", "skuName", "optionSummarySnapshot") || "없음",
+    productId: numberValue(item, "productId") || undefined,
     productSlug: stringValue(item, "productSlug", "slug"),
     productTitle: stringValue(item, "productTitle", "productName", "productNameSnapshot"),
     quantity: Math.max(1, numberValue(item, "quantity") || 0),

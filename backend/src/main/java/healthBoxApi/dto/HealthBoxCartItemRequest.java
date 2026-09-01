@@ -9,6 +9,7 @@ public class HealthBoxCartItemRequest {
     private Long buyerMemberId;
     private Long dealerMallId;
     private String sessionToken;
+    private Long productId;
     private Long skuId;
     private Integer quantity;
 }

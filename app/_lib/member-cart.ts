@@ -3,6 +3,7 @@ export const MEMBER_CART_STORAGE_KEY = "health-box-member-cart";
 export type MemberCartItem = {
   image?: string;
   optionLabel: string;
+  productId?: number;
   productSlug: string;
   productTitle: string;
   quantity: number;
@@ -102,12 +103,12 @@ export async function fetchMemberCart() {
   return parseCartResponse(response);
 }
 
-export async function saveMemberCartItem(skuId: number, quantity: number) {
+export async function saveMemberCartItem(skuId: number, quantity: number, productId?: number) {
   const response = await fetch("/api/member/cart", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
-    body: JSON.stringify({ skuId, quantity }),
+    body: JSON.stringify({ productId, skuId, quantity }),
   });
   return parseCartResponse(response);
 }
@@ -117,7 +118,7 @@ export async function addMemberCartItemsToServer(items: MemberCartItem[]) {
 
   for (const item of normalizeCartItems(items)) {
     const existing = nextItems.find((entry) => entry.skuId === item.skuId);
-    nextItems = await saveMemberCartItem(item.skuId, (existing?.quantity || 0) + item.quantity);
+    nextItems = await saveMemberCartItem(item.skuId, (existing?.quantity || 0) + item.quantity, item.productId);
   }
 
   return nextItems;

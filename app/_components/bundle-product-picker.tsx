@@ -62,6 +62,7 @@ export function BundleProductPicker({
         selectedCandidates.map(({ product, sku }) => ({
           image: product.image,
           optionLabel: sku?.skuName || "없음",
+          productId: product.id,
           productSlug: product.slug,
           productTitle: product.title,
           quantity: 1,

@@ -185,6 +185,7 @@ export function ProductPurchaseBox({
   priceExposurePolicy,
   isMember = false,
   productImage,
+  productId,
   productSlug,
   highlights,
   displaySubtitle,
@@ -200,6 +201,7 @@ export function ProductPurchaseBox({
   priceExposurePolicy?: string;
   isMember?: boolean;
   productImage: string;
+  productId?: number;
   productSlug: string;
   highlights: string[];
   displaySubtitle?: string;
@@ -352,6 +354,7 @@ export function ProductPurchaseBox({
       .map<MemberCartItem>((item) => ({
         image: productImage,
         optionLabel: item.label || "없음",
+        productId,
         productSlug,
         productTitle: title,
         quantity: item.quantity,

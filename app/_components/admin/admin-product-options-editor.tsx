@@ -24,6 +24,7 @@ type OptionGroupDraft = {
 
 type SkuDraft = {
   consumerPrice: number;
+  id?: number;
   memberPrice: number;
   optionValueCodes: string[];
   safetyStock: number;
@@ -100,6 +101,7 @@ function toSkuDraft(sku: HealthBoxProductSku, fallbackName: string, baseMemberPr
 
   return {
     consumerPrice: numberOrZero(sku.consumerPrice),
+    id: sku.id,
     memberPrice: optionAdditionalPrice,
     optionValueCodes: sku.optionValueCodes || [],
     safetyStock: numberOrZero(sku.safetyStock),
@@ -240,6 +242,7 @@ export function AdminProductOptionsEditor({
       (optionUseYn === "Y" ? skus : [fallbackSku])
         .map((sku) => ({
           consumerPrice: sku.consumerPrice || 0,
+          id: sku.id,
           memberPrice: sku.memberPrice || 0,
           optionValueCodes: optionUseYn === "Y" ? sku.optionValueCodes : [],
           safetyStock: sku.safetyStock || 0,

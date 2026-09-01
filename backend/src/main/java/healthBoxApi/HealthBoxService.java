@@ -1195,11 +1195,32 @@ public class HealthBoxService {
         return response;
     }
 
+    @Transactional
     public List<HealthBoxCartItemResponse> getBuyerCartItems(Long buyerMemberId, Long dealerMallId, String sessionToken) {
         validateBuyerAccess(buyerMemberId, dealerMallId, sessionToken);
-        return buyerCartItemRepository.findByBuyerMemberIdAndDealerMallIdOrderByIdAsc(buyerMemberId, dealerMallId).stream()
-            .map(this::buildCartItemResponse)
-            .collect(Collectors.toList());
+        List<HealthBoxBuyerCartItemVo> cartItems =
+            buyerCartItemRepository.findByBuyerMemberIdAndDealerMallIdOrderByIdAsc(buyerMemberId, dealerMallId);
+        List<HealthBoxBuyerCartItemVo> invalidItems = new ArrayList<>();
+        List<HealthBoxCartItemResponse> responses = new ArrayList<>();
+
+        for (HealthBoxBuyerCartItemVo cartItem : cartItems) {
+            HealthBoxProductSkuVo sku = productSkuRepository.findById(cartItem.getSkuId()).orElse(null);
+            if (sku == null || "Y".equalsIgnoreCase(sku.getDeletedYn()) || !"ACTIVE".equalsIgnoreCase(sku.getStatus())) {
+                invalidItems.add(cartItem);
+                continue;
+            }
+            HealthBoxProductVo product = productRepository.findById(sku.getProductId()).orElse(null);
+            if (product == null || "Y".equalsIgnoreCase(product.getDeletedYn()) || !"ACTIVE".equalsIgnoreCase(product.getStatus())) {
+                invalidItems.add(cartItem);
+                continue;
+            }
+            responses.add(buildCartItemResponse(cartItem, sku, product));
+        }
+
+        if (!invalidItems.isEmpty()) {
+            buyerCartItemRepository.deleteAll(invalidItems);
+        }
+        return responses;
     }
 
     @Transactional
@@ -1216,18 +1237,25 @@ public class HealthBoxService {
             return getBuyerCartItems(request.getBuyerMemberId(), request.getDealerMallId(), request.getSessionToken());
         }
 
-        HealthBoxProductSkuVo sku = productSkuRepository.findById(request.getSkuId())
-            .orElseThrow(() -> new IllegalArgumentException("sku not found. id=" + request.getSkuId()));
+        HealthBoxProductSkuVo sku = resolveCartSku(request);
         HealthBoxProductVo product = productRepository.findById(sku.getProductId())
             .orElseThrow(() -> new IllegalArgumentException("product not found for sku. productId=" + sku.getProductId()));
         validateOrderableSku(product, sku, request.getQuantity());
 
+        if (!sku.getId().equals(request.getSkuId())) {
+            buyerCartItemRepository.deleteByBuyerMemberIdAndDealerMallIdAndSkuId(
+                request.getBuyerMemberId(),
+                request.getDealerMallId(),
+                request.getSkuId()
+            );
+        }
+
         HealthBoxBuyerCartItemVo cartItem = buyerCartItemRepository
-            .findByBuyerMemberIdAndDealerMallIdAndSkuId(request.getBuyerMemberId(), request.getDealerMallId(), request.getSkuId())
+            .findByBuyerMemberIdAndDealerMallIdAndSkuId(request.getBuyerMemberId(), request.getDealerMallId(), sku.getId())
             .orElseGet(HealthBoxBuyerCartItemVo::new);
         cartItem.setBuyerMemberId(request.getBuyerMemberId());
         cartItem.setDealerMallId(request.getDealerMallId());
-        cartItem.setSkuId(request.getSkuId());
+        cartItem.setSkuId(sku.getId());
         cartItem.setQuantity(request.getQuantity());
         buyerCartItemRepository.save(cartItem);
 
@@ -1268,14 +1296,11 @@ public class HealthBoxService {
         }
     }
 
-    private HealthBoxCartItemResponse buildCartItemResponse(HealthBoxBuyerCartItemVo cartItem) {
-        HealthBoxProductSkuVo sku = productSkuRepository.findById(cartItem.getSkuId()).orElse(null);
-        if (sku == null) {
-            throw new IllegalArgumentException("sku not found. id=" + cartItem.getSkuId());
-        }
-        HealthBoxProductVo product = productRepository.findById(sku.getProductId())
-            .orElseThrow(() -> new IllegalArgumentException("product not found for sku. productId=" + sku.getProductId()));
-
+    private HealthBoxCartItemResponse buildCartItemResponse(
+        HealthBoxBuyerCartItemVo cartItem,
+        HealthBoxProductSkuVo sku,
+        HealthBoxProductVo product
+    ) {
         int unitPrice = resolveOrderPrice(product, sku);
         int quantity = cartItem.getQuantity() != null ? cartItem.getQuantity() : 0;
         List<HealthBoxProductMediaResponse> mediaItems = productMediaRepository.findByProductIdOrderBySortOrderAscIdAsc(product.getId()).stream()
@@ -3185,10 +3210,19 @@ public class HealthBoxService {
     }
 
     private void syncProductOptionsAndSkus(HealthBoxProductVo product, HealthBoxProductSaveRequest request) {
-        clearProductOptionStructure(product.getId());
+        List<HealthBoxProductSkuVo> existingSkus = productSkuRepository.findByProductIdOrderByIdAsc(product.getId());
+        clearProductOptionDefinitions(product.getId(), existingSkus);
+        Map<Long, HealthBoxProductSkuVo> existingSkuById = existingSkus.stream()
+            .filter(sku -> sku.getId() != null)
+            .collect(Collectors.toMap(HealthBoxProductSkuVo::getId, sku -> sku));
+        Map<String, HealthBoxProductSkuVo> existingSkuByCode = existingSkus.stream()
+            .filter(sku -> StringUtils.hasText(sku.getSkuCode()))
+            .collect(Collectors.toMap(sku -> sku.getSkuCode().trim().toUpperCase(Locale.ROOT), sku -> sku, (left, right) -> left));
+        Set<Long> retainedSkuIds = new HashSet<>();
 
         if (!"Y".equalsIgnoreCase(product.getOptionUseYn())) {
-            createDefaultSku(product, request.getSkus());
+            syncDefaultSku(product, request.getSkus(), existingSkuById, existingSkuByCode, retainedSkuIds);
+            retireUnusedSkus(existingSkus, retainedSkuIds);
             return;
         }
 
@@ -3203,18 +3237,17 @@ public class HealthBoxService {
             throw new IllegalArgumentException("optionUseYn is Y but skus are empty");
         }
 
-        createSkus(product, skuRequests, valueByCode);
+        syncSkus(product, skuRequests, valueByCode, existingSkuById, existingSkuByCode, retainedSkuIds);
+        retireUnusedSkus(existingSkus, retainedSkuIds);
     }
 
-    private void clearProductOptionStructure(Long productId) {
-        List<HealthBoxProductSkuVo> existingSkus = productSkuRepository.findByProductIdOrderByIdAsc(productId);
+    private void clearProductOptionDefinitions(Long productId, List<HealthBoxProductSkuVo> existingSkus) {
         if (!existingSkus.isEmpty()) {
             List<Long> skuIds = existingSkus.stream().map(HealthBoxProductSkuVo::getId).collect(Collectors.toList());
             List<HealthBoxProductSkuOptionVo> skuOptions = productSkuOptionRepository.findBySkuIdIn(skuIds);
             if (!skuOptions.isEmpty()) {
                 productSkuOptionRepository.deleteAll(skuOptions);
             }
-            productSkuRepository.deleteAll(existingSkus);
         }
 
         List<HealthBoxProductOptionValueVo> existingValues = productOptionValueRepository.findByProductIdOrderBySortOrderAscIdAsc(productId);
@@ -3281,10 +3314,13 @@ public class HealthBoxService {
         return valueByCode;
     }
 
-    private void createSkus(
+    private void syncSkus(
         HealthBoxProductVo product,
         List<HealthBoxProductSkuRequest> skuRequests,
-        Map<String, HealthBoxProductOptionValueVo> valueByCode
+        Map<String, HealthBoxProductOptionValueVo> valueByCode,
+        Map<Long, HealthBoxProductSkuVo> existingSkuById,
+        Map<String, HealthBoxProductSkuVo> existingSkuByCode,
+        Set<Long> retainedSkuIds
     ) {
         Set<String> usedSkuCodes = new HashSet<>();
 
@@ -3310,21 +3346,25 @@ public class HealthBoxService {
                 throw new IllegalArgumentException("sku safetyStock cannot be negative");
             }
 
-            String skuCode = resolveSkuCode(product.getProductCode(), skuRequest.getSkuCode(), optionValueCodes, usedSkuCodes);
-            HealthBoxProductSkuVo sku = new HealthBoxProductSkuVo();
-            sku.setProductId(product.getId());
-            sku.setSkuCode(skuCode);
-            sku.setSkuName(StringUtils.hasText(skuRequest.getSkuName()) ? skuRequest.getSkuName().trim() : buildSkuName(product.getName(), optionValueCodes, valueByCode));
-            sku.setStatus(StringUtils.hasText(skuRequest.getStatus()) ? skuRequest.getStatus().trim() : "ACTIVE");
-            sku.setConsumerPrice(skuRequest.getConsumerPrice() != null ? skuRequest.getConsumerPrice() : product.getConsumerPrice());
-            sku.setMemberPrice(skuRequest.getMemberPrice() != null ? skuRequest.getMemberPrice() : product.getMemberPrice());
-            sku.setSupplyPrice(skuRequest.getSupplyPrice() != null ? skuRequest.getSupplyPrice() : product.getSupplyPrice());
-            sku.setSettlementBasePrice(skuRequest.getSettlementBasePrice() != null ? skuRequest.getSettlementBasePrice() : product.getSettlementBasePrice());
-            sku.setStockQuantity(skuRequest.getStockQuantity() != null ? skuRequest.getStockQuantity() : 0);
-            sku.setSafetyStock(skuRequest.getSafetyStock() != null ? skuRequest.getSafetyStock() : 0);
-            sku.setSoldOutYn(StringUtils.hasText(skuRequest.getSoldOutYn()) ? skuRequest.getSoldOutYn().trim() : "N");
+            String requestedSkuCode = requestedSkuCode(product.getProductCode(), skuRequest.getSkuCode(), optionValueCodes);
+            HealthBoxProductSkuVo sku = findExistingSku(product.getId(), skuRequest, requestedSkuCode, existingSkuById, existingSkuByCode);
+            if (sku == null) {
+                sku = new HealthBoxProductSkuVo();
+            }
+            if (sku.getId() != null && retainedSkuIds.contains(sku.getId())) {
+                throw new IllegalArgumentException("duplicate sku in product request. skuId=" + sku.getId());
+            }
+            String skuCode = resolveStableSkuCode(requestedSkuCode, usedSkuCodes, sku.getId());
+            applySkuFields(
+                sku,
+                product,
+                skuRequest,
+                skuCode,
+                buildSkuName(product.getName(), optionValueCodes, valueByCode)
+            );
             sku = productSkuRepository.save(sku);
             usedSkuCodes.add(skuCode);
+            retainedSkuIds.add(sku.getId());
 
             for (String optionValueCode : optionValueCodes) {
                 HealthBoxProductOptionValueVo optionValue = valueByCode.get(optionValueCode);
@@ -3345,7 +3385,13 @@ public class HealthBoxService {
         }
     }
 
-    private void createDefaultSku(HealthBoxProductVo product, List<HealthBoxProductSkuRequest> skuRequests) {
+    private void syncDefaultSku(
+        HealthBoxProductVo product,
+        List<HealthBoxProductSkuRequest> skuRequests,
+        Map<Long, HealthBoxProductSkuVo> existingSkuById,
+        Map<String, HealthBoxProductSkuVo> existingSkuByCode,
+        Set<Long> retainedSkuIds
+    ) {
         HealthBoxProductSkuRequest skuRequest =
             (skuRequests != null && !skuRequests.isEmpty()) ? skuRequests.get(0) : null;
         if (skuRequest != null && skuRequest.getStockQuantity() != null && skuRequest.getStockQuantity() < 0) {
@@ -3357,31 +3403,99 @@ public class HealthBoxService {
 
         String requestedSkuCode = StringUtils.hasText(skuRequest != null ? skuRequest.getSkuCode() : null)
             ? skuRequest.getSkuCode().trim().toUpperCase(Locale.ROOT)
-            : null;
-        String skuCode = StringUtils.hasText(requestedSkuCode) ? requestedSkuCode : product.getProductCode() + "-DEFAULT";
-        if (productSkuRepository.findBySkuCode(skuCode).isPresent()) {
-            throw new IllegalArgumentException("sku code already exists. skuCode=" + skuCode);
+            : product.getProductCode() + "-DEFAULT";
+        HealthBoxProductSkuVo sku = findExistingSku(product.getId(), skuRequest, requestedSkuCode, existingSkuById, existingSkuByCode);
+        if (sku == null) {
+            sku = new HealthBoxProductSkuVo();
         }
+        String skuCode = resolveStableSkuCode(requestedSkuCode, Collections.emptySet(), sku.getId());
+        applySkuFields(sku, product, skuRequest, skuCode, product.getName());
+        sku = productSkuRepository.save(sku);
+        retainedSkuIds.add(sku.getId());
+    }
 
-        HealthBoxProductSkuVo sku = new HealthBoxProductSkuVo();
+    private String requestedSkuCode(String productCode, String requestedCode, List<String> optionValueCodes) {
+        return StringUtils.hasText(requestedCode)
+            ? requestedCode.trim().toUpperCase(Locale.ROOT)
+            : productCode + "-" + String.join("-", optionValueCodes);
+    }
+
+    private HealthBoxProductSkuVo findExistingSku(
+        Long productId,
+        HealthBoxProductSkuRequest request,
+        String requestedSkuCode,
+        Map<Long, HealthBoxProductSkuVo> existingSkuById,
+        Map<String, HealthBoxProductSkuVo> existingSkuByCode
+    ) {
+        if (request != null && request.getId() != null) {
+            HealthBoxProductSkuVo byId = existingSkuById.get(request.getId());
+            if (byId != null) {
+                if (!productId.equals(byId.getProductId())) {
+                    throw new IllegalArgumentException("sku does not belong to product. skuId=" + request.getId());
+                }
+                return byId;
+            }
+        }
+        return existingSkuByCode.get(requestedSkuCode.trim().toUpperCase(Locale.ROOT));
+    }
+
+    private String resolveStableSkuCode(String requestedSkuCode, Set<String> usedCodes, Long currentSkuId) {
+        String candidate = requestedSkuCode.trim().toUpperCase(Locale.ROOT);
+        String unique = candidate;
+        int suffix = 2;
+        while (usedCodes.contains(unique) || productSkuRepository.findBySkuCode(unique)
+            .filter(existing -> currentSkuId == null || !currentSkuId.equals(existing.getId()))
+            .isPresent()) {
+            unique = candidate + "-" + suffix;
+            suffix++;
+        }
+        return unique;
+    }
+
+    private void applySkuFields(
+        HealthBoxProductSkuVo sku,
+        HealthBoxProductVo product,
+        HealthBoxProductSkuRequest request,
+        String skuCode,
+        String fallbackName
+    ) {
         sku.setProductId(product.getId());
         sku.setSkuCode(skuCode);
-        sku.setSkuName(StringUtils.hasText(skuRequest != null ? skuRequest.getSkuName() : null)
-            ? skuRequest.getSkuName().trim()
-            : product.getName());
-        sku.setStatus(StringUtils.hasText(skuRequest != null ? skuRequest.getStatus() : null)
-            ? skuRequest.getStatus().trim()
+        sku.setSkuName(StringUtils.hasText(request != null ? request.getSkuName() : null)
+            ? request.getSkuName().trim()
+            : fallbackName);
+        sku.setStatus(StringUtils.hasText(request != null ? request.getStatus() : null)
+            ? request.getStatus().trim()
             : "ACTIVE");
-        sku.setConsumerPrice(skuRequest != null && skuRequest.getConsumerPrice() != null ? skuRequest.getConsumerPrice() : product.getConsumerPrice());
-        sku.setMemberPrice(skuRequest != null && skuRequest.getMemberPrice() != null ? skuRequest.getMemberPrice() : product.getMemberPrice());
-        sku.setSupplyPrice(skuRequest != null && skuRequest.getSupplyPrice() != null ? skuRequest.getSupplyPrice() : product.getSupplyPrice());
-        sku.setSettlementBasePrice(skuRequest != null && skuRequest.getSettlementBasePrice() != null ? skuRequest.getSettlementBasePrice() : product.getSettlementBasePrice());
-        sku.setStockQuantity(skuRequest != null && skuRequest.getStockQuantity() != null ? skuRequest.getStockQuantity() : 0);
-        sku.setSafetyStock(skuRequest != null && skuRequest.getSafetyStock() != null ? skuRequest.getSafetyStock() : 0);
-        sku.setSoldOutYn(StringUtils.hasText(skuRequest != null ? skuRequest.getSoldOutYn() : null)
-            ? skuRequest.getSoldOutYn().trim()
+        sku.setConsumerPrice(request != null && request.getConsumerPrice() != null ? request.getConsumerPrice() : product.getConsumerPrice());
+        sku.setMemberPrice(request != null && request.getMemberPrice() != null ? request.getMemberPrice() : product.getMemberPrice());
+        sku.setSupplyPrice(request != null && request.getSupplyPrice() != null ? request.getSupplyPrice() : product.getSupplyPrice());
+        sku.setSettlementBasePrice(request != null && request.getSettlementBasePrice() != null ? request.getSettlementBasePrice() : product.getSettlementBasePrice());
+        sku.setStockQuantity(request != null && request.getStockQuantity() != null ? request.getStockQuantity() : defaultInteger(sku.getStockQuantity(), 0));
+        sku.setSafetyStock(request != null && request.getSafetyStock() != null ? request.getSafetyStock() : defaultInteger(sku.getSafetyStock(), 0));
+        sku.setSoldOutYn(StringUtils.hasText(request != null ? request.getSoldOutYn() : null)
+            ? request.getSoldOutYn().trim()
             : "N");
-        productSkuRepository.save(sku);
+        sku.setDeletedYn("N");
+        sku.setDeletedAt(null);
+    }
+
+    private int defaultInteger(Integer value, int fallback) {
+        return value != null ? value : fallback;
+    }
+
+    private void retireUnusedSkus(List<HealthBoxProductSkuVo> existingSkus, Set<Long> retainedSkuIds) {
+        LocalDateTime retiredAt = LocalDateTime.now();
+        for (HealthBoxProductSkuVo existingSku : existingSkus) {
+            if (existingSku.getId() == null || retainedSkuIds.contains(existingSku.getId())) {
+                continue;
+            }
+            existingSku.setStatus("INACTIVE");
+            existingSku.setSoldOutYn("Y");
+            existingSku.setDeletedYn("Y");
+            existingSku.setDeletedAt(retiredAt);
+            productSkuRepository.save(existingSku);
+        }
     }
 
     private List<HealthBoxProductOptionGroupResponse> buildProductOptionGroupResponses(Long productId) {
@@ -3408,7 +3522,9 @@ public class HealthBoxService {
     }
 
     private List<HealthBoxProductSkuResponse> buildProductSkuResponses(Long productId) {
-        List<HealthBoxProductSkuVo> skus = productSkuRepository.findByProductIdOrderByIdAsc(productId);
+        List<HealthBoxProductSkuVo> skus = productSkuRepository.findByProductIdOrderByIdAsc(productId).stream()
+            .filter(sku -> !"Y".equalsIgnoreCase(sku.getDeletedYn()))
+            .collect(Collectors.toList());
         List<Long> skuIds = skus.stream().map(HealthBoxProductSkuVo::getId).collect(Collectors.toList());
         List<HealthBoxProductSkuOptionVo> skuOptions = skuIds.isEmpty() ? Collections.emptyList() : productSkuOptionRepository.findBySkuIdIn(skuIds);
         List<HealthBoxProductOptionValueVo> optionValues = productOptionValueRepository.findByProductIdOrderBySortOrderAscIdAsc(productId);
@@ -3459,6 +3575,8 @@ public class HealthBoxService {
 
     private Integer calculateTotalStockQuantity(Long productId) {
         return productSkuRepository.findByProductIdOrderByIdAsc(productId).stream()
+            .filter(sku -> !"Y".equalsIgnoreCase(sku.getDeletedYn()))
+            .filter(sku -> "ACTIVE".equalsIgnoreCase(sku.getStatus()))
             .map(HealthBoxProductSkuVo::getStockQuantity)
             .filter(java.util.Objects::nonNull)
             .reduce(0, Integer::sum);
@@ -4145,6 +4263,32 @@ public class HealthBoxService {
         return response;
     }
 
+    private HealthBoxProductSkuVo resolveCartSku(HealthBoxCartItemRequest request) {
+        HealthBoxProductSkuVo requestedSku = productSkuRepository.findById(request.getSkuId()).orElse(null);
+        if (requestedSku != null && !"Y".equalsIgnoreCase(requestedSku.getDeletedYn())) {
+            if (request.getProductId() != null && !request.getProductId().equals(requestedSku.getProductId())) {
+                throw new IllegalArgumentException("sku does not belong to product. skuId=" + request.getSkuId());
+            }
+            return requestedSku;
+        }
+
+        if (request.getProductId() == null) {
+            throw new IllegalArgumentException("sku not found. id=" + request.getSkuId());
+        }
+
+        HealthBoxProductVo product = productRepository.findById(request.getProductId())
+            .orElseThrow(() -> new IllegalArgumentException("product not found. id=" + request.getProductId()));
+        if ("Y".equalsIgnoreCase(product.getOptionUseYn())) {
+            throw new IllegalArgumentException("product options changed. productId=" + product.getId());
+        }
+
+        return productSkuRepository.findByProductIdOrderByIdAsc(product.getId()).stream()
+            .filter(sku -> !"Y".equalsIgnoreCase(sku.getDeletedYn()))
+            .filter(sku -> "ACTIVE".equalsIgnoreCase(sku.getStatus()))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("active sku not found. productId=" + product.getId()));
+    }
+
     private String maskMemberName(String name) {
         String normalizedName = name != null ? name.trim() : "";
         if (normalizedName.length() <= 1) {
@@ -4306,20 +4450,6 @@ public class HealthBoxService {
             suffix++;
         }
         localCodes.add(unique);
-        return unique;
-    }
-
-    private String resolveSkuCode(String productCode, String requestedCode, List<String> optionValueCodes, Set<String> usedCodes) {
-        String candidate = StringUtils.hasText(requestedCode)
-            ? requestedCode.trim().toUpperCase(Locale.ROOT)
-            : productCode + "-" + String.join("-", optionValueCodes);
-
-        String unique = candidate;
-        int suffix = 2;
-        while (usedCodes.contains(unique) || productSkuRepository.findBySkuCode(unique).isPresent()) {
-            unique = candidate + "-" + suffix;
-            suffix++;
-        }
         return unique;
     }
 
