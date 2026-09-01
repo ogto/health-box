@@ -52,7 +52,7 @@ export type AdminMemberDealerOption = {
   name: string;
 };
 
-type ApplicationFilter = "ALL" | "PENDING" | "APPROVED" | "REJECTED";
+type ApplicationStatus = "PENDING" | "APPROVED" | "REJECTED";
 type MemberFilter = "ALL" | "ACTIVE" | "INACTIVE";
 type DealerFilter = "ALL" | number;
 
@@ -62,7 +62,7 @@ function normalized(value: string) {
   return value.toLocaleLowerCase("ko-KR").replace(/\s+/g, " ").trim();
 }
 
-function applicationStatusKey(status: string): Exclude<ApplicationFilter, "ALL"> {
+function applicationStatusKey(status: string): ApplicationStatus {
   if (/^APPROVED$/i.test(status)) {
     return "APPROVED";
   }
@@ -435,7 +435,7 @@ function MemberApplicationAction({
   returnPath: string;
 }) {
   if (!actionsEnabled) {
-    return <span className="admin-row-muted">{applicationStatusKey(application.status) === "APPROVED" ? "자동 가입" : "처리 이력"}</span>;
+    return <span className="admin-row-muted">{application.statusLabel}</span>;
   }
 
   return (
@@ -469,31 +469,23 @@ function AdminMemberApplicationsBoard({
   items: AdminMemberApplicationListItem[];
 }) {
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<ApplicationFilter>("ALL");
   const [sort, setSort] = useState<"NEWEST" | "OLDEST">("NEWEST");
   const [page, setPage] = useState(1);
 
   const scopedItems = useMemo(
-    () => items.filter((item) => dealerFilter === "ALL" || item.dealerMallId === dealerFilter),
+    () => items.filter((item) =>
+      applicationStatusKey(item.status) === "PENDING"
+        && (dealerFilter === "ALL" || item.dealerMallId === dealerFilter)
+    ),
     [dealerFilter, items],
-  );
-  const counts = useMemo(
-    () => ({
-      ALL: scopedItems.length,
-      PENDING: scopedItems.filter((item) => applicationStatusKey(item.status) === "PENDING").length,
-      APPROVED: scopedItems.filter((item) => applicationStatusKey(item.status) === "APPROVED").length,
-      REJECTED: scopedItems.filter((item) => applicationStatusKey(item.status) === "REJECTED").length,
-    }),
-    [scopedItems],
   );
   const filteredItems = useMemo(() => {
     const keyword = normalized(query);
     const filtered = scopedItems.filter((item) => {
-      const matchesStatus = statusFilter === "ALL" || applicationStatusKey(item.status) === statusFilter;
       const searchTarget = normalized(
         [item.memberName, item.dealerName, item.phone, item.email, item.rejectReason].join(" "),
       );
-      return matchesStatus && (!keyword || searchTarget.includes(keyword));
+      return !keyword || searchTarget.includes(keyword);
     });
 
     return [...filtered].sort((left, right) =>
@@ -501,7 +493,7 @@ function AdminMemberApplicationsBoard({
         ? right.applicationId - left.applicationId
         : left.applicationId - right.applicationId,
     );
-  }, [query, scopedItems, sort, statusFilter]);
+  }, [query, scopedItems, sort]);
   const pageCount = Math.max(1, Math.ceil(filteredItems.length / MEMBER_PAGE_SIZE));
   const pagedItems = filteredItems.slice((page - 1) * MEMBER_PAGE_SIZE, page * MEMBER_PAGE_SIZE);
   const returnPath =
@@ -511,11 +503,11 @@ function AdminMemberApplicationsBoard({
 
   return (
     <AdminPanel
-      action={<span className="admin-dealer-panel-count">가입 완료 <strong>{counts.APPROVED}</strong>명</span>}
+      action={<span className="admin-dealer-panel-count">처리 대기 <strong>{scopedItems.length}</strong>건</span>}
       className="admin-dealer-directory-panel"
-      description="회원가입은 자동으로 처리됩니다. 가입 결과와 과거 처리 이력을 상태별로 확인할 수 있습니다."
+      description="가입 완료 회원은 아래 목록에서 확인하며, 이곳에는 아직 처리되지 않은 요청만 표시합니다."
       id="member-applications"
-      title="회원가입 처리 이력"
+      title="회원가입 요청"
     >
       <div className="admin-dealer-directory-toolbar">
         <SearchBox
@@ -528,10 +520,7 @@ function AdminMemberApplicationsBoard({
           value={query}
         />
         <div aria-label="회원 신청 상태 필터" className="admin-dealer-filter-chips" role="group">
-          <FilterChip active={statusFilter === "ALL"} count={counts.ALL} label="전체" onClick={() => { setStatusFilter("ALL"); setPage(1); }} />
-          <FilterChip active={statusFilter === "PENDING"} count={counts.PENDING} label="처리 대기" onClick={() => { setStatusFilter("PENDING"); setPage(1); }} />
-          <FilterChip active={statusFilter === "APPROVED"} count={counts.APPROVED} label="가입 완료" onClick={() => { setStatusFilter("APPROVED"); setPage(1); }} />
-          <FilterChip active={statusFilter === "REJECTED"} count={counts.REJECTED} label="반려" onClick={() => { setStatusFilter("REJECTED"); setPage(1); }} />
+          <FilterChip active count={scopedItems.length} label="처리 대기" onClick={() => setPage(1)} />
         </div>
         <select
           aria-label="회원 신청 정렬"
@@ -559,8 +548,8 @@ function AdminMemberApplicationsBoard({
                   <th>가입 경로</th>
                   <th>휴대폰 번호</th>
                   <th>이메일</th>
-                  <th>신청일</th>
-                  <th className="is-action">결과</th>
+                  <th>요청일</th>
+                  <th className="is-action">상태</th>
                 </tr>
               </thead>
               <tbody>
@@ -611,7 +600,7 @@ function AdminMemberApplicationsBoard({
                 <dl className="admin-member-card-contact">
                   <div><dt>휴대폰 번호</dt><dd title={application.phone}>{application.phone}</dd></div>
                   <div><dt>이메일</dt><dd title={application.email}>{application.email}</dd></div>
-                  <div><dt>신청일</dt><dd>{formatAdminDate(application.submittedAt)}</dd></div>
+                  <div><dt>요청일</dt><dd>{formatAdminDate(application.submittedAt)}</dd></div>
                 </dl>
 
                 <div className="admin-member-card-actions">
@@ -627,7 +616,7 @@ function AdminMemberApplicationsBoard({
 
           <Pagination onChange={setPage} page={page} pageCount={pageCount} />
         </>
-      ) : <EmptyResult>검색어, 조회 범위 또는 신청 상태를 변경해보세요.</EmptyResult>}
+      ) : <EmptyResult>조건에 맞는 처리 대기 회원가입 요청이 없습니다.</EmptyResult>}
     </AdminPanel>
   );
 }
@@ -816,7 +805,7 @@ export function AdminMembersDirectory({
         <div>
           <span>조회 범위</span>
           <strong>{selectedDealerName}</strong>
-          <p>선택한 범위가 회원가입 처리 이력과 가입 회원 목록에 함께 적용됩니다.</p>
+          <p>선택한 범위가 회원가입 요청과 가입 회원 목록에 함께 적용됩니다.</p>
         </div>
         <MemberScopePicker onChange={changeDealerFilter} options={dealerOptions} value={dealerFilter} />
       </div>

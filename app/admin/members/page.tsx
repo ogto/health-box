@@ -133,36 +133,38 @@ export default async function AdminMembersPage({
     };
   });
 
-  const applicationRows: AdminMemberApplicationListItem[] = (buyerApplications ?? []).map((application, index) => {
-    const applicationId = idValue(application, "id", "applicationId") ?? index + 1;
-    const rawDealerMallId = idValue(application, "dealerMallId");
-    const hqApplication = isHqBuyerApplication(application) || rawDealerMallId === 0;
-    const dealerMallId = hqApplication ? 0 : rawDealerMallId ?? -1;
-    const dealerName = hqApplication
-      ? "본사몰"
-      : stringValue(application, "dealerMallName", "mallName", "dealer") ||
-        (rawDealerMallId ? dealerNameById.get(rawDealerMallId) : "") ||
-        "가입 경로 미확인";
-    const status = applicationStatus(stringValue(application, "status"));
+  const applicationRows: AdminMemberApplicationListItem[] = (buyerApplications ?? [])
+    .filter((application) => applicationStatus(stringValue(application, "status")).raw === "PENDING")
+    .map((application, index) => {
+      const applicationId = idValue(application, "id", "applicationId") ?? index + 1;
+      const rawDealerMallId = idValue(application, "dealerMallId");
+      const hqApplication = isHqBuyerApplication(application) || rawDealerMallId === 0;
+      const dealerMallId = hqApplication ? 0 : rawDealerMallId ?? -1;
+      const dealerName = hqApplication
+        ? "본사몰"
+        : stringValue(application, "dealerMallName", "mallName", "dealer") ||
+          (rawDealerMallId ? dealerNameById.get(rawDealerMallId) : "") ||
+          "가입 경로 미확인";
+      const status = applicationStatus(stringValue(application, "status"));
 
-    return {
-      applicationId,
-      approvedAt: dateTimeValue(application, "approvedAt") || "-",
-      birthDate: stringValue(application, "birthDate") || "-",
-      consentVersion: stringValue(application, "consentDocumentVersion") || "-",
-      dealerMallId,
-      dealerName,
-      email: stringValue(application, "email") || "-",
-      marketingConsent: marketingConsent(stringValue(application, "marketingConsentYn")),
-      memberName: stringValue(application, "name", "buyerName") || "이름 없음",
-      phone: stringValue(application, "phone") || "-",
-      rejectReason: stringValue(application, "rejectReason"),
-      status: status.raw,
-      statusLabel: status.label,
-      statusTone: status.tone,
-      submittedAt: dateTimeValue(application, "appliedAt", "createdAt", "submittedAt", "requestedAt") || "-",
-    };
-  });
+      return {
+        applicationId,
+        approvedAt: dateTimeValue(application, "approvedAt") || "-",
+        birthDate: stringValue(application, "birthDate") || "-",
+        consentVersion: stringValue(application, "consentDocumentVersion") || "-",
+        dealerMallId,
+        dealerName,
+        email: stringValue(application, "email") || "-",
+        marketingConsent: marketingConsent(stringValue(application, "marketingConsentYn")),
+        memberName: stringValue(application, "name", "buyerName") || "이름 없음",
+        phone: stringValue(application, "phone") || "-",
+        rejectReason: stringValue(application, "rejectReason"),
+        status: status.raw,
+        statusLabel: status.label,
+        statusTone: status.tone,
+        submittedAt: dateTimeValue(application, "appliedAt", "createdAt", "submittedAt", "requestedAt") || "-",
+      };
+    });
 
   return (
     <div className="admin-page">
