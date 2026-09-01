@@ -8981,7 +8981,7 @@ select option:disabled {
 
 .admin-order-management-row {
   display: grid;
-  grid-template-columns: 180px repeat(5, minmax(0, max-content));
+  grid-template-columns: 180px repeat(6, minmax(0, max-content));
   gap: 12px 22px;
   align-items: center;
   min-height: 58px;
@@ -9693,6 +9693,21 @@ select option:disabled {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.admin-panel-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.admin-panel-title-row .admin-panel-title {
+  min-width: 0;
+}
+
+.admin-panel-title-action {
+  flex-shrink: 0;
 }
 
 .admin-panel-description {

@@ -28,6 +28,7 @@ export function AdminMetrics({ items }: { items: AdminMetric[] }) {
 export function AdminPanel({
   kicker,
   title,
+  titleAction,
   description,
   action,
   children,
@@ -36,6 +37,7 @@ export function AdminPanel({
 }: {
   kicker?: string;
   title: string;
+  titleAction?: ReactNode;
   description?: string;
   action?: ReactNode;
   children: ReactNode;
@@ -47,7 +49,10 @@ export function AdminPanel({
       <div className="admin-panel-head">
         <div className="admin-panel-copy">
           {kicker ? <p className="admin-panel-kicker">{kicker}</p> : null}
-          <h2 className="admin-panel-title">{title}</h2>
+          <div className="admin-panel-title-row">
+            <h2 className="admin-panel-title">{title}</h2>
+            {titleAction ? <div className="admin-panel-title-action">{titleAction}</div> : null}
+          </div>
           {description ? <p className="admin-panel-description">{description}</p> : null}
         </div>
         {action ? <div className="admin-panel-action">{action}</div> : null}

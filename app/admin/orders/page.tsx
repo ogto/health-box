@@ -3,7 +3,7 @@ import Link from "next/link";
 import { bulkPrepareShipmentsAction } from "../../_actions/health-box-admin";
 import { AdminHeader } from "../../_components/admin/admin-header";
 import { AdminReadOnlyNotice } from "../../_components/admin/admin-read-only-notice";
-import { AdminOrderBulkActions } from "../../_components/admin/admin-order-bulk-actions";
+import { AdminOrderBulkActions, AdminOrderSelectAllButton } from "../../_components/admin/admin-order-bulk-actions";
 import { AdminOrderExcelDownloadButton } from "../../_components/admin/admin-order-excel-download-button";
 import { AdminTableScrollMirror } from "../../_components/admin/admin-table-scroll-mirror";
 import { AdminBadge, AdminPanel, AdminTable } from "../../_components/admin/admin-ui";
@@ -373,6 +373,7 @@ export default async function AdminOrdersPage({
         }
         description={selectedTask ? `${orderTaskLabels[selectedTask]} 대상 주문입니다. 주문을 선택해 일괄 처리하거나 주문번호를 눌러 개별 처리하세요.` : undefined}
         title={`${selectedTask ? `${orderTaskLabels[selectedTask]} · ` : ""}목록 (총 ${filteredOrderRows.length.toLocaleString("ko-KR")}건)`}
+        titleAction={!readOnly && selectedTask !== "unpaid" ? <AdminOrderSelectAllButton formId={bulkPrepareFormId} /> : null}
       >
         <form action={readOnly || (selectedTask && selectedTask !== "prepare") ? undefined : bulkPrepareShipmentsAction} id={bulkPrepareFormId}>
           <input name="redirectTo" type="hidden" value={buildOrdersHref({ dateFrom, dateTo, dealerMallId: selectedDealer?.id, status: selectedStatus, task: selectedTask })} />

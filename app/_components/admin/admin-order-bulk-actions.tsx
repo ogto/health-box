@@ -32,6 +32,29 @@ const taskLabels: Record<string, string> = {
   exchangeProcess: "교환접수 후 처리",
 };
 
+function selectableOrderCheckboxes(formId: string) {
+  const form = document.getElementById(formId);
+  if (!(form instanceof HTMLFormElement)) return [];
+  return Array.from(form.querySelectorAll<HTMLInputElement>('input[data-admin-order-select="true"]:not(:disabled)'));
+}
+
+export function AdminOrderSelectAllButton({ formId }: { formId: string }) {
+  function toggleAll() {
+    const checkboxes = selectableOrderCheckboxes(formId);
+    const shouldCheck = checkboxes.some((checkbox) => !checkbox.checked);
+    checkboxes.forEach((checkbox) => {
+      checkbox.checked = shouldCheck;
+      checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+
+  return (
+    <button className="admin-button secondary small" onClick={toggleAll} type="button">
+      전체 선택
+    </button>
+  );
+}
+
 export function AdminOrderBulkActions({
   formId,
   redirectTo = "/admin/orders",
@@ -48,18 +71,7 @@ export function AdminOrderBulkActions({
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
   function selectableCheckboxes() {
-    const form = document.getElementById(formId);
-    if (!(form instanceof HTMLFormElement)) return [];
-    return Array.from(form.querySelectorAll<HTMLInputElement>('input[data-admin-order-select="true"]:not(:disabled)'));
-  }
-
-  function syncSelection() {
-    setSelectedIds(
-      selectableCheckboxes()
-        .filter((checkbox) => checkbox.checked)
-        .map((checkbox) => Number(checkbox.dataset.orderId))
-        .filter((value) => Number.isFinite(value) && value > 0),
-    );
+    return selectableOrderCheckboxes(formId);
   }
 
   useEffect(() => {
@@ -90,15 +102,6 @@ export function AdminOrderBulkActions({
     () => rows.filter((row) => selectedIds.includes(row.orderId)),
     [rows, selectedIds],
   );
-
-  function toggleAll() {
-    const checkboxes = selectableCheckboxes();
-    const shouldCheck = checkboxes.some((checkbox) => !checkbox.checked);
-    checkboxes.forEach((checkbox) => {
-      checkbox.checked = shouldCheck;
-    });
-    syncSelection();
-  }
 
   function openBulkDialog() {
     const checkedIds = selectableCheckboxes()
@@ -131,9 +134,6 @@ export function AdminOrderBulkActions({
   if (!task || task === "prepare") {
     return (
       <div className="admin-order-bulk-actions">
-        <button className="admin-button secondary small" onClick={toggleAll} type="button">
-          전체 선택
-        </button>
         <AdminConfirmSubmitButton
           className="admin-button small"
           confirmMessage="선택한 주문을 모두 상품 준비중 상태로 변경할까요?"
@@ -154,9 +154,6 @@ export function AdminOrderBulkActions({
     <>
       <div className="admin-order-bulk-actions">
         <span className="admin-order-selected-count">선택 {selectedIds.length}건</span>
-        <button className="admin-button secondary small" onClick={toggleAll} type="button">
-          전체 선택
-        </button>
         <button className={`admin-button small${dangerous ? " danger" : ""}`} onClick={openBulkDialog} type="button">
           선택 주문 {taskLabel}
         </button>
