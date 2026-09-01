@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useId, useState } from "react";
 
 import { addMemberCartItemsToServer, dispatchMemberCartSync } from "../_lib/member-cart";
 
@@ -21,7 +22,10 @@ export function MemberReorderButton({
   skuId: number;
   unitPrice: number;
 }) {
+  const router = useRouter();
+  const titleId = useId();
   const [message, setMessage] = useState("");
+  const [showCartAddedModal, setShowCartAddedModal] = useState(false);
 
   async function addToCart() {
     if (!skuId || unitPrice <= 0) {
@@ -42,7 +46,7 @@ export function MemberReorderButton({
         },
       ]);
       dispatchMemberCartSync();
-      setMessage("장바구니에 담았습니다.");
+      setShowCartAddedModal(true);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "장바구니에 담지 못했습니다.");
     }
@@ -54,6 +58,22 @@ export function MemberReorderButton({
         장바구니 담기
       </button>
       {message ? <span>{message}</span> : null}
+      {showCartAddedModal ? (
+        <div className="shop-login-modal-backdrop" role="presentation">
+          <div aria-labelledby={titleId} aria-modal="true" className="shop-login-modal" role="dialog">
+            <strong id={titleId}>장바구니에 담았습니다</strong>
+            <p>장바구니로 이동해서 담은 상품을 확인하시겠어요?</p>
+            <div className="shop-login-modal-actions">
+              <button className="button-secondary" onClick={() => setShowCartAddedModal(false)} type="button">
+                계속 보기
+              </button>
+              <button className="button-primary" onClick={() => router.push("/cart")} type="button">
+                장바구니 보기
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

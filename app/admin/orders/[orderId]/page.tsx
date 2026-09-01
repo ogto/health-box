@@ -125,9 +125,13 @@ function paymentStatusLabel(value: unknown) {
   return labels[status] || String(value || "-");
 }
 
-function orderDisplayStatusLabel(orderStatus: unknown, paymentStatus: unknown, shipmentStatus: unknown) {
+function orderDisplayStatusLabel(orderStatus: unknown, paymentStatus: unknown, shipmentStatus: unknown, claimStatus?: unknown) {
   const orderStatusText = String(orderStatus || "").toUpperCase();
   const paymentStatusText = String(paymentStatus || "").toUpperCase();
+
+  if (String(claimStatus || "").toUpperCase() === "REQUESTED") {
+    return "취소 요청";
+  }
 
   if (/PARTIALLY_CANCELED/.test(orderStatusText) || /PARTIALLY_CANCELED/.test(paymentStatusText)) {
     return "부분취소";
@@ -177,8 +181,10 @@ export default async function AdminOrderDetailPage({
   const shipmentStatus = stringValue(order, "shipmentStatus") || "PENDING";
   const orderStatus = stringValue(order, "orderStatus", "status");
   const paymentStatus = stringValue(order, "paymentStatus");
-  const statusTone = toneFromStatus(`${orderStatus} ${shipmentStatus}`);
-  const displayStatus = orderDisplayStatusLabel(orderStatus, paymentStatus, shipmentStatus);
+  const claimStatus = stringValue(order, "claimStatus");
+  const normalizedClaimStatus = claimStatus.toUpperCase();
+  const statusTone = toneFromStatus(`${orderStatus} ${shipmentStatus} ${claimStatus}`);
+  const displayStatus = orderDisplayStatusLabel(orderStatus, paymentStatus, shipmentStatus, claimStatus);
   const items = Array.isArray(order.items) ? (order.items as Array<Record<string, unknown>>) : [];
   const shipmentId = idValue(order, "shipmentId");
   const cancelableItems = items.filter((item) => remainingQuantity(item) > 0 && idValue(item, "id"));
@@ -240,6 +246,10 @@ export default async function AdminOrderDetailPage({
               <div className="admin-status-row">
                 <span>취소금액</span>
                 <strong>{formatWon(numberValue(order, "canceledPaymentAmount"))}</strong>
+              </div>
+              <div className="admin-status-row">
+                <span>취소 요청</span>
+                <strong>{normalizedClaimStatus === "REQUESTED" ? "처리 대기" : normalizedClaimStatus === "APPLIED" ? "처리 완료" : "-"}</strong>
               </div>
             </div>
           </div>

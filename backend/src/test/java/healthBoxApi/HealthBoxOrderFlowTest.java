@@ -5,6 +5,8 @@ import healthBoxApi.dto.HealthBoxOrderCreateRequest;
 import healthBoxApi.dto.HealthBoxOrderDetailResponse;
 import healthBoxApi.dto.HealthBoxOrderPaymentRequest;
 import healthBoxApi.dto.HealthBoxOrderQuoteResponse;
+import healthBoxApi.dto.HealthBoxBuyerOrderCancelRequest;
+import healthBoxApi.dto.HealthBoxOrderCancellationResponse;
 import healthBoxApi.payment.HealthBoxPaymentResponse;
 import healthBoxApi.payment.HealthBoxPaymentService;
 import healthBoxApi.repository.*;
@@ -12,6 +14,7 @@ import healthBoxApi.vo.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -58,6 +61,7 @@ class HealthBoxOrderFlowTest {
     @Mock private HealthBoxOrderItemRepository orderItemRepository;
     @Mock private HealthBoxPaymentRepository paymentRepository;
     @Mock private HealthBoxPaymentCancelRequestRepository paymentCancelRequestRepository;
+    @Mock private HealthBoxClaimRepository claimRepository;
     @Mock private HealthBoxPaymentService paymentService;
     @Mock private HealthBoxShipmentRepository shipmentRepository;
     @Mock private HealthBoxShipmentItemRepository shipmentItemRepository;
@@ -158,6 +162,69 @@ class HealthBoxOrderFlowTest {
         verify(paymentService, never()).getLivePayment(any());
     }
 
+    @Test
+    void immediatelyCancelsBuyerOrderWhileShipmentIsPending() throws Exception {
+        mockBuyerSession(0L);
+        HealthBoxOrderVo order = paidOrder("ORDERED");
+        HealthBoxShipmentVo shipment = shipment("PENDING");
+        HealthBoxOrderItemVo item = orderItem();
+        HealthBoxPaymentVo payment = orderPayment();
+        HealthBoxProductSkuVo sku = sku();
+        sku.setStockQuantity(19);
+        HealthBoxPaymentResponse canceledPayment = new HealthBoxPaymentResponse();
+        canceledPayment.setStatus("CANCELED");
+
+        when(orderRepository.findBuyerOrderWithLock(42L, 1L, 0L)).thenReturn(Optional.of(order));
+        when(orderRepository.findById(42L)).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId(42L)).thenReturn(Optional.of(shipment));
+        when(orderItemRepository.findByOrderIdOrderByIdAsc(42L)).thenReturn(Collections.singletonList(item));
+        when(paymentRepository.findTopByOrderIdOrderByIdDesc(42L)).thenReturn(Optional.of(payment));
+        when(productSkuRepository.findWithLockById(145L)).thenReturn(Optional.of(sku));
+        when(paymentService.cancelLivePayment("live-payment-key", "판매자 주문 전체 취소", null, "healthbox-full-cancel-42"))
+            .thenReturn(canceledPayment);
+        when(orderRepository.save(any(HealthBoxOrderVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderItemRepository.save(any(HealthBoxOrderItemVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(paymentRepository.save(any(HealthBoxPaymentVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productSkuRepository.save(any(HealthBoxProductSkuVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(shipmentRepository.save(any(HealthBoxShipmentVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(claimRepository.save(any(HealthBoxClaimVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        HealthBoxOrderCancellationResponse response = service.requestBuyerOrderCancellation(42L, cancellationRequest());
+
+        assertEquals("CANCELED", response.getAction());
+        assertEquals("CANCELED", order.getOrderStatus());
+        assertEquals("CANCELED", shipment.getShipmentStatus());
+        assertEquals(Integer.valueOf(0), order.getRemainingPaymentAmount());
+        assertEquals(Integer.valueOf(20), sku.getStockQuantity());
+        verify(paymentService).cancelLivePayment(
+            "live-payment-key",
+            "판매자 주문 전체 취소",
+            null,
+            "healthbox-full-cancel-42"
+        );
+    }
+
+    @Test
+    void createsCancellationRequestAfterProductPreparationStarts() throws Exception {
+        mockBuyerSession(0L);
+        HealthBoxOrderVo order = paidOrder("ORDERED");
+        HealthBoxShipmentVo shipment = shipment("PREPARING");
+        when(orderRepository.findBuyerOrderWithLock(42L, 1L, 0L)).thenReturn(Optional.of(order));
+        when(shipmentRepository.findByOrderId(42L)).thenReturn(Optional.of(shipment));
+        when(orderItemRepository.findByOrderIdOrderByIdAsc(42L)).thenReturn(Collections.singletonList(orderItem()));
+        when(claimRepository.save(any(HealthBoxClaimVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        HealthBoxOrderCancellationResponse response = service.requestBuyerOrderCancellation(42L, cancellationRequest());
+
+        ArgumentCaptor<HealthBoxClaimVo> claimCaptor = ArgumentCaptor.forClass(HealthBoxClaimVo.class);
+        verify(claimRepository).save(claimCaptor.capture());
+        assertEquals("REQUESTED", response.getAction());
+        assertEquals("REQUESTED", claimCaptor.getValue().getStatus());
+        assertEquals("CANCEL", claimCaptor.getValue().getClaimType());
+        assertEquals(Integer.valueOf(60000), claimCaptor.getValue().getAmount());
+        verify(paymentService, never()).cancelLivePayment(any(), any(), any(), any());
+    }
+
     private void mockBuyerSession(Long dealerMallId) {
         HealthBoxBuyerMemberVo buyer = new HealthBoxBuyerMemberVo();
         buyer.setId(1L);
@@ -191,6 +258,80 @@ class HealthBoxOrderFlowTest {
         request.setDiscountAmount(0);
         request.setTotalPaymentAmount(60000);
         return request;
+    }
+
+    private HealthBoxBuyerOrderCancelRequest cancellationRequest() {
+        HealthBoxBuyerOrderCancelRequest request = new HealthBoxBuyerOrderCancelRequest();
+        request.setBuyerMemberId(1L);
+        request.setDealerMallId(0L);
+        request.setSessionToken("session-token");
+        request.setReason("회원 주문 취소");
+        return request;
+    }
+
+    private HealthBoxOrderVo paidOrder(String orderStatus) {
+        HealthBoxOrderVo order = new HealthBoxOrderVo();
+        order.setId(42L);
+        order.setOrderNo("2026090100000042");
+        order.setBuyerMemberId(1L);
+        order.setDealerMallId(0L);
+        order.setDealerSlugSnapshot("everybuy.co.kr");
+        order.setDealerNameSnapshot("본사몰");
+        order.setOrdererName("테스트 회원");
+        order.setOrdererPhone("01012345678");
+        order.setReceiverName("테스트 회원");
+        order.setReceiverPhone("01012345678");
+        order.setBaseAddress("서울특별시 종로구 테스트로 1");
+        order.setPaymentStatus("PAID");
+        order.setOrderStatus(orderStatus);
+        order.setOrderedAt(LocalDateTime.now());
+        order.setProductAmount(60000);
+        order.setShippingFee(0);
+        order.setDiscountAmount(0);
+        order.setTotalPaymentAmount(60000);
+        order.setRemainingPaymentAmount(60000);
+        order.setCanceledPaymentAmount(0);
+        return order;
+    }
+
+    private HealthBoxShipmentVo shipment(String status) {
+        HealthBoxShipmentVo shipment = new HealthBoxShipmentVo();
+        shipment.setId(168L);
+        shipment.setOrderId(42L);
+        shipment.setShipmentStatus(status);
+        return shipment;
+    }
+
+    private HealthBoxOrderItemVo orderItem() {
+        HealthBoxOrderItemVo item = new HealthBoxOrderItemVo();
+        item.setId(84L);
+        item.setOrderId(42L);
+        item.setProductId(10L);
+        item.setSkuId(145L);
+        item.setSkuCodeSnapshot("HB-P-000010-DEFAULT");
+        item.setSkuNameSnapshot("상품");
+        item.setProductNameSnapshot("엠에스엠 골드 1550");
+        item.setPriceSnapshot(60000);
+        item.setQuantity(1);
+        item.setCanceledQuantity(0);
+        item.setLineAmount(60000);
+        return item;
+    }
+
+    private HealthBoxPaymentVo orderPayment() {
+        HealthBoxPaymentVo payment = new HealthBoxPaymentVo();
+        payment.setId(126L);
+        payment.setOrderId(42L);
+        payment.setBuyerMemberId(1L);
+        payment.setDealerMallId(0L);
+        payment.setOrderNo("2026090100000042");
+        payment.setProvider("TOSS");
+        payment.setPaymentKey("live-payment-key");
+        payment.setStatus("PAID");
+        payment.setPaidAmount(60000);
+        payment.setCanceledAmount(0);
+        payment.setRemainingAmount(60000);
+        return payment;
     }
 
     private HealthBoxOrderCreateRequest orderRequestWithoutPayment(Long dealerMallId) {

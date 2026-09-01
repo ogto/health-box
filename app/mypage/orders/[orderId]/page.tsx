@@ -3,6 +3,7 @@ import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
 
 import { MemberAccountLayout } from "../../../_components/member-account-layout";
+import { MemberOrderCancelButton } from "../../../_components/member-order-cancel-button";
 import { MemberOrderComingSoonButton, MemberReorderButton } from "../../../_components/member-reorder-button";
 import { Breadcrumbs, StoreShell } from "../../../_components/store-ui";
 import { healthBoxFetch, type HealthBoxRecord } from "../../../_lib/health-box-api";
@@ -141,6 +142,10 @@ function customerOrderStatusLabel(order: HealthBoxRecord) {
   const orderStatus = String(order.orderStatus || "").toUpperCase();
   const shipmentStatus = String(order.shipmentStatus || "").toUpperCase();
 
+  if (String(order.claimStatus || "").toUpperCase() === "REQUESTED") {
+    return "취소 요청";
+  }
+
   if (/CANCELED/.test(orderStatus)) {
     return orderStatusLabel(orderStatus);
   }
@@ -176,6 +181,9 @@ function orderStatusDetail(order: HealthBoxRecord) {
 
 function statusToneClass(order: HealthBoxRecord) {
   const status = `${order.orderStatus || ""} ${order.shipmentStatus || ""} ${order.paymentStatus || ""}`.toUpperCase();
+  if (String(order.claimStatus || "").toUpperCase() === "REQUESTED") {
+    return "is-cancel-requested";
+  }
   if (/CANCELED/.test(status)) {
     return "is-canceled";
   }
@@ -189,6 +197,12 @@ function statusToneClass(order: HealthBoxRecord) {
     return "is-preparing";
   }
   return "is-pending";
+}
+
+function canCancelImmediately(order: HealthBoxRecord) {
+  const orderStatus = String(order.orderStatus || "ORDERED").toUpperCase();
+  const shipmentStatus = String(order.shipmentStatus || "PENDING").toUpperCase();
+  return orderStatus === "ORDERED" && ["PENDING", "ORDERED"].includes(shipmentStatus);
 }
 
 function orderActionMode(order: HealthBoxRecord) {
@@ -343,7 +357,7 @@ export default async function MemberOrderDetailPage({
             </div>
 
             <section className="account-order-product-list order-detail-product-card">
-              {items.map((item) => (
+              {items.map((item, itemIndex) => (
                 <div
                   className={`account-order-product-row${orderActionMode(order) === "canceled" ? " is-canceled" : ""}`}
                   key={String(item.id || item.skuId)}
@@ -382,12 +396,25 @@ export default async function MemberOrderDetailPage({
                     <div className="account-order-product-actions">
                       {orderActionMode(order) === "ready" ? (
                         <>
-                          <MemberOrderComingSoonButton>취소 요청</MemberOrderComingSoonButton>
+                          {itemIndex === 0 ? (
+                            <MemberOrderCancelButton
+                              claimStatus={String(order.claimStatus || "")}
+                              immediate={canCancelImmediately(order)}
+                              orderId={Number(order.id || orderId)}
+                            />
+                          ) : null}
                           <MemberOrderComingSoonButton>리뷰 작성하기</MemberOrderComingSoonButton>
                         </>
                       ) : null}
                       {orderActionMode(order) === "delivery" ? (
                         <>
+                          {itemIndex === 0 ? (
+                            <MemberOrderCancelButton
+                              claimStatus={String(order.claimStatus || "")}
+                              immediate={false}
+                              orderId={Number(order.id || orderId)}
+                            />
+                          ) : null}
                           {shouldShowTracking(order) ? (
                             <Link className="is-delivery" href={`/mypage/orders/${String(order.id || orderId)}/tracking`}>
                               배송 조회

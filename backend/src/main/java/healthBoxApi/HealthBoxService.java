@@ -13,6 +13,7 @@ import healthBoxApi.dto.HealthBoxBuyerLoginRequest;
 import healthBoxApi.dto.HealthBoxBuyerLoginResponse;
 import healthBoxApi.dto.HealthBoxBuyerPasswordResetRequest;
 import healthBoxApi.dto.HealthBoxBuyerProfileUpdateRequest;
+import healthBoxApi.dto.HealthBoxBuyerOrderCancelRequest;
 import healthBoxApi.dto.HealthBoxBuyerAddressRequest;
 import healthBoxApi.dto.HealthBoxBuyerAddressResponse;
 import healthBoxApi.dto.HealthBoxBuyerSignupCreateRequest;
@@ -30,6 +31,7 @@ import healthBoxApi.dto.HealthBoxNoticeSaveRequest;
 import healthBoxApi.dto.HealthBoxOrderCreateItemRequest;
 import healthBoxApi.dto.HealthBoxOrderCreateRequest;
 import healthBoxApi.dto.HealthBoxOrderCancelItemRequest;
+import healthBoxApi.dto.HealthBoxOrderCancellationResponse;
 import healthBoxApi.dto.HealthBoxOrderDetailResponse;
 import healthBoxApi.dto.HealthBoxOrderItemResponse;
 import healthBoxApi.dto.HealthBoxOrderPartialCancelRequest;
@@ -131,6 +133,7 @@ public class HealthBoxService {
     private final HealthBoxOrderItemRepository orderItemRepository;
     private final HealthBoxPaymentRepository paymentRepository;
     private final HealthBoxPaymentCancelRequestRepository paymentCancelRequestRepository;
+    private final HealthBoxClaimRepository claimRepository;
     private final HealthBoxPaymentService paymentService;
     private final HealthBoxShipmentRepository shipmentRepository;
     private final HealthBoxShipmentItemRepository shipmentItemRepository;
@@ -164,6 +167,7 @@ public class HealthBoxService {
         HealthBoxOrderItemRepository orderItemRepository,
         HealthBoxPaymentRepository paymentRepository,
         HealthBoxPaymentCancelRequestRepository paymentCancelRequestRepository,
+        HealthBoxClaimRepository claimRepository,
         HealthBoxPaymentService paymentService,
         HealthBoxShipmentRepository shipmentRepository,
         HealthBoxShipmentItemRepository shipmentItemRepository,
@@ -196,6 +200,7 @@ public class HealthBoxService {
         this.orderItemRepository = orderItemRepository;
         this.paymentRepository = paymentRepository;
         this.paymentCancelRequestRepository = paymentCancelRequestRepository;
+        this.claimRepository = claimRepository;
         this.paymentService = paymentService;
         this.shipmentRepository = shipmentRepository;
         this.shipmentItemRepository = shipmentItemRepository;
@@ -1592,6 +1597,7 @@ public class HealthBoxService {
         if ("CANCELED".equalsIgnoreCase(order.getOrderStatus())) {
             List<HealthBoxOrderItemVo> existingItems = orderItemRepository.findByOrderIdOrderByIdAsc(orderId);
             HealthBoxShipmentVo existingShipment = shipmentRepository.findByOrderId(orderId).orElse(null);
+            markCancelClaimApplied(orderId);
             return buildOrderDetailResponse(order, existingShipment, existingItems);
         }
 
@@ -1615,6 +1621,7 @@ public class HealthBoxService {
 
         recalculateOrderAfterCancellation(order);
         HealthBoxShipmentVo shipment = updateShipmentAfterCancellation(orderId, order.getOrderStatus());
+        markCancelClaimApplied(orderId);
         return buildOrderDetailResponse(order, shipment, items);
     }
 
@@ -1705,6 +1712,78 @@ public class HealthBoxService {
         HealthBoxShipmentVo shipment = updateShipmentAfterCancellation(orderId, order.getOrderStatus());
         List<HealthBoxOrderItemVo> items = orderItemRepository.findByOrderIdOrderByIdAsc(orderId);
         return buildOrderDetailResponse(order, shipment, items);
+    }
+
+    @Transactional
+    public HealthBoxOrderCancellationResponse requestBuyerOrderCancellation(
+        Long orderId,
+        HealthBoxBuyerOrderCancelRequest request
+    ) {
+        if (
+            request == null ||
+            request.getBuyerMemberId() == null ||
+            request.getDealerMallId() == null
+        ) {
+            throw new IllegalArgumentException("buyer cancellation request is required");
+        }
+
+        validateBuyerAccess(
+            request.getBuyerMemberId(),
+            request.getDealerMallId(),
+            request.getSessionToken()
+        );
+        HealthBoxOrderVo order = orderRepository
+            .findBuyerOrderWithLock(
+                orderId,
+                request.getBuyerMemberId(),
+                request.getDealerMallId()
+            )
+            .orElseThrow(() -> new IllegalArgumentException("order not found. id=" + orderId));
+        HealthBoxShipmentVo shipment = shipmentRepository.findByOrderId(orderId).orElse(null);
+
+        if ("CANCELED".equalsIgnoreCase(order.getOrderStatus())) {
+            markCancelClaimApplied(orderId);
+            return cancellationResponse(
+                "CANCELED",
+                "이미 취소가 완료된 주문입니다.",
+                buildOrderDetailResponse(order)
+            );
+        }
+
+        HealthBoxClaimVo existingClaim = claimRepository
+            .findTopByOrderIdAndClaimTypeOrderByIdDesc(orderId, "CANCEL")
+            .orElse(null);
+        if (existingClaim != null && "REQUESTED".equalsIgnoreCase(existingClaim.getStatus())) {
+            return cancellationResponse(
+                "REQUESTED",
+                "이미 취소 요청이 접수되어 있습니다.",
+                buildOrderDetailResponse(order, shipment, orderItemRepository.findByOrderIdOrderByIdAsc(orderId))
+            );
+        }
+
+        String reason = StringUtils.hasText(request.getReason())
+            ? request.getReason().trim()
+            : "회원 주문 취소";
+
+        if (canBuyerCancelImmediately(order, shipment)) {
+            HealthBoxClaimVo appliedClaim = createCancelClaim(order, "APPLIED", reason);
+            cancelOrder(orderId);
+            appliedClaim.setProcessedAt(LocalDateTime.now());
+            claimRepository.save(appliedClaim);
+            return cancellationResponse(
+                "CANCELED",
+                "주문과 결제가 즉시 취소되었습니다.",
+                buildOrderDetailResponse(order)
+            );
+        }
+
+        HealthBoxClaimVo requestedClaim = createCancelClaim(order, "REQUESTED", reason);
+        claimRepository.save(requestedClaim);
+        return cancellationResponse(
+            "REQUESTED",
+            "취소 요청이 접수되었습니다. 판매자 확인 후 처리됩니다.",
+            buildOrderDetailResponse(order, shipment, orderItemRepository.findByOrderIdOrderByIdAsc(orderId))
+        );
     }
 
     public List<HealthBoxOrderDetailResponse> getBuyerOrders(Long buyerMemberId, Long dealerMallId, String sessionToken) {
@@ -3773,6 +3852,51 @@ public class HealthBoxService {
         );
     }
 
+    private boolean canBuyerCancelImmediately(HealthBoxOrderVo order, HealthBoxShipmentVo shipment) {
+        String orderStatus = defaultText(order.getOrderStatus(), "ORDERED").toUpperCase(Locale.ROOT);
+        String shipmentStatus = shipment != null
+            ? defaultText(shipment.getShipmentStatus(), "PENDING").toUpperCase(Locale.ROOT)
+            : "PENDING";
+        return "ORDERED".equals(orderStatus)
+            && ("PENDING".equals(shipmentStatus) || "ORDERED".equals(shipmentStatus));
+    }
+
+    private HealthBoxClaimVo createCancelClaim(HealthBoxOrderVo order, String status, String reason) {
+        HealthBoxClaimVo claim = new HealthBoxClaimVo();
+        claim.setOrderId(order.getId());
+        claim.setDealerMallId(order.getDealerMallId());
+        claim.setBuyerMemberId(order.getBuyerMemberId());
+        claim.setClaimType("CANCEL");
+        claim.setStatus(status);
+        claim.setAmount(order.getRemainingPaymentAmount() != null ? order.getRemainingPaymentAmount() : 0);
+        claim.setReason(reason);
+        return claim;
+    }
+
+    private void markCancelClaimApplied(Long orderId) {
+        HealthBoxClaimVo claim = claimRepository
+            .findTopByOrderIdAndClaimTypeOrderByIdDesc(orderId, "CANCEL")
+            .orElse(null);
+        if (claim == null || !"REQUESTED".equalsIgnoreCase(claim.getStatus())) {
+            return;
+        }
+        claim.setStatus("APPLIED");
+        claim.setProcessedAt(LocalDateTime.now());
+        claimRepository.save(claim);
+    }
+
+    private HealthBoxOrderCancellationResponse cancellationResponse(
+        String action,
+        String message,
+        HealthBoxOrderDetailResponse order
+    ) {
+        HealthBoxOrderCancellationResponse response = new HealthBoxOrderCancellationResponse();
+        response.setAction(action);
+        response.setMessage(message);
+        response.setOrder(order);
+        return response;
+    }
+
     private HealthBoxOrderDetailResponse buildOrderDetailResponse(HealthBoxOrderVo order) {
         HealthBoxShipmentVo shipment = shipmentRepository.findByOrderId(order.getId()).orElse(null);
         List<HealthBoxOrderItemVo> items = orderItemRepository.findByOrderIdOrderByIdAsc(order.getId());
@@ -3824,6 +3948,15 @@ public class HealthBoxService {
             response.setTrackingNo(shipment.getTrackingNo());
             response.setShippedAt(shipment.getShippedAt());
             response.setDeliveredAt(shipment.getDeliveredAt());
+        }
+        HealthBoxClaimVo claim = claimRepository
+            .findTopByOrderIdAndClaimTypeOrderByIdDesc(order.getId(), "CANCEL")
+            .orElse(null);
+        if (claim != null) {
+            response.setClaimType(claim.getClaimType());
+            response.setClaimStatus(claim.getStatus());
+            response.setClaimReason(claim.getReason());
+            response.setClaimRequestedAt(claim.getCreatedAt());
         }
         response.setItems(items.stream().map(this::buildOrderItemResponse).collect(Collectors.toList()));
         return response;

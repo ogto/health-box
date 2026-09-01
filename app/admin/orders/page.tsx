@@ -103,7 +103,7 @@ function matchesStatus(row: ReturnType<typeof mapOrderRows>[number], status: str
     return true;
   }
 
-  const text = `${row.orderStatus} ${row.shipmentStatus} ${row.status}`.toUpperCase();
+  const text = `${row.orderStatus} ${row.shipmentStatus} ${row.status} ${row.claimStatus}`.toUpperCase();
   if (status === "CANCELED") {
     return /CANCELED|취소/.test(text);
   }
@@ -161,7 +161,11 @@ export default async function AdminOrdersPage({
 
     return {
       amount: order.amount,
-      claimStatus: /취소|CANCELED/i.test(`${order.orderStatus} ${order.shipmentStatus} ${order.status}`) ? "취소" : "-",
+      claimStatus: /REQUESTED/i.test(order.claimStatus)
+        ? "취소 요청"
+        : /취소|CANCELED/i.test(`${order.orderStatus} ${order.shipmentStatus} ${order.status}`)
+          ? "취소"
+          : "-",
       company: order.company,
       deliveryType: "일반배송",
       option: firstItem?.option || "없음",
@@ -322,7 +326,13 @@ export default async function AdminOrdersPage({
                     <strong className="admin-row-price">{order.amount}</strong>
                   </div>
                   <div className="admin-row-stack">
-                    <span>{/취소|CANCELED/i.test(`${order.orderStatus} ${order.shipmentStatus} ${order.status}`) ? "취소" : "-"}</span>
+                    <span>
+                      {/REQUESTED/i.test(order.claimStatus)
+                        ? "취소 요청"
+                        : /취소|CANCELED/i.test(`${order.orderStatus} ${order.shipmentStatus} ${order.status}`)
+                          ? "취소"
+                          : "-"}
+                    </span>
                   </div>
                 </div>
               );

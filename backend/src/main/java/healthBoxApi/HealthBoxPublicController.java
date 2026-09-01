@@ -8,10 +8,12 @@ import healthBoxApi.dto.HealthBoxBuyerPasswordResetRequest;
 import healthBoxApi.dto.HealthBoxBuyerProfileUpdateRequest;
 import healthBoxApi.dto.HealthBoxBuyerAddressRequest;
 import healthBoxApi.dto.HealthBoxBuyerAddressResponse;
+import healthBoxApi.dto.HealthBoxBuyerOrderCancelRequest;
 import healthBoxApi.dto.HealthBoxCartItemRequest;
 import healthBoxApi.dto.HealthBoxCartItemResponse;
 import healthBoxApi.dto.HealthBoxOrderCreateRequest;
 import healthBoxApi.dto.HealthBoxOrderDetailResponse;
+import healthBoxApi.dto.HealthBoxOrderCancellationResponse;
 import healthBoxApi.dto.HealthBoxOrderQuoteResponse;
 import healthBoxApi.dto.HealthBoxProductInquiryRequest;
 import healthBoxApi.dto.HealthBoxProductInquiryResponse;
@@ -283,6 +285,18 @@ public class HealthBoxPublicController {
         @RequestParam String sessionToken
     ) {
         return service.getBuyerOrderDetail(orderId, buyerMemberId, dealerMallId, sessionToken);
+    }
+
+    @ApiOperation(
+        value = "내 주문 취소 또는 취소 요청",
+        notes = "주문 접수 상태는 즉시 취소하고, 상품 준비 이후에는 취소 요청을 접수한다."
+    )
+    @PostMapping("/orders/{orderId}/cancel-request")
+    public HealthBoxOrderCancellationResponse requestMyOrderCancellation(
+        @PathVariable Long orderId,
+        @RequestBody HealthBoxBuyerOrderCancelRequest request
+    ) {
+        return service.requestBuyerOrderCancellation(orderId, request);
     }
 }
 

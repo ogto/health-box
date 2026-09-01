@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -12,6 +13,11 @@ import {
   type MemberCartItem,
 } from "../_lib/member-cart";
 import { addressAlias, addressLine, isDefaultAddress, type MemberAddress } from "../_lib/member-address";
+import {
+  readMemberCheckoutDraft,
+  writeMemberCheckoutDraft,
+  type MemberCheckoutDraft,
+} from "../_lib/member-checkout-draft";
 import { writeMemberOrderDraft } from "../_lib/member-order-draft";
 import type { Product } from "../_lib/store-data";
 import { calculateShippingBreakdown, remainingForFreeShipping } from "../_lib/storefront-policy";
@@ -110,6 +116,7 @@ export function MemberCartPanel({
   freeShippingThreshold,
   remoteAreaFee,
   remoteAreaZipRanges,
+  mode = "cart",
 }: {
   baseShippingFee: number;
   customerEmail?: string;
@@ -122,8 +129,13 @@ export function MemberCartPanel({
   freeShippingThreshold: number;
   remoteAreaFee: number;
   remoteAreaZipRanges: string[];
+  mode?: "cart" | "checkout";
 }) {
+  const router = useRouter();
+  const checkoutMode = mode === "checkout";
   const [items, setItems] = useState<MemberCartItem[]>([]);
+  const [selectedSkuIds, setSelectedSkuIds] = useState<Set<number>>(() => new Set());
+  const [checkoutSource, setCheckoutSource] = useState<MemberCheckoutDraft["source"]>("cart");
   const [addresses, setAddresses] = useState<MemberAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState("new");
   const [addressAliasInput, setAddressAliasInput] = useState("");
@@ -160,11 +172,20 @@ export function MemberCartPanel({
 
     let canceled = false;
 
-    async function loadCart() {
+    async function loadItems() {
       try {
-        const nextItems = (await fetchMemberCart()).map(repairCartItem);
+        const checkoutDraft = checkoutMode ? readMemberCheckoutDraft() : null;
+        const nextItems = checkoutMode
+          ? (checkoutDraft?.items || []).map(repairCartItem)
+          : (await fetchMemberCart()).map(repairCartItem);
         if (!canceled) {
           setItems(nextItems);
+          setSelectedSkuIds(new Set(nextItems.map((item) => item.skuId)));
+          if (checkoutDraft) {
+            setCheckoutSource(checkoutDraft.source);
+          } else if (checkoutMode) {
+            setError("주문할 상품 정보가 없거나 만료되었습니다. 장바구니에서 다시 선택해주세요.");
+          }
         }
       } catch (cartError) {
         if (!canceled) {
@@ -174,18 +195,18 @@ export function MemberCartPanel({
       }
     }
 
-    void loadCart();
+    void loadItems();
 
     return () => {
       canceled = true;
     };
-  }, [loggedIn, repairCartItem]);
+  }, [checkoutMode, loggedIn, repairCartItem]);
 
   useEffect(() => {
     let canceled = false;
 
     async function loadAddresses() {
-      if (!loggedIn || !orderSessionReady) {
+      if (!checkoutMode || !loggedIn || !orderSessionReady) {
         return;
       }
 
@@ -213,9 +234,17 @@ export function MemberCartPanel({
     return () => {
       canceled = true;
     };
-  }, [loggedIn, orderSessionReady]);
+  }, [checkoutMode, loggedIn, orderSessionReady]);
 
-  const productAmount = useMemo(() => items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0), [items]);
+  const selectedItems = useMemo(
+    () => checkoutMode ? items : items.filter((item) => selectedSkuIds.has(item.skuId)),
+    [checkoutMode, items, selectedSkuIds],
+  );
+  const allItemsSelected = items.length > 0 && items.every((item) => selectedSkuIds.has(item.skuId));
+  const productAmount = useMemo(
+    () => selectedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
+    [selectedItems],
+  );
   const shippingPolicy = useMemo(
     () => ({
       baseShippingFee,
@@ -240,6 +269,24 @@ export function MemberCartPanel({
     dispatchMemberCartSync();
   }
 
+  function toggleItemSelection(skuId: number) {
+    setSelectedSkuIds((current) => {
+      const next = new Set(current);
+      if (next.has(skuId)) {
+        next.delete(skuId);
+      } else {
+        next.add(skuId);
+      }
+      return next;
+    });
+  }
+
+  function toggleAllItems() {
+    setSelectedSkuIds(() =>
+      allItemsSelected ? new Set() : new Set(items.map((item) => item.skuId)),
+    );
+  }
+
   async function updateQuantity(skuId: number, quantity: number) {
     const nextQuantity = Math.max(1, Math.min(99, quantity));
     commitItems(items.map((item) => item.skuId === skuId ? { ...item, quantity: nextQuantity } : item));
@@ -255,6 +302,11 @@ export function MemberCartPanel({
   async function removeItem(skuId: number) {
     const previousItems = items;
     commitItems(items.filter((item) => item.skuId !== skuId));
+    setSelectedSkuIds((current) => {
+      const next = new Set(current);
+      next.delete(skuId);
+      return next;
+    });
 
     try {
       commitItems((await deleteMemberCartItem(skuId)).map(repairCartItem));
@@ -364,7 +416,14 @@ export function MemberCartPanel({
       setPaymentWidgetReady(false);
       setPaymentWidgetError("");
 
-      if (!loggedIn || !orderSessionReady || !items.length || totalPaymentAmount <= 0 || !tossClientKey) {
+      if (
+        !checkoutMode ||
+        !loggedIn ||
+        !orderSessionReady ||
+        !selectedItems.length ||
+        totalPaymentAmount <= 0 ||
+        !tossClientKey
+      ) {
         return;
       }
 
@@ -416,7 +475,20 @@ export function MemberCartPanel({
     return () => {
       canceled = true;
     };
-  }, [customerIdentifier, items.length, loggedIn, orderSessionReady, tossClientKey, totalPaymentAmount]);
+  }, [checkoutMode, customerIdentifier, loggedIn, orderSessionReady, selectedItems.length, tossClientKey, totalPaymentAmount]);
+
+  function startCheckout() {
+    setMessage("");
+    setError("");
+
+    if (!selectedItems.length) {
+      setError("주문할 상품을 선택해주세요.");
+      return;
+    }
+
+    writeMemberCheckoutDraft("cart", selectedItems);
+    router.push("/cart/checkout");
+  }
 
   async function handleOrder() {
     setMessage("");
@@ -432,7 +504,7 @@ export function MemberCartPanel({
       return;
     }
 
-    if (!items.length) {
+    if (!selectedItems.length) {
       setError("주문할 상품을 담아주세요.");
       return;
     }
@@ -455,8 +527,10 @@ export function MemberCartPanel({
       }
 
       const orderName =
-        items.length > 1 ? `${items[0].productTitle} 외 ${items.length - 1}건` : items[0]?.productTitle || "건강창고 주문";
-      const quote = await fetchOrderQuote(items, zipCode);
+        selectedItems.length > 1
+          ? `${selectedItems[0].productTitle} 외 ${selectedItems.length - 1}건`
+          : selectedItems[0]?.productTitle || "건강창고 주문";
+      const quote = await fetchOrderQuote(selectedItems, zipCode);
 
       if (!quote.orderId || !quote.checkoutIntent || quote.totalPaymentAmount <= 0) {
         throw new Error("주문 금액을 확인하지 못했습니다.");
@@ -468,7 +542,7 @@ export function MemberCartPanel({
         buyerAddressId: Number(selectedAddressId || 0) || undefined,
         checkoutIntent: quote.checkoutIntent,
         detailAddress,
-        items: items.map((item) => ({
+        items: selectedItems.map((item) => ({
           skuId: item.skuId,
           optionLabel: item.optionLabel,
           quantity: item.quantity,
@@ -506,16 +580,16 @@ export function MemberCartPanel({
   return (
     <>
       <div className="cart-page-head">
-        <Link aria-label="이전으로" className="cart-back-link" href="/">
+        <Link aria-label="이전으로" className="cart-back-link" href={checkoutMode ? "/cart" : "/"}>
           <span aria-hidden="true">‹</span>
         </Link>
-        <h1>장바구니({items.length})</h1>
+        <h1>{checkoutMode ? "주문/결제" : `장바구니(${items.length})`}</h1>
         <div className="cart-stepper" aria-label="주문 단계">
           <span>01 옵션선택</span>
           <i aria-hidden="true">›</i>
-          <strong>02 장바구니</strong>
+          {checkoutMode ? <span>02 장바구니</span> : <strong>02 장바구니</strong>}
           <i aria-hidden="true">›</i>
-          <span>03 주문/결제</span>
+          {checkoutMode ? <strong>03 주문/결제</strong> : <span>03 주문/결제</span>}
           <i aria-hidden="true">›</i>
           <span>04 주문완료</span>
         </div>
@@ -523,9 +597,39 @@ export function MemberCartPanel({
 
       <div className="cart-layout">
         <div className="cart-list-panel">
+          {!checkoutMode && items.length ? (
+            <div className="cart-selection-toolbar">
+              <label className="cart-selection-check">
+                <input
+                  checked={allItemsSelected}
+                  onChange={toggleAllItems}
+                  type="checkbox"
+                />
+                <span>전체 선택</span>
+              </label>
+              <span>선택 {selectedItems.length}개</span>
+            </div>
+          ) : checkoutMode && items.length ? (
+            <div className="cart-checkout-source">
+              {checkoutSource === "buy-now" ? "바로 구매 상품" : "장바구니에서 선택한 상품"}만 주문합니다.
+            </div>
+          ) : null}
           <div className="cart-list">
             {items.map((item) => (
-              <article className="cart-item" key={item.skuId}>
+              <article
+                className={`cart-item${checkoutMode ? " is-checkout" : ""}${selectedSkuIds.has(item.skuId) ? " is-selected" : ""}`}
+                key={item.skuId}
+              >
+                {!checkoutMode ? (
+                  <label className="cart-item-check">
+                    <input
+                      aria-label={`${item.productTitle} 선택`}
+                      checked={selectedSkuIds.has(item.skuId)}
+                      onChange={() => toggleItemSelection(item.skuId)}
+                      type="checkbox"
+                    />
+                  </label>
+                ) : null}
                 <Link className="cart-thumb" href={`/product/${item.productSlug}`}>
                   {item.image ? (
                     <Image alt={item.productTitle} className="object-cover" fill sizes="120px" src={item.image} />
@@ -538,27 +642,33 @@ export function MemberCartPanel({
                 </Link>
 
                 <div className="cart-item-meta">
-                  <button className="text-button cart-remove-button" onClick={() => void removeItem(item.skuId)} type="button">
-                    삭제
-                  </button>
-                  <div className="shop-quantity-stepper" aria-label={`${item.productTitle} 수량 선택`}>
-                    <button
-                      aria-label="수량 감소"
-                      disabled={item.quantity <= 1}
-                      onClick={() => void updateQuantity(item.skuId, item.quantity - 1)}
-                      type="button"
-                    >
-                      -
-                    </button>
-                    <strong aria-live="polite">{item.quantity}</strong>
-                    <button
-                      aria-label="수량 증가"
-                      onClick={() => void updateQuantity(item.skuId, item.quantity + 1)}
-                      type="button"
-                    >
-                      +
-                    </button>
-                  </div>
+                  {!checkoutMode ? (
+                    <>
+                      <button className="text-button cart-remove-button" onClick={() => void removeItem(item.skuId)} type="button">
+                        삭제
+                      </button>
+                      <div className="shop-quantity-stepper" aria-label={`${item.productTitle} 수량 선택`}>
+                        <button
+                          aria-label="수량 감소"
+                          disabled={item.quantity <= 1}
+                          onClick={() => void updateQuantity(item.skuId, item.quantity - 1)}
+                          type="button"
+                        >
+                          -
+                        </button>
+                        <strong aria-live="polite">{item.quantity}</strong>
+                        <button
+                          aria-label="수량 증가"
+                          onClick={() => void updateQuantity(item.skuId, item.quantity + 1)}
+                          type="button"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <span className="cart-checkout-quantity">수량 {item.quantity}개</span>
+                  )}
                   <strong>{formatWon(item.unitPrice * item.quantity)}</strong>
                 </div>
               </article>
@@ -566,7 +676,11 @@ export function MemberCartPanel({
 
             {!items.length ? (
               <div className="info-panel compact">
-                <p className="member-auth-empty">장바구니에 담긴 상품이 없습니다.</p>
+                <p className="member-auth-empty">
+                  {checkoutMode
+                    ? "주문할 상품이 없습니다. 장바구니에서 상품을 다시 선택해주세요."
+                    : "장바구니에 담긴 상품이 없습니다."}
+                </p>
               </div>
             ) : null}
           </div>
@@ -616,7 +730,7 @@ export function MemberCartPanel({
             </p>
           ) : null}
 
-          <div className="cart-order-form">
+          {checkoutMode ? <div className="cart-order-form">
             {addresses.length ? (
               <div className="cart-address-select-wrap">
                 <label className="member-auth-field">
@@ -698,18 +812,18 @@ export function MemberCartPanel({
                 ) : null}
               </>
             ) : null}
-          </div>
+          </div> : null}
 
           {message ? <div className="member-auth-alert is-success">{message}</div> : null}
           {error ? <div className="member-auth-alert is-error">{error}</div> : null}
 
-          {loggedIn && !orderSessionReady ? (
+          {checkoutMode && loggedIn && !orderSessionReady ? (
             <div className="member-auth-alert is-error">
               로그인 정보가 오래되었습니다. 다시 로그인 후 주문해주세요.
             </div>
           ) : null}
 
-          {loggedIn && orderSessionReady && items.length ? (
+          {checkoutMode && loggedIn && orderSessionReady && selectedItems.length ? (
             <div className="cart-payment-widget">
               <div id="health-box-payment-methods" />
               <div id="health-box-payment-agreement" />
@@ -717,33 +831,45 @@ export function MemberCartPanel({
             </div>
           ) : null}
 
-          {loggedIn && orderSessionReady ? (
+          {!checkoutMode && loggedIn && orderSessionReady ? (
             <button
               className="button-primary full-width-button"
-              disabled={loading || !items.length || !paymentWidgetReady}
+              disabled={!selectedItems.length}
+              onClick={startCheckout}
+              type="button"
+            >
+              {selectedItems.length ? `선택 상품 ${selectedItems.length}개 주문하기` : "상품을 선택해주세요"}
+            </button>
+          ) : checkoutMode && loggedIn && orderSessionReady ? (
+            <button
+              className="button-primary full-width-button"
+              disabled={loading || !selectedItems.length || !paymentWidgetReady}
               onClick={() => void handleOrder()}
               type="button"
             >
               {loading
                 ? "결제 준비 중..."
-                : !items.length
+                : !selectedItems.length
                   ? "상품을 선택해주세요"
                   : paymentWidgetReady
                     ? "결제 후 주문"
                     : "결제수단 준비 중..."}
             </button>
           ) : loggedIn ? (
-            <Link className="button-primary full-width-button" href="/login?next=/cart">
+            <Link className="button-primary full-width-button" href={`/login?next=${encodeURIComponent(checkoutMode ? "/cart/checkout" : "/cart")}`}>
               다시 로그인 후 주문
             </Link>
           ) : (
-            <Link className="button-primary full-width-button" href="/login?next=/cart">
+            <Link className="button-primary full-width-button" href={`/login?next=${encodeURIComponent(checkoutMode ? "/cart/checkout" : "/cart")}`}>
               로그인 후 주문
             </Link>
           )}
-          <Link className="button-secondary full-width-button" href="/">
-            계속 쇼핑하기
-          </Link>
+          {checkoutMode ? (
+            <Link className="button-secondary full-width-button" href="/cart">
+              장바구니로 돌아가기
+            </Link>
+          ) : null}
+          <Link className="button-secondary full-width-button" href="/">계속 쇼핑하기</Link>
         </aside>
       </div>
     </>

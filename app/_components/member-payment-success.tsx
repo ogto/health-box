@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { clearMemberCart, clearMemberCartOnServer, dispatchMemberCartSync } from "../_lib/member-cart";
+import { dispatchMemberCartSync } from "../_lib/member-cart";
+import { clearMemberCheckoutDraft } from "../_lib/member-checkout-draft";
 import {
   clearMemberOrderDraft,
   readMemberOrderDraft,
@@ -65,9 +66,8 @@ export function MemberPaymentSuccess() {
           return;
         }
 
-        clearMemberCart();
-        await clearMemberCartOnServer().catch(() => undefined);
         dispatchMemberCartSync();
+        clearMemberCheckoutDraft();
         clearMemberOrderDraft();
         setStatus("success");
         setOrderDetailHref(orderData.order?.id ? `/mypage/orders/${orderData.order.id}` : "/mypage");

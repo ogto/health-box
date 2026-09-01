@@ -692,6 +692,7 @@ export function mapOrderRows(orders: HealthBoxRecord[] | null) {
       orderStatus,
       shipmentStatus,
       paymentStatus: stringValue(order, "paymentStatus"),
+      claimStatus: stringValue(order, "claimStatus"),
       tone: tone(`${orderStatus} ${shipmentStatus} ${status}`),
       pendingAgeLabel: pendingAge?.label || "",
       pendingAgeTone: pendingAge?.tone || "cyan",

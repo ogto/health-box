@@ -14,6 +14,7 @@ import {
 
 import type { Product } from "../_lib/store-data";
 import { addMemberCartItemsToServer, dispatchMemberCartSync, type MemberCartItem } from "../_lib/member-cart";
+import { writeMemberCheckoutDraft } from "../_lib/member-checkout-draft";
 import { ProductPriceDisplay } from "./product-price-display";
 
 type DropdownOption = {
@@ -212,6 +213,7 @@ export function ProductPurchaseBox({
   const router = useRouter();
   const { quantity, selectedItems, selectedValues, setQuantity, setSelectedItems, setSelectedValues } = usePurchaseContext();
   const [purchaseMessage, setPurchaseMessage] = useState("");
+  const [showCartAddedModal, setShowCartAddedModal] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const optionId = useId();
   const dropdownRefs = useRef<Array<ProductOptionDropdownHandle | null>>([]);
@@ -363,7 +365,7 @@ export function ProductPurchaseBox({
       }));
   }
 
-  async function handleCartAction(nextPath?: string) {
+  async function handleCartAction() {
     setPurchaseMessage("");
 
     if (!isMember) {
@@ -382,13 +384,28 @@ export function ProductPurchaseBox({
       await addMemberCartItemsToServer(cartItems);
       dispatchMemberCartSync();
       setPurchaseMessage("장바구니에 담았습니다.");
-
-      if (nextPath) {
-        router.push(nextPath);
-      }
+      setShowCartAddedModal(true);
     } catch (error) {
       setPurchaseMessage(error instanceof Error ? error.message : "장바구니에 담지 못했습니다.");
     }
+  }
+
+  function handleBuyNowAction() {
+    setPurchaseMessage("");
+
+    if (!isMember) {
+      setShowLoginPrompt(true);
+      return;
+    }
+
+    const checkoutItems = getCartItems();
+    if (!checkoutItems.length) {
+      setPurchaseMessage(hasGroupedOptions ? "옵션을 선택해주세요." : "현재 구매할 수 있는 상품이 없습니다.");
+      return;
+    }
+
+    writeMemberCheckoutDraft("buy-now", checkoutItems);
+    router.push("/cart/checkout");
   }
 
   return (
@@ -588,7 +605,7 @@ export function ProductPurchaseBox({
               event.preventDefault();
               return;
             }
-            void handleCartAction("/cart");
+            handleBuyNowAction();
           }}
           type="button"
         >
@@ -596,6 +613,22 @@ export function ProductPurchaseBox({
         </button>
       </div>
       {purchaseMessage ? <div className="member-auth-alert is-muted">{purchaseMessage}</div> : null}
+      {showCartAddedModal ? (
+        <div className="shop-login-modal-backdrop" role="presentation">
+          <div aria-labelledby={`${optionId}-cart-added-title`} aria-modal="true" className="shop-login-modal" role="dialog">
+            <strong id={`${optionId}-cart-added-title`}>장바구니에 담았습니다</strong>
+            <p>장바구니로 이동해서 담은 상품을 확인하시겠어요?</p>
+            <div className="shop-login-modal-actions">
+              <button className="button-secondary" onClick={() => setShowCartAddedModal(false)} type="button">
+                계속 쇼핑하기
+              </button>
+              <button className="button-primary" onClick={() => router.push("/cart")} type="button">
+                장바구니 보기
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {showLoginPrompt ? (
         <div className="shop-login-modal-backdrop" role="presentation">
           <div aria-modal="true" className="shop-login-modal" role="dialog">
