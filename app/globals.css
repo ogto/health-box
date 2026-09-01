@@ -3369,12 +3369,8 @@ select option:disabled {
 }
 
 .account-layout {
-  grid-template-columns: 280px minmax(0, 1fr);
-  align-items: start;
-}
-
-.account-layout-cart {
   grid-template-columns: minmax(0, 1fr);
+  align-items: start;
 }
 
 .account-sidebar {
@@ -4959,7 +4955,7 @@ select option:disabled {
 }
 
 @media (min-width: 1121px) {
-  .account-layout-cart > .account-sidebar {
+  .account-layout > .account-sidebar {
     position: static;
     display: grid;
     grid-template-columns: minmax(190px, 0.7fr) minmax(0, 2fr) minmax(150px, 0.45fr);
@@ -4968,32 +4964,32 @@ select option:disabled {
     padding: 14px;
   }
 
-  .account-layout-cart > .account-sidebar .account-profile {
+  .account-layout > .account-sidebar .account-profile {
     display: grid;
     align-content: center;
     min-height: 82px;
     padding: 14px 16px;
   }
 
-  .account-layout-cart > .account-sidebar .account-menu {
+  .account-layout > .account-sidebar .account-menu {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
     margin-top: 0;
   }
 
-  .account-layout-cart > .account-sidebar .account-menu a {
+  .account-layout > .account-sidebar .account-menu a {
     min-height: 38px;
     padding: 0 9px;
     font-size: 13px;
   }
 
-  .account-layout-cart > .account-sidebar .member-auth-inline-action {
+  .account-layout > .account-sidebar .member-auth-inline-action {
     display: grid;
     align-content: stretch;
     margin-top: 0;
   }
 
-  .account-layout-cart > .account-sidebar .member-auth-inline-action .button-secondary {
+  .account-layout > .account-sidebar .member-auth-inline-action .button-secondary {
     height: 100%;
     min-height: 38px;
   }
@@ -5018,44 +5014,48 @@ select option:disabled {
   }
 }
 
-@media (min-width: 1720px) {
-  .account-layout-cart > .account-sidebar {
+@media (min-width: 1500px) {
+  .account-layout {
+    padding-left: max(0px, calc(286px - (100vw - 1288px) / 2));
+  }
+
+  .account-layout > .account-sidebar {
     position: fixed;
     z-index: 20;
     top: 250px;
-    left: max(16px, calc((100vw - 1288px) / 2 - 206px));
+    left: max(16px, calc((100vw - 1288px) / 2 - 270px));
     display: block;
-    width: 184px;
+    width: 250px;
     max-height: calc(100vh - 270px);
     overflow-y: auto;
-    padding: 12px;
+    padding: 18px;
     box-shadow: 0 16px 38px rgba(16, 34, 53, 0.08);
   }
 
-  .account-layout-cart > .account-sidebar .account-profile {
+  .account-layout > .account-sidebar .account-profile {
     display: block;
     min-height: 0;
-    padding: 12px;
+    padding: 18px;
   }
 
-  .account-layout-cart > .account-sidebar .account-profile h2 {
-    font-size: 18px;
+  .account-layout > .account-sidebar .account-profile h2 {
+    font-size: 22px;
   }
 
-  .account-layout-cart > .account-sidebar .account-menu {
+  .account-layout > .account-sidebar .account-menu {
     grid-template-columns: 1fr;
-    gap: 5px;
-    margin-top: 10px;
+    gap: 8px;
+    margin-top: 16px;
   }
 
-  .account-layout-cart > .account-sidebar .account-menu a {
-    min-height: 38px;
-    padding: 0 9px;
-    font-size: 12px;
+  .account-layout > .account-sidebar .account-menu a {
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 14px;
   }
 
-  .account-layout-cart > .account-sidebar .member-auth-inline-action {
-    margin-top: 10px;
+  .account-layout > .account-sidebar .member-auth-inline-action {
+    margin-top: 16px;
   }
 }
 
