@@ -456,6 +456,12 @@ export default async function AdminOrdersPage({
       {!readOnly ? <section className="admin-order-management-guide" aria-label="주문 처리 안내">
         <div className="admin-order-management-row">
           <strong>주문관리</strong>
+          <Link
+            className={!selectedTask ? "is-active" : undefined}
+            href={buildOrdersHref({ dateFrom, dateTo, dealerMallId: selectedDealer?.id })}
+          >
+            전체조회
+          </Link>
           {[["prepare", "발주 확인"], ["ship", "발송 처리"], ["delay", "발송 지연 처리"], ["address", "배송지 정보 수정"], ["unpaid", "미결제 확인"]].map(([task, label]) => (
             <Link
               className={selectedTask === task ? "is-active" : undefined}
