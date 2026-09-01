@@ -124,7 +124,7 @@ export function buildTossCustomerKey(memberId: number) {
   const digest = createHmac("sha256", signingSecret)
     .update(`toss-customer:${memberId}`)
     .digest("base64url");
-  return `healthbox_${digest}`;
+  return `hb_${digest}`;
 }
 
 export async function getTossPayment(paymentKey: string) {

@@ -581,21 +581,17 @@ export function MemberCartPanel({
               <strong>{formatWon(productAmount)}</strong>
             </div>
             <div className="summary-row">
-              <span>기본 배송비</span>
+              <span>배송비</span>
               <strong>
                 {shippingBreakdown.baseShippingFee ? `+${formatWon(shippingBreakdown.baseShippingFee)}` : "무료"}
               </strong>
             </div>
             {shippingBreakdown.remoteAreaFee ? (
               <div className="summary-row">
-                <span>도서산간 추가배송비</span>
+                <span>제주·도서산간 추가 배송비</span>
                 <strong>{`+${formatWon(shippingBreakdown.remoteAreaFee)}`}</strong>
               </div>
             ) : null}
-            <div className="summary-row">
-              <span>총 배송비</span>
-              <strong>{shippingFee ? `+${formatWon(shippingFee)}` : "무료"}</strong>
-            </div>
             <div className="summary-row total">
               <span>총 결제 예상 금액</span>
               <strong>{formatWon(totalPaymentAmount)}</strong>
