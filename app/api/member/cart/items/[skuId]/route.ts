@@ -2,35 +2,7 @@ import { NextResponse } from "next/server";
 
 import { healthBoxFetch, numberValue, stringValue, type HealthBoxRecord } from "../../../../../_lib/health-box-api";
 import { getMemberSession } from "../../../../../_lib/member-auth";
-
-function extractErrorMessage(error: unknown) {
-  const rawMessage = error instanceof Error ? error.message : String(error);
-  return rawMessage
-    .replace(/^HealthBox API \d+:\s*/, "")
-    .replace(/^Error:\s*/, "")
-    .trim();
-}
-
-function toCartErrorMessage(error: unknown) {
-  const message = extractErrorMessage(error);
-  let parsedMessage = message;
-
-  try {
-    const parsed = JSON.parse(message) as { error?: string; message?: string; path?: string; status?: number };
-    if (parsed.status === 404 && parsed.path?.includes("/cart")) {
-      return "장바구니 DB API가 아직 서버에 반영되지 않았습니다. 백엔드 배포 후 다시 이용해주세요.";
-    }
-    parsedMessage = parsed.message || parsed.error || message;
-  } catch {
-    parsedMessage = message;
-  }
-
-  if (/404|not found|\/cart/i.test(parsedMessage)) {
-    return "장바구니 DB API가 아직 서버에 반영되지 않았습니다. 백엔드 배포 후 다시 이용해주세요.";
-  }
-
-  return parsedMessage || "장바구니 상품을 삭제하지 못했습니다.";
-}
+import { toCartErrorMessage } from "../../../_lib/cart-error";
 
 function toCartItem(item: HealthBoxRecord) {
   return {
@@ -73,11 +45,12 @@ export async function DELETE(
 
     return NextResponse.json({ items: items.map(toCartItem), ok: true });
   } catch (error) {
+    console.error("[member-cart-item] DELETE failed", error);
     return NextResponse.json(
       {
         items: [],
         ok: false,
-        message: toCartErrorMessage(error),
+        message: toCartErrorMessage(error, "장바구니 상품을 삭제하지 못했습니다."),
       },
       { status: 500 },
     );

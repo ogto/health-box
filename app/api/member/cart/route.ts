@@ -2,43 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { healthBoxFetch, numberValue, stringValue, type HealthBoxRecord } from "../../../_lib/health-box-api";
 import { getMemberSession } from "../../../_lib/member-auth";
-
-function extractErrorMessage(error: unknown) {
-  const rawMessage = error instanceof Error ? error.message : String(error);
-  return rawMessage
-    .replace(/^HealthBox API \d+:\s*/, "")
-    .replace(/^Error:\s*/, "")
-    .trim();
-}
-
-function toCartErrorMessage(error: unknown, fallback: string) {
-  const message = extractErrorMessage(error);
-  let parsedMessage = message;
-
-  try {
-    const parsed = JSON.parse(message) as { error?: string; message?: string; path?: string; status?: number };
-    if (parsed.status === 404 && parsed.path?.includes("/cart")) {
-      return "장바구니 DB API가 아직 서버에 반영되지 않았습니다. 백엔드 배포 후 다시 이용해주세요.";
-    }
-    parsedMessage = parsed.message || parsed.error || message;
-  } catch {
-    parsedMessage = message;
-  }
-
-  if (/404|not found|\/cart/i.test(parsedMessage)) {
-    return "장바구니 DB API가 아직 서버에 반영되지 않았습니다. 백엔드 배포 후 다시 이용해주세요.";
-  }
-
-  if (/session|buyer member|login/i.test(parsedMessage)) {
-    return "로그인 정보가 만료되었습니다. 다시 로그인해주세요.";
-  }
-
-  if (/stock|sold out|sku/i.test(parsedMessage)) {
-    return "담을 수 없는 상품입니다. 상품 옵션과 재고를 확인해주세요.";
-  }
-
-  return parsedMessage || fallback;
-}
+import { toCartErrorMessage } from "../_lib/cart-error";
 
 function toCartItem(item: HealthBoxRecord) {
   const optionLabel = stringValue(item, "optionSummary", "skuName", "optionSummarySnapshot") || "없음";
@@ -77,6 +41,7 @@ export async function GET() {
 
     return NextResponse.json({ items: items.map(toCartItem), ok: true });
   } catch (error) {
+    console.error("[member-cart] GET failed", error);
     return NextResponse.json(
       {
         items: [],
@@ -116,6 +81,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ items: items.map(toCartItem), ok: true });
   } catch (error) {
+    console.error("[member-cart] PUT failed", error);
     return NextResponse.json(
       {
         items: [],
@@ -144,6 +110,7 @@ export async function DELETE() {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    console.error("[member-cart] DELETE failed", error);
     return NextResponse.json(
       {
         ok: false,
