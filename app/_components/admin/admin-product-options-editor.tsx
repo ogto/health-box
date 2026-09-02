@@ -606,6 +606,7 @@ export function AdminProductOptionsEditor({
                   </div>
                   <div className="admin-sku-table-head">
                     <span>{group.groupName} 옵션</span>
+                    <span>정상가</span>
                     <span>추가금액</span>
                     <span>재고</span>
                     <span>안전재고</span>
@@ -619,6 +620,15 @@ export function AdminProductOptionsEditor({
                         onChange={(event) => updateSku(index, { skuName: event.target.value })}
                         type="text"
                         value={sku.skuName}
+                      />
+                      <input
+                        aria-label={`${sku.skuName || "옵션 조합"} 정상가`}
+                        className="admin-input"
+                        min="0"
+                        onChange={(event) => updateSku(index, { consumerPrice: Number(event.target.value) || 0 })}
+                        placeholder="옵션 정상가"
+                        type="number"
+                        value={sku.consumerPrice}
                       />
                       <input
                         className="admin-input"
@@ -669,6 +679,7 @@ export function AdminProductOptionsEditor({
                   </div>
                   <div className="admin-sku-table-head">
                     <span>옵션명</span>
+                    <span>정상가</span>
                     <span>추가금액</span>
                     <span>재고</span>
                     <span>안전재고</span>
@@ -682,6 +693,15 @@ export function AdminProductOptionsEditor({
                         onChange={(event) => updateSku(index, { skuName: event.target.value })}
                         type="text"
                         value={sku.skuName}
+                      />
+                      <input
+                        aria-label={`${sku.skuName || "옵션 조합"} 정상가`}
+                        className="admin-input"
+                        min="0"
+                        onChange={(event) => updateSku(index, { consumerPrice: Number(event.target.value) || 0 })}
+                        placeholder="옵션 정상가"
+                        type="number"
+                        value={sku.consumerPrice}
                       />
                       <input
                         className="admin-input"

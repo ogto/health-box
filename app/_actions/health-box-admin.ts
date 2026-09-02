@@ -1003,13 +1003,21 @@ async function saveProduct(formData: FormData) {
   });
   const hasOptionRows = skus.some((sku) => Array.isArray(sku.optionValueCodes) && sku.optionValueCodes.length > 0);
   const optionUseYn = requestedOptionUseYn === "Y" && (optionGroups.length > 0 || hasOptionRows) ? "Y" : "N";
-  const normalizedSkus =
+  const normalizedSkus: HealthBoxRecord[] =
     optionUseYn === "Y"
       ? skus.map((sku) => ({
           ...sku,
           memberPrice: memberPrice + (Number(sku.memberPrice) || 0),
         }))
       : skus;
+  for (const sku of normalizedSkus) {
+    const skuConsumerPrice = Number(sku.consumerPrice) || 0;
+    const skuMemberPrice = Number(sku.memberPrice) || 0;
+    if (skuConsumerPrice > 0 && skuMemberPrice > skuConsumerPrice) {
+      const skuName = typeof sku.skuName === "string" && sku.skuName.trim() ? sku.skuName.trim() : "상품 옵션";
+      throw new Error(`${skuName}의 회원가는 정상가보다 높을 수 없습니다.`);
+    }
+  }
   const normalizedOptionGroups =
     optionUseYn === "Y" && !optionGroups.length && skus.length
       ? [
@@ -1586,6 +1594,115 @@ export async function updateShipmentStatusAction(formData: FormData) {
 
   revalidatePath("/admin/orders");
   redirectIfRequested(formData, "배송 상태를 저장했습니다.");
+}
+
+type BulkShipmentImportRow = {
+  courierCompany: string;
+  orderNo: string;
+  trackingNo: string;
+};
+
+type BulkShipmentImportResponse = {
+  failureCount: number;
+  requestedCount: number;
+  results: Array<{
+    message?: string;
+    orderNo?: string;
+    success: boolean;
+  }>;
+  successCount: number;
+};
+
+function bulkShipmentImportErrorMessage(message: string | undefined) {
+  if (!message) return "처리할 수 없는 주문입니다.";
+  if (/order not found/i.test(message)) return "주문번호를 찾을 수 없습니다.";
+  if (/shipment not found/i.test(message)) return "배송 정보가 없습니다.";
+  if (/duplicate order number/i.test(message)) return "같은 주문번호가 중복되었습니다.";
+  if (/canceled or unpaid order/i.test(message)) return "취소되었거나 결제가 완료되지 않은 주문입니다.";
+  if (/valid courier company/i.test(message)) return "택배사를 확인해주세요.";
+  if (/valid tracking number/i.test(message)) return "송장번호 형식을 확인해주세요.";
+  if (/valid order number/i.test(message)) return "주문번호를 확인해주세요.";
+  if (/invalid shipment status transition/i.test(message)) return "이미 배송완료 또는 취소된 주문입니다.";
+  return message;
+}
+
+export async function bulkShipmentImportAction(formData: FormData) {
+  await requireAdminSession();
+  ensureApiConfigured();
+
+  const redirectTo = optionalString(formData, "redirectTo") || "/admin/orders";
+  const shipmentRowsJson = requiredString(formData, "shipmentRows");
+  let rawRows: unknown;
+
+  try {
+    rawRows = JSON.parse(shipmentRowsJson || "[]");
+  } catch {
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", "송장 파일 데이터가 올바르지 않습니다."));
+  }
+
+  if (!Array.isArray(rawRows) || !rawRows.length) {
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", "처리할 송장 정보를 등록해주세요."));
+  }
+  if (rawRows.length > 500) {
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", "송장은 한 번에 최대 500건까지 등록할 수 있습니다."));
+  }
+
+  const rows: BulkShipmentImportRow[] = [];
+  const orderNos = new Set<string>();
+  for (const rawRow of rawRows) {
+    if (!rawRow || typeof rawRow !== "object") {
+      redirect(buildRedirectWithMessage(redirectTo, "toastError", "송장 파일에 올바르지 않은 행이 있습니다."));
+    }
+
+    const source = rawRow as Record<string, unknown>;
+    const orderNo = typeof source.orderNo === "string" ? source.orderNo.trim() : "";
+    const courierCompany = typeof source.courierCompany === "string" ? source.courierCompany.trim() : "";
+    const trackingNo = typeof source.trackingNo === "string" ? source.trackingNo.trim().replace(/\s/g, "") : "";
+
+    if (!orderNo || !courierCompany || !trackingNo) {
+      redirect(buildRedirectWithMessage(redirectTo, "toastError", "주문번호, 택배사, 송장번호를 모두 입력해주세요."));
+    }
+    if (orderNo.length > 100 || courierCompany.length > 100 || trackingNo.length > 100) {
+      redirect(buildRedirectWithMessage(redirectTo, "toastError", "송장 입력값은 각각 100자 이하여야 합니다."));
+    }
+    if (!/^[A-Za-z0-9-]+$/.test(trackingNo)) {
+      redirect(buildRedirectWithMessage(redirectTo, "toastError", "송장번호는 영문, 숫자, 하이픈(-)만 사용할 수 있습니다."));
+    }
+    if (orderNos.has(orderNo)) {
+      redirect(buildRedirectWithMessage(redirectTo, "toastError", `주문번호 ${orderNo}가 중복되었습니다.`));
+    }
+
+    orderNos.add(orderNo);
+    rows.push({ courierCompany, orderNo, trackingNo });
+  }
+
+  let response: BulkShipmentImportResponse;
+  try {
+    response = await healthBoxFetch<BulkShipmentImportResponse>("/health-box/admin/shipments/bulk-dispatch", {
+      method: "POST",
+      body: { rows },
+    });
+  } catch (error) {
+    redirect(buildRedirectWithMessage(
+      redirectTo,
+      "toastError",
+      orderActionErrorMessage(error, "송장 일괄 등록에 실패했습니다."),
+    ));
+  }
+
+  revalidatePath("/admin/orders");
+  const failures = (response.results || []).filter((result) => !result.success);
+  if (failures.length) {
+    const details = failures
+      .slice(0, 2)
+      .map((result) => `${result.orderNo || "주문번호 없음"}: ${bulkShipmentImportErrorMessage(result.message)}`)
+      .join(" / ");
+    const moreCount = Math.max(0, failures.length - 2);
+    const message = `송장 ${response.successCount}건 등록, ${response.failureCount}건 실패: ${details}${moreCount ? ` 외 ${moreCount}건` : ""}`;
+    redirect(buildRedirectWithMessage(redirectTo, "toastError", message));
+  }
+
+  redirect(buildRedirectWithMessage(redirectTo, "toast", `송장 ${response.successCount}건을 등록하고 배송중으로 변경했습니다.`));
 }
 
 export async function bulkPrepareShipmentsAction(formData: FormData) {

@@ -110,6 +110,7 @@ public class HealthBoxAdminAuditFilter extends OncePerRequestFilter {
         if (path.matches(".*/dealer-applications/\\d+/reject$")) return action("DEALER_REJECT", "딜러 신청 반려", "DEALER_APPLICATION");
         if (path.matches(".*/buyer-signup-applications/\\d+/approve$")) return action("MEMBER_APPROVE", "회원 가입 승인", "MEMBER_APPLICATION");
         if (path.matches(".*/buyer-signup-applications/\\d+/reject$")) return action("MEMBER_REJECT", "회원 가입 반려", "MEMBER_APPLICATION");
+        if (path.endsWith("/shipments/bulk-dispatch")) return action("SHIPMENT_BULK_DISPATCH", "송장 일괄 등록", "SHIPMENT");
         if (path.matches(".*/shipments/\\d+/delay$")) return action("SHIPMENT_DELAY", "발송 지연 처리", "SHIPMENT");
         if (path.matches(".*/shipments/\\d+/status$")) return action("SHIPMENT_UPDATE", "배송 처리", "SHIPMENT");
         if (path.matches(".*/orders/\\d+/shipping-address$")) return action("ORDER_ADDRESS_UPDATE", "주문 배송지 수정", "ORDER");

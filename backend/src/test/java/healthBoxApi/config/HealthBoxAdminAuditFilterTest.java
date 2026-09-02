@@ -57,4 +57,30 @@ class HealthBoxAdminAuditFilterTest {
         assertEquals("역할: OWNER", log.getDetailText());
         assertEquals("SUCCESS", log.getResultStatus());
     }
+
+    @Test
+    void recordsBulkShipmentDispatchAsDedicatedAction() throws Exception {
+        HealthBoxAdminAuditLogRepository repository = mock(HealthBoxAdminAuditLogRepository.class);
+        HealthBoxAdminAuditFilter filter = new HealthBoxAdminAuditFilter(repository);
+        MockHttpServletRequest request = new MockHttpServletRequest(
+            "POST",
+            "/health-box/admin/shipments/bulk-dispatch"
+        );
+        request.setContentType("application/json");
+        request.setContent("{\"rows\":[]}".getBytes(StandardCharsets.UTF_8));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, (servletRequest, servletResponse) -> {
+            StreamUtils.copyToByteArray(servletRequest.getInputStream());
+            ((HttpServletResponse) servletResponse).setStatus(HttpServletResponse.SC_OK);
+        });
+
+        ArgumentCaptor<HealthBoxAdminAuditLogVo> captor = ArgumentCaptor.forClass(HealthBoxAdminAuditLogVo.class);
+        verify(repository).save(captor.capture());
+        HealthBoxAdminAuditLogVo log = captor.getValue();
+        assertEquals("SHIPMENT_BULK_DISPATCH", log.getActionCode());
+        assertEquals("송장 일괄 등록", log.getActionLabel());
+        assertEquals("SHIPMENT", log.getTargetType());
+        assertEquals("SUCCESS", log.getResultStatus());
+    }
 }

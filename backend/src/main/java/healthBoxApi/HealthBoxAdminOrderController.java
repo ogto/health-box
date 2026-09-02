@@ -9,6 +9,8 @@ import healthBoxApi.dto.HealthBoxClaimResponse;
 import healthBoxApi.dto.HealthBoxOrderPartialCancelRequest;
 import healthBoxApi.dto.HealthBoxOrderDetailResponse;
 import healthBoxApi.dto.HealthBoxShipmentDelayRequest;
+import healthBoxApi.dto.HealthBoxShipmentBulkDispatchRequest;
+import healthBoxApi.dto.HealthBoxShipmentBulkDispatchResponse;
 import healthBoxApi.dto.HealthBoxShipmentStatusRequest;
 import healthBoxApi.vo.HealthBoxShipmentVo;
 import healthBoxApi.config.HealthBoxAdminAccessContext;
@@ -117,6 +119,16 @@ public class HealthBoxAdminOrderController {
         accessContext.requirePermission("ORDER_PROCESS");
         accessContext.requireDealerMallAccess(service.getOrderDetailByShipmentId(shipmentId).getDealerMallId());
         return service.updateShipmentStatus(shipmentId, request);
+    }
+
+    @ApiOperation(value = "송장 일괄 등록", notes = "주문번호와 택배사·송장번호를 검증하고 배송중 상태로 일괄 변경한다.")
+    @PostMapping("/shipments/bulk-dispatch")
+    public HealthBoxShipmentBulkDispatchResponse bulkDispatchShipments(
+        @RequestBody HealthBoxShipmentBulkDispatchRequest request
+    ) {
+        accessContext.requireHq();
+        accessContext.requirePermission("ORDER_PROCESS");
+        return service.bulkDispatchShipments(request);
     }
 
     @ApiOperation(value = "발송 지연 처리", notes = "미출고 주문을 발송 지연 상태로 변경하고 사유를 기록한다.")

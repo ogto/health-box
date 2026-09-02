@@ -5,6 +5,7 @@ import { AdminHeader } from "../../_components/admin/admin-header";
 import { AdminReadOnlyNotice } from "../../_components/admin/admin-read-only-notice";
 import { AdminOrderBulkActions, AdminOrderSelectAllButton } from "../../_components/admin/admin-order-bulk-actions";
 import { AdminOrderExcelDownloadButton } from "../../_components/admin/admin-order-excel-download-button";
+import { AdminShipmentBulkImport } from "../../_components/admin/admin-shipment-bulk-import";
 import { AdminTableScrollMirror } from "../../_components/admin/admin-table-scroll-mirror";
 import { AdminBadge, AdminPanel, AdminTable } from "../../_components/admin/admin-ui";
 import {
@@ -179,6 +180,18 @@ function AdminOptionDisplay({
   return <span className="admin-option-inline-text">{optionPairs.map((item) => `${item.name}: ${item.value}`).join(", ") || option}</span>;
 }
 
+function canExportForShipping(order: ReturnType<typeof mapOrderRows>[number]) {
+  const orderStatus = String(order.orderStatus || "").toUpperCase();
+  const paymentStatus = String(order.paymentStatus || "").toUpperCase();
+  const shipmentStatus = String(order.shipmentStatus || "PENDING").toUpperCase();
+  const canceled = /CANCELED/.test(`${orderStatus} ${paymentStatus} ${shipmentStatus}`);
+
+  return Boolean(order.shipmentId)
+    && !canceled
+    && ["PAID", "PARTIALLY_CANCELED"].includes(paymentStatus)
+    && ["PENDING", "ORDERED", "PARTIALLY_CANCELED", "PREPARING", "DELAYED"].includes(shipmentStatus);
+}
+
 function activeClaimForTask(order: ReturnType<typeof mapOrderRows>[number], task: string) {
   const claimType = task === "cancelApproval" ? "CANCEL" : task === "returnProcess" ? "RETURN" : task === "exchangeProcess" ? "EXCHANGE" : "";
   return claimType ? order.activeClaims.find((claim) => claim.type === claimType) : undefined;
@@ -240,17 +253,33 @@ export default async function AdminOrdersPage({
 
     return {
       amount: order.amount,
+      baseAddress: order.baseAddress,
+      buyerName: order.buyer,
+      buyerPhone: order.buyerPhone,
       claimStatus: orderClaimLabel(order),
       company: order.company,
       deliveryType: "일반배송",
+      detailAddress: order.detailAddress,
       option: firstItem?.option || "없음",
       orderAt: orderDateText(order.placedAt),
       orderNo: order.number,
+      productDetails: order.itemDetails.length
+        ? order.itemDetails
+          .map((item) => `${item.productName}${item.option !== "없음" ? ` / 옵션: ${item.option}` : ""} / 수량: ${item.quantity}개`)
+          .join("\n")
+        : order.items,
       productName: firstItem ? `${firstItem.productName}${extraCount ? ` 외 ${extraCount}개` : ""}` : order.items,
       quantity: `${totalQuantity || firstItem?.quantity || 0}개`,
+      receiverName: order.receiverName,
+      receiverPhone: order.receiverPhone,
       status: order.status,
+      zipCode: order.zipCode,
     };
   });
+  const shippingOrderNos = new Set(
+    filteredOrderRows.filter(canExportForShipping).map((order) => order.number),
+  );
+  const shippingExportRows = exportRows.filter((row) => shippingOrderNos.has(row.orderNo));
   const bulkRedirectTo = buildOrdersHref({
     dateFrom,
     dateTo,
@@ -354,7 +383,8 @@ export default async function AdminOrdersPage({
         action={
           <div className="admin-order-list-actions">
             <div className="admin-order-list-actions-left">
-              <AdminOrderExcelDownloadButton rows={exportRows} />
+              <AdminOrderExcelDownloadButton rows={exportRows} shippingRows={shippingExportRows} />
+              {!readOnly ? <AdminShipmentBulkImport redirectTo={bulkRedirectTo} /> : null}
               {selectedTask ? (
                 <Link className="admin-button secondary small" href={buildOrdersHref({ dateFrom, dateTo, dealerMallId: selectedDealer?.id })}>
                   처리 필터 해제

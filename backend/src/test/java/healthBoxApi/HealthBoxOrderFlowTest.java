@@ -12,6 +12,9 @@ import healthBoxApi.dto.HealthBoxAdminClaimStatusRequest;
 import healthBoxApi.dto.HealthBoxAdminOrderAddressRequest;
 import healthBoxApi.dto.HealthBoxClaimResponse;
 import healthBoxApi.dto.HealthBoxShipmentDelayRequest;
+import healthBoxApi.dto.HealthBoxShipmentBulkDispatchRequest;
+import healthBoxApi.dto.HealthBoxShipmentBulkDispatchResponse;
+import healthBoxApi.dto.HealthBoxShipmentBulkDispatchRowRequest;
 import healthBoxApi.payment.HealthBoxPaymentResponse;
 import healthBoxApi.payment.HealthBoxPaymentService;
 import healthBoxApi.repository.*;
@@ -27,6 +30,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.time.LocalDateTime;
 import java.time.LocalDate;
 import java.util.Collections;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -291,6 +295,65 @@ class HealthBoxOrderFlowTest {
         assertEquals("DELAYED", response.getShipmentStatus());
         assertEquals("DELIVERY_DELAY", claimCaptor.getValue().getClaimType());
         assertTrue(claimCaptor.getValue().getReason().contains("2026-09-05"));
+    }
+
+    @Test
+    void bulkDispatchesValidRowsAndReportsInvalidRowsSeparately() {
+        HealthBoxOrderVo order = paidOrder("ORDERED");
+        HealthBoxShipmentVo shipment = shipment("PENDING");
+        HealthBoxShipmentBulkDispatchRowRequest validRow = new HealthBoxShipmentBulkDispatchRowRequest();
+        validRow.setOrderNo("20260901-0001");
+        validRow.setCourierCompany("CJ대한통운");
+        validRow.setTrackingNo("1234567890");
+        HealthBoxShipmentBulkDispatchRowRequest missingRow = new HealthBoxShipmentBulkDispatchRowRequest();
+        missingRow.setOrderNo("20260901-9999");
+        missingRow.setCourierCompany("CJ대한통운");
+        missingRow.setTrackingNo("9999999999");
+        HealthBoxShipmentBulkDispatchRequest request = new HealthBoxShipmentBulkDispatchRequest();
+        request.setRows(Arrays.asList(validRow, missingRow));
+
+        when(orderRepository.findByOrderNoIn(any())).thenReturn(Collections.singletonList(order));
+        when(shipmentRepository.findByOrderIdIn(any())).thenReturn(Collections.singletonList(shipment));
+        when(shipmentRepository.save(any(HealthBoxShipmentVo.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        HealthBoxShipmentBulkDispatchResponse response = service.bulkDispatchShipments(request);
+
+        assertEquals(2, response.getRequestedCount());
+        assertEquals(1, response.getSuccessCount());
+        assertEquals(1, response.getFailureCount());
+        assertTrue(response.getResults().get(0).isSuccess());
+        assertTrue(!response.getResults().get(1).isSuccess());
+        assertEquals("SHIPPED", shipment.getShipmentStatus());
+        assertEquals("CJ대한통운", shipment.getCourierCompany());
+        assertEquals("1234567890", shipment.getTrackingNo());
+        assertTrue(shipment.getShippedAt() != null);
+    }
+
+    @Test
+    void bulkDispatchRejectsDeliveredOrderWithoutOverwritingShipment() {
+        HealthBoxOrderVo order = paidOrder("ORDERED");
+        HealthBoxShipmentVo shipment = shipment("DELIVERED");
+        shipment.setCourierCompany("기존택배");
+        shipment.setTrackingNo("1111111111");
+        HealthBoxShipmentBulkDispatchRowRequest row = new HealthBoxShipmentBulkDispatchRowRequest();
+        row.setOrderNo("20260901-0001");
+        row.setCourierCompany("CJ대한통운");
+        row.setTrackingNo("2222222222");
+        HealthBoxShipmentBulkDispatchRequest request = new HealthBoxShipmentBulkDispatchRequest();
+        request.setRows(Collections.singletonList(row));
+
+        when(orderRepository.findByOrderNoIn(any())).thenReturn(Collections.singletonList(order));
+        when(shipmentRepository.findByOrderIdIn(any())).thenReturn(Collections.singletonList(shipment));
+
+        HealthBoxShipmentBulkDispatchResponse response = service.bulkDispatchShipments(request);
+
+        assertEquals(0, response.getSuccessCount());
+        assertEquals(1, response.getFailureCount());
+        assertTrue(!response.getResults().get(0).isSuccess());
+        assertEquals("DELIVERED", shipment.getShipmentStatus());
+        assertEquals("기존택배", shipment.getCourierCompany());
+        assertEquals("1111111111", shipment.getTrackingNo());
+        verify(shipmentRepository, never()).save(any(HealthBoxShipmentVo.class));
     }
 
     @Test

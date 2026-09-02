@@ -15,6 +15,8 @@ import java.util.Optional;
 public interface HealthBoxOrderRepository extends JpaRepository<HealthBoxOrderVo, Long> {
     List<HealthBoxOrderVo> findByDealerMallIdOrderByIdDesc(Long dealerMallId);
     List<HealthBoxOrderVo> findByBuyerMemberIdAndDealerMallIdOrderByIdDesc(Long buyerMemberId, Long dealerMallId);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    List<HealthBoxOrderVo> findByOrderNoIn(List<String> orderNos);
     Optional<HealthBoxOrderVo> findByIdAndBuyerMemberIdAndDealerMallId(Long id, Long buyerMemberId, Long dealerMallId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

@@ -60,6 +60,10 @@ import healthBoxApi.dto.HealthBoxProductInquiryResponse;
 import healthBoxApi.dto.HealthBoxRejectRequest;
 import healthBoxApi.dto.HealthBoxShipmentStatusRequest;
 import healthBoxApi.dto.HealthBoxShipmentDelayRequest;
+import healthBoxApi.dto.HealthBoxShipmentBulkDispatchRequest;
+import healthBoxApi.dto.HealthBoxShipmentBulkDispatchResponse;
+import healthBoxApi.dto.HealthBoxShipmentBulkDispatchResult;
+import healthBoxApi.dto.HealthBoxShipmentBulkDispatchRowRequest;
 import healthBoxApi.vo.*;
 import healthBoxApi.repository.*;
 import org.springframework.data.domain.Page;
@@ -2327,6 +2331,114 @@ public class HealthBoxService {
             shipment.setHandlerAccountId(request.getHandlerAccountId());
         }
         return shipmentRepository.save(shipment);
+    }
+
+    @Transactional
+    public HealthBoxShipmentBulkDispatchResponse bulkDispatchShipments(HealthBoxShipmentBulkDispatchRequest request) {
+        List<HealthBoxShipmentBulkDispatchRowRequest> rows = request != null ? request.getRows() : null;
+        if (rows == null || rows.isEmpty()) {
+            throw new IllegalArgumentException("shipment rows are required");
+        }
+        if (rows.size() > 500) {
+            throw new IllegalArgumentException("shipment rows cannot exceed 500");
+        }
+
+        List<String> requestedOrderNos = rows.stream()
+            .map(row -> trimToNull(row != null ? row.getOrderNo() : null))
+            .filter(Objects::nonNull)
+            .distinct()
+            .collect(Collectors.toList());
+        Map<String, HealthBoxOrderVo> ordersByOrderNo = orderRepository.findByOrderNoIn(requestedOrderNos).stream()
+            .collect(Collectors.toMap(HealthBoxOrderVo::getOrderNo, order -> order));
+        List<Long> orderIds = ordersByOrderNo.values().stream()
+            .map(HealthBoxOrderVo::getId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
+        Map<Long, HealthBoxShipmentVo> shipmentsByOrderId = shipmentRepository.findByOrderIdIn(orderIds).stream()
+            .collect(Collectors.toMap(HealthBoxShipmentVo::getOrderId, shipment -> shipment));
+
+        Set<String> processedOrderNos = new HashSet<>();
+        List<HealthBoxShipmentBulkDispatchResult> results = new ArrayList<>();
+        int successCount = 0;
+
+        for (HealthBoxShipmentBulkDispatchRowRequest row : rows) {
+            String orderNo = trimToNull(row != null ? row.getOrderNo() : null);
+            HealthBoxShipmentBulkDispatchResult result = new HealthBoxShipmentBulkDispatchResult();
+            result.setOrderNo(orderNo != null ? orderNo : "-");
+
+            try {
+                String courierCompany = trimToNull(row != null ? row.getCourierCompany() : null);
+                String trackingNo = trimToNull(row != null ? row.getTrackingNo() : null);
+                validateBulkDispatchRow(orderNo, courierCompany, trackingNo);
+                if (!processedOrderNos.add(orderNo)) {
+                    throw new IllegalArgumentException("duplicate order number");
+                }
+
+                HealthBoxOrderVo order = ordersByOrderNo.get(orderNo);
+                if (order == null) {
+                    throw new IllegalArgumentException("order not found");
+                }
+                String orderStatus = defaultText(order.getOrderStatus(), "ORDERED").toUpperCase(Locale.ROOT);
+                String paymentStatus = defaultText(order.getPaymentStatus(), "").toUpperCase(Locale.ROOT);
+                if ("CANCELED".equals(orderStatus)
+                    || !Arrays.asList("PAID", "PARTIALLY_CANCELED").contains(paymentStatus)
+                    || (order.getRemainingPaymentAmount() != null && order.getRemainingPaymentAmount() <= 0)) {
+                    throw new IllegalArgumentException("canceled or unpaid order cannot be shipped");
+                }
+
+                HealthBoxShipmentVo shipment = shipmentsByOrderId.get(order.getId());
+                if (shipment == null) {
+                    throw new IllegalArgumentException("shipment not found");
+                }
+                dispatchShipment(shipment, courierCompany, trackingNo);
+
+                result.setSuccess(true);
+                result.setMessage("배송중 처리 완료");
+                successCount += 1;
+            } catch (IllegalArgumentException error) {
+                result.setSuccess(false);
+                result.setMessage(error.getMessage());
+            }
+            results.add(result);
+        }
+
+        HealthBoxShipmentBulkDispatchResponse response = new HealthBoxShipmentBulkDispatchResponse();
+        response.setRequestedCount(rows.size());
+        response.setSuccessCount(successCount);
+        response.setFailureCount(rows.size() - successCount);
+        response.setResults(results);
+        return response;
+    }
+
+    private void validateBulkDispatchRow(String orderNo, String courierCompany, String trackingNo) {
+        if (!StringUtils.hasText(orderNo) || orderNo.length() > 100) {
+            throw new IllegalArgumentException("valid order number is required");
+        }
+        if (!StringUtils.hasText(courierCompany) || courierCompany.length() > 100) {
+            throw new IllegalArgumentException("valid courier company is required");
+        }
+        if (!StringUtils.hasText(trackingNo) || trackingNo.length() > 100 || !trackingNo.matches("[A-Za-z0-9-]+")) {
+            throw new IllegalArgumentException("valid tracking number is required");
+        }
+    }
+
+    private void dispatchShipment(HealthBoxShipmentVo shipment, String courierCompany, String trackingNo) {
+        String currentStatus = defaultText(shipment.getShipmentStatus(), "PENDING").toUpperCase(Locale.ROOT);
+        if (Arrays.asList("PENDING", "ORDERED", "PARTIALLY_CANCELED").contains(currentStatus)) {
+            validateShipmentStatusTransition(currentStatus, "PREPARING");
+            currentStatus = "PREPARING";
+        }
+        if (!"SHIPPED".equals(currentStatus)) {
+            validateShipmentStatusTransition(currentStatus, "SHIPPED");
+        }
+
+        shipment.setShipmentStatus("SHIPPED");
+        shipment.setCourierCompany(courierCompany);
+        shipment.setTrackingNo(trackingNo);
+        if (shipment.getShippedAt() == null) {
+            shipment.setShippedAt(LocalDateTime.now());
+        }
+        shipmentRepository.save(shipment);
     }
 
     @Transactional
