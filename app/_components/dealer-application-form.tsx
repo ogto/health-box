@@ -8,7 +8,6 @@ import {
   DEALER_APPLICATION_PRIVACY_SUMMARY,
 } from "@/lib/dealer-application-consent";
 import {
-  DEALER_CONTRACT_PAGE_COUNT,
   DEALER_CONTRACT_PRINT_MESSAGE,
   DEALER_CONTRACT_PRINT_URL,
   DEALER_CONTRACT_TITLE,
@@ -274,12 +273,9 @@ export function DealerApplicationForm() {
 
         <fieldset className="dealer-application-section dealer-contract-section">
           <legend><span>04</span> 딜러 계약서 확인·출력</legend>
-          <p className="dealer-contract-intro">신청 전 계약서 전체를 확인하고 출력해주세요. 신청 접수만으로 딜러 승인이나 계약 체결이 완료되는 것은 아닙니다.</p>
           <div className="dealer-contract-file">
             <div>
-              <span className="dealer-contract-file-tag">PDF · {DEALER_CONTRACT_VERSION} · A4 {DEALER_CONTRACT_PAGE_COUNT}쪽</span>
               <strong>{DEALER_CONTRACT_TITLE}</strong>
-              <p>새 창에서 계약서 원문을 확인한 뒤 ‘계약서 {DEALER_CONTRACT_PAGE_COUNT}쪽 인쇄’를 눌러주세요.</p>
             </div>
             <button className="button-primary" disabled={loading} onClick={openContract} type="button">계약서 확인·인쇄</button>
           </div>
