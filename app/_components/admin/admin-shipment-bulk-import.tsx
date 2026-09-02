@@ -212,7 +212,7 @@ export function AdminShipmentBulkImport({ redirectTo }: { redirectTo: string }) 
     try {
       setParsed(buildImportData(await readSpreadsheetRows(file)));
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "CSV 파일을 읽지 못했습니다.");
+      setError(caughtError instanceof Error ? caughtError.message : "파일을 읽지 못했습니다. XLSX 또는 CSV 형식을 확인해주세요.");
     }
   }
 

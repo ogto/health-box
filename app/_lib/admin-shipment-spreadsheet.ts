@@ -128,25 +128,28 @@ export async function createShippingWorkbook(rows: AdminOrderExportRow[]) {
 
 function worksheetRows(worksheet: ExcelJS.Worksheet) {
   const rows: string[][] = [];
-  for (let rowNumber = 1; rowNumber <= worksheet.actualRowCount; rowNumber += 1) {
-    const row = worksheet.getRow(rowNumber);
+  worksheet.eachRow((row) => {
     const values = Array.from(
       { length: Math.max(worksheet.columnCount, row.cellCount) },
       (_, index) => row.getCell(index + 1).text.trim(),
     );
     if (values.some(Boolean)) rows.push(values);
-  }
+  });
   return rows;
 }
 
 function normalizedHeader(value: string) {
-  return value.replace(/[\s_-]/g, "").toLowerCase();
+  return value.replace(/^\uFEFF/, "").replace(/[\s_-]/g, "").toLowerCase();
 }
 
 function hasShipmentHeaders(rows: string[][]) {
   const headers = rows[0]?.map(normalizedHeader) || [];
-  return ["주문번호", "택배사", "송장번호"].every((requiredHeader) =>
-    headers.includes(normalizedHeader(requiredHeader)),
+  return [
+    ["주문번호", "orderNo", "orderNumber"],
+    ["택배사", "배송사", "택배회사", "courier", "courierCompany"],
+    ["송장번호", "운송장번호", "trackingNo", "trackingNumber"],
+  ].every((aliases) =>
+    aliases.some((alias) => headers.includes(normalizedHeader(alias))),
   );
 }
 
