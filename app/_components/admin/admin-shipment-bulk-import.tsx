@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal, useFormStatus } from "react-dom";
 
 import { bulkShipmentImportAction } from "../../_actions/health-box-admin";
@@ -20,55 +20,6 @@ type ParsedShipmentFile = {
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_ROWS = 500;
 
-function parseCsv(text: string) {
-  const rows: string[][] = [];
-  let currentRow: string[] = [];
-  let currentCell = "";
-  let quoted = false;
-
-  for (let index = 0; index < text.length; index += 1) {
-    const character = text[index];
-    const nextCharacter = text[index + 1];
-
-    if (quoted) {
-      if (character === '"' && nextCharacter === '"') {
-        currentCell += '"';
-        index += 1;
-      } else if (character === '"') {
-        quoted = false;
-      } else {
-        currentCell += character;
-      }
-      continue;
-    }
-
-    if (character === '"' && currentCell === "") {
-      quoted = true;
-    } else if (character === ",") {
-      currentRow.push(currentCell);
-      currentCell = "";
-    } else if (character === "\n" || character === "\r") {
-      currentRow.push(currentCell);
-      rows.push(currentRow);
-      currentRow = [];
-      currentCell = "";
-      if (character === "\r" && nextCharacter === "\n") index += 1;
-    } else {
-      currentCell += character;
-    }
-  }
-
-  if (quoted) {
-    throw new Error("따옴표가 닫히지 않은 CSV입니다.");
-  }
-  if (currentCell || currentRow.length) {
-    currentRow.push(currentCell);
-    rows.push(currentRow);
-  }
-
-  return rows.filter((row) => row.some((cell) => cell.trim()));
-}
-
 function normalizeHeader(value: string) {
   return value.replace(/^\uFEFF/, "").replace(/[\s_-]/g, "").toLowerCase();
 }
@@ -78,20 +29,12 @@ function findHeaderIndex(headers: string[], aliases: string[]) {
   return headers.findIndex((header) => normalizedAliases.includes(normalizeHeader(header)));
 }
 
-function decodeCsv(buffer: ArrayBuffer) {
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
-  } catch {
-    return new TextDecoder("euc-kr").decode(buffer);
-  }
-}
-
-function buildImportData(csvRows: string[][]): ParsedShipmentFile {
-  if (csvRows.length < 2) {
+function buildImportData(spreadsheetRows: string[][]): ParsedShipmentFile {
+  if (spreadsheetRows.length < 2) {
     throw new Error("처리할 주문 행이 없습니다.");
   }
 
-  const headers = csvRows[0];
+  const headers = spreadsheetRows[0];
   const orderNoIndex = findHeaderIndex(headers, ["주문번호", "orderNo", "orderNumber"]);
   const courierIndex = findHeaderIndex(headers, ["택배사", "배송사", "택배회사", "courier", "courierCompany"]);
   const trackingIndex = findHeaderIndex(headers, ["송장번호", "운송장번호", "trackingNo", "trackingNumber"]);
@@ -104,11 +47,11 @@ function buildImportData(csvRows: string[][]): ParsedShipmentFile {
   const rowErrors: string[] = [];
   let ignoredCount = 0;
 
-  csvRows.slice(1).forEach((csvRow, index) => {
+  spreadsheetRows.slice(1).forEach((spreadsheetRow, index) => {
     const sourceRowNumber = index + 2;
-    const orderNo = (csvRow[orderNoIndex] || "").trim().replace(/^'/, "");
-    const courierCompany = (csvRow[courierIndex] || "").trim();
-    const trackingNo = (csvRow[trackingIndex] || "").trim().replace(/\s/g, "");
+    const orderNo = (spreadsheetRow[orderNoIndex] || "").trim().replace(/^'/, "");
+    const courierCompany = (spreadsheetRow[courierIndex] || "").trim();
+    const trackingNo = (spreadsheetRow[trackingIndex] || "").trim().replace(/\s/g, "");
 
     if (!orderNo && !courierCompany && !trackingNo) return;
     if (!courierCompany && !trackingNo) {
@@ -147,17 +90,13 @@ function buildImportData(csvRows: string[][]): ParsedShipmentFile {
     throw new Error(`한 번에 최대 ${MAX_ROWS}건까지 처리할 수 있습니다.`);
   }
 
-  return { ignoredCount, rows, sourceCount: csvRows.length - 1 };
+  return { ignoredCount, rows, sourceCount: spreadsheetRows.length - 1 };
 }
 
 async function readSpreadsheetRows(file: File) {
   const buffer = await file.arrayBuffer();
-  if (/\.xlsx$/i.test(file.name)) {
-    const { readShippingWorkbook } = await import("../../_lib/admin-shipment-spreadsheet");
-    return readShippingWorkbook(buffer);
-  }
-
-  return parseCsv(decodeCsv(buffer));
+  const { readShippingWorkbook } = await import("../../_lib/admin-shipment-spreadsheet");
+  return readShippingWorkbook(buffer);
 }
 
 function ShipmentImportSubmitButton({ count }: { count: number }) {
@@ -175,33 +114,38 @@ export function AdminShipmentBulkImport({ redirectTo }: { redirectTo: string }) 
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [parsed, setParsed] = useState<ParsedShipmentFile | null>(null);
+  const [reading, setReading] = useState(false);
+  const fileReadId = useRef(0);
 
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    if (open) document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open]);
-
-  function resetFile() {
+  const resetFile = useCallback(() => {
+    fileReadId.current += 1;
     setFileName("");
     setError("");
     setParsed(null);
-  }
+    setReading(false);
+  }, []);
 
-  function closeDialog() {
+  const closeDialog = useCallback(() => {
     setOpen(false);
     resetFile();
-  }
+  }, [resetFile]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") closeDialog();
+    }
+    if (open) document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, closeDialog]);
 
   async function handleFile(file: File | undefined) {
     resetFile();
     if (!file) return;
+    const currentReadId = fileReadId.current;
     setFileName(file.name);
 
-    if (!/\.(csv|xlsx)$/i.test(file.name)) {
-      setError("XLSX 또는 CSV 파일만 등록할 수 있습니다.");
+    if (!/\.xlsx$/i.test(file.name)) {
+      setError("엑셀(.xlsx) 파일만 등록할 수 있습니다.");
       return;
     }
     if (file.size > MAX_FILE_BYTES) {
@@ -209,10 +153,16 @@ export function AdminShipmentBulkImport({ redirectTo }: { redirectTo: string }) 
       return;
     }
 
+    setReading(true);
     try {
-      setParsed(buildImportData(await readSpreadsheetRows(file)));
+      const result = buildImportData(await readSpreadsheetRows(file));
+      if (currentReadId === fileReadId.current) setParsed(result);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "파일을 읽지 못했습니다. XLSX 또는 CSV 형식을 확인해주세요.");
+      if (currentReadId === fileReadId.current) {
+        setError(caughtError instanceof Error ? caughtError.message : "파일을 읽지 못했습니다. 엑셀(.xlsx) 형식을 확인해주세요.");
+      }
+    } finally {
+      if (currentReadId === fileReadId.current) setReading(false);
     }
   }
 
@@ -230,7 +180,7 @@ export function AdminShipmentBulkImport({ redirectTo }: { redirectTo: string }) 
                 <div className="admin-info-dialog-head">
                   <div className="admin-info-dialog-copy">
                     <strong>송장 일괄 등록</strong>
-                    <p>배송용 엑셀의 택배사와 송장번호를 채운 뒤 XLSX 또는 CSV 파일을 등록하세요.</p>
+                    <p>배송용 엑셀의 택배사와 송장번호를 채운 뒤 엑셀(.xlsx) 파일을 등록하세요.</p>
                   </div>
                   <button aria-label="송장 일괄 등록 닫기" className="admin-info-dialog-close" onClick={closeDialog} type="button">×</button>
                 </div>
@@ -242,14 +192,14 @@ export function AdminShipmentBulkImport({ redirectTo }: { redirectTo: string }) 
                   <ol className="admin-shipment-import-guide">
                     <li>현재 조건의 <strong>배송용 엑셀</strong>을 내려받습니다.</li>
                     <li>마지막의 <strong>택배사</strong>, <strong>송장번호</strong> 열을 채웁니다.</li>
-                    <li>작성한 XLSX 파일을 그대로 등록합니다. 택배사 CSV도 사용할 수 있습니다.</li>
+                    <li>작성한 엑셀(.xlsx) 파일을 그대로 등록합니다.</li>
                   </ol>
 
                   <label className="admin-shipment-import-dropzone">
-                    <strong>{fileName || "송장 XLSX · CSV 파일 선택"}</strong>
-                    <span>최대 500건 · 5MB · 비어 있는 송장 행은 제외</span>
+                    <strong>{fileName || "송장 엑셀(.xlsx) 파일 선택"}</strong>
+                    <span aria-live="polite">{reading ? "엑셀 파일 확인 중..." : "최대 500건 · 5MB · 비어 있는 송장 행은 제외"}</span>
                     <input
-                      accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                      accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                       onChange={(event) => void handleFile(event.target.files?.[0])}
                       type="file"
                     />

@@ -4,6 +4,19 @@ import ExcelJS from "exceljs";
 
 import type { AdminOrderExportRow } from "../_components/admin/admin-order-excel-download-button";
 
+export const ORDER_SPREADSHEET_HEADERS = [
+  "주문번호",
+  "주문일시",
+  "주문상태",
+  "배송속성",
+  "회원사",
+  "상품명",
+  "옵션정보",
+  "수량",
+  "결제금액",
+  "클레임상태",
+] as const;
+
 export const SHIPPING_SPREADSHEET_HEADERS = [
   "주문번호",
   "주문일시",
@@ -27,6 +40,13 @@ export const SHIPPING_SPREADSHEET_HEADERS = [
 const COLUMN_WIDTHS = [18, 21, 14, 12, 16, 12, 16, 10, 32, 22, 54, 10, 14, 13, 16, 18, 20];
 const TEXT_COLUMN_NUMBERS = [1, 5, 7, 8, 16, 17];
 
+function spreadsheetNumber(value: string) {
+  const normalized = value.replace(/,/g, "").replace(/[원개]$/, "").trim();
+  if (!/^[+-]?\d+(?:\.\d+)?$/.test(normalized)) return value;
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : value;
+}
+
 function shippingRowValues(row: AdminOrderExportRow) {
   return [
     row.orderNo,
@@ -40,8 +60,8 @@ function shippingRowValues(row: AdminOrderExportRow) {
     row.baseAddress,
     row.detailAddress,
     row.productDetails,
-    row.quantity,
-    row.amount,
+    spreadsheetNumber(row.quantity),
+    spreadsheetNumber(row.amount),
     row.deliveryType,
     row.company,
     "",
@@ -49,23 +69,23 @@ function shippingRowValues(row: AdminOrderExportRow) {
   ];
 }
 
-export async function createShippingWorkbook(rows: AdminOrderExportRow[]) {
+function createExportWorksheet(name: string, headers: readonly string[], widths: number[]) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "건강창고";
   workbook.created = new Date();
-  const worksheet = workbook.addWorksheet("배송목록", {
+  const worksheet = workbook.addWorksheet(name, {
     properties: { defaultRowHeight: 24 },
     views: [{ state: "frozen", ySplit: 1 }],
   });
 
-  worksheet.columns = SHIPPING_SPREADSHEET_HEADERS.map((header, index) => ({
+  worksheet.columns = headers.map((header, index) => ({
     header,
     key: `column_${index + 1}`,
-    width: COLUMN_WIDTHS[index],
+    width: widths[index],
   }));
   worksheet.autoFilter = {
     from: { column: 1, row: 1 },
-    to: { column: SHIPPING_SPREADSHEET_HEADERS.length, row: 1 },
+    to: { column: headers.length, row: 1 },
   };
 
   const headerRow = worksheet.getRow(1);
@@ -82,30 +102,78 @@ export async function createShippingWorkbook(rows: AdminOrderExportRow[]) {
     cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
   });
 
+  return { workbook, worksheet };
+}
+
+function styleDataRow(row: ExcelJS.Row, index: number, wrapColumns: number[], centerColumns: number[]) {
+  row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
+    cell.alignment = {
+      horizontal: typeof cell.value === "number" ? "right" : centerColumns.includes(columnNumber) ? "center" : "left",
+      vertical: "middle",
+      wrapText: wrapColumns.includes(columnNumber),
+    };
+    cell.border = {
+      bottom: { color: { argb: "FFDCE5DF" }, style: "thin" },
+      left: { color: { argb: "FFE7EDE9" }, style: "thin" },
+      right: { color: { argb: "FFE7EDE9" }, style: "thin" },
+      top: { color: { argb: "FFDCE5DF" }, style: "thin" },
+    };
+    if (index % 2 === 1) {
+      cell.fill = { fgColor: { argb: "FFF7FAF8" }, pattern: "solid", type: "pattern" };
+    }
+  });
+}
+
+export async function createOrderWorkbook(rows: AdminOrderExportRow[]) {
+  const { workbook, worksheet } = createExportWorksheet(
+    "주문목록",
+    ORDER_SPREADSHEET_HEADERS,
+    [18, 28, 14, 13, 16, 54, 32, 10, 16, 18],
+  );
+  worksheet.getColumn(1).numFmt = "@";
+  worksheet.getColumn(8).numFmt = "#,##0";
+  worksheet.getColumn(9).numFmt = '#,##0"원"';
+
+  rows.forEach((row, index) => {
+    // Text is stored as a string, never as an Excel formula object.
+    const excelRow = worksheet.addRow([
+      row.orderNo,
+      row.orderAt,
+      row.status,
+      row.deliveryType,
+      row.company,
+      row.productName,
+      row.option,
+      spreadsheetNumber(row.quantity),
+      spreadsheetNumber(row.amount),
+      row.claimStatus,
+    ]);
+    const lineCount = Math.max(
+      1,
+      ...[row.productName, row.option].map((value) =>
+        value.split("\n").reduce((count, line) => count + Math.max(1, Math.ceil(line.length / 24)), 0),
+      ),
+    );
+    excelRow.height = Math.min(96, 24 + (lineCount - 1) * 16);
+    styleDataRow(excelRow, index, [6, 7, 10], [1, 3, 4, 10]);
+  });
+
+  return new Uint8Array(await workbook.xlsx.writeBuffer());
+}
+
+export async function createShippingWorkbook(rows: AdminOrderExportRow[]) {
+  const { workbook, worksheet } = createExportWorksheet("배송목록", SHIPPING_SPREADSHEET_HEADERS, COLUMN_WIDTHS);
   for (const columnNumber of TEXT_COLUMN_NUMBERS) {
     worksheet.getColumn(columnNumber).numFmt = "@";
   }
+  worksheet.getColumn(12).numFmt = "#,##0";
+  worksheet.getColumn(13).numFmt = '#,##0"원"';
 
   rows.forEach((row, index) => {
     const excelRow = worksheet.addRow(shippingRowValues(row));
     const productLineCount = Math.max(1, row.productDetails.split("\n").length);
     excelRow.height = Math.min(84, 24 + (productLineCount - 1) * 15);
-    excelRow.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
-      cell.alignment = {
-        horizontal: [1, 3, 8, 12, 13, 14, 16, 17].includes(columnNumber) ? "center" : "left",
-        vertical: "middle",
-        wrapText: [9, 10, 11, 16, 17].includes(columnNumber),
-      };
-      cell.border = {
-        bottom: { color: { argb: "FFDCE5DF" }, style: "thin" },
-        left: { color: { argb: "FFE7EDE9" }, style: "thin" },
-        right: { color: { argb: "FFE7EDE9" }, style: "thin" },
-        top: { color: { argb: "FFDCE5DF" }, style: "thin" },
-      };
-      if (index % 2 === 1) {
-        cell.fill = { fgColor: { argb: "FFF7FAF8" }, pattern: "solid", type: "pattern" };
-      }
-    });
+    styleDataRow(excelRow, index, [9, 10, 11, 16, 17], [1, 3, 8, 14, 16, 17]);
 
     for (const columnNumber of [16, 17]) {
       const inputCell = excelRow.getCell(columnNumber);
