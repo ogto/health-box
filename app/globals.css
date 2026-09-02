@@ -2772,6 +2772,7 @@ select option:disabled {
 .dealer-contract-steps li > span { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 26px; height: 26px; border-radius: 50%; background: #e7f1e9; color: #2f7a3d; font-size: 12px; font-weight: 850; }
 .dealer-contract-steps strong { display: block; color: #29435b; font-size: 14px; line-height: 1.7; }
 .dealer-contract-steps p { margin: 3px 0 0; color: #6a7e90; font-size: 13px; line-height: 1.7; }
+.dealer-contract-email { color: #2f7a3d; font-weight: 700; text-decoration: underline; overflow-wrap: anywhere; }
 .dealer-contract-confirmation { padding: 16px; border-radius: 13px; background: #edf5ef; }
 .dealer-contract-confirmation label { display: flex; align-items: flex-start; gap: 10px; color: #29435b; font-size: 14px; line-height: 1.65; cursor: pointer; }
 .dealer-contract-confirmation input { flex: 0 0 20px; width: 20px; height: 20px; margin: 2px 0 0; accent-color: #2f7a3d; }

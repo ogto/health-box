@@ -8,8 +8,9 @@ import {
   DEALER_APPLICATION_PRIVACY_SUMMARY,
 } from "@/lib/dealer-application-consent";
 import {
-  DEALER_CONTRACT_PRINT_MESSAGE,
+  DEALER_CONTRACT_PREPARED_MESSAGE,
   DEALER_CONTRACT_PRINT_URL,
+  DEALER_CONTRACT_SUBMISSION_EMAIL,
   DEALER_CONTRACT_TITLE,
   DEALER_CONTRACT_VERSION,
 } from "@/lib/dealer-contract";
@@ -31,24 +32,24 @@ export function DealerApplicationForm() {
   const [error, setError] = useState("");
   const [submittedApplicationId, setSubmittedApplicationId] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
-  const [contractPrintRequested, setContractPrintRequested] = useState(false);
-  const [contractPrintConfirmed, setContractPrintConfirmed] = useState(false);
+  const [contractPrepared, setContractPrepared] = useState(false);
+  const [contractConfirmed, setContractConfirmed] = useState(false);
   const contractWindow = useRef<Window | null>(null);
   const contractRequestId = useRef("");
-  const contractReady = contractPrintRequested && contractPrintConfirmed;
+  const contractReady = contractPrepared && contractConfirmed;
 
   useEffect(() => {
-    function handleContractPrint(event: MessageEvent) {
+    function handleContractPrepared(event: MessageEvent) {
       if (event.origin !== window.location.origin || event.source !== contractWindow.current) return;
       if (!event.data || typeof event.data !== "object") return;
-      if (event.data.type !== DEALER_CONTRACT_PRINT_MESSAGE
+      if (event.data.type !== DEALER_CONTRACT_PREPARED_MESSAGE
         || event.data.version !== DEALER_CONTRACT_VERSION
         || !contractRequestId.current
         || event.data.requestId !== contractRequestId.current) return;
-      setContractPrintRequested(true);
+      setContractPrepared(true);
     }
-    window.addEventListener("message", handleContractPrint);
-    return () => window.removeEventListener("message", handleContractPrint);
+    window.addEventListener("message", handleContractPrepared);
+    return () => window.removeEventListener("message", handleContractPrepared);
   }, []);
 
   function openContract() {
@@ -63,8 +64,8 @@ export function DealerApplicationForm() {
       }
       contractWindow.current = printWindow;
       contractRequestId.current = requestId;
-      setContractPrintRequested(false);
-      setContractPrintConfirmed(false);
+      setContractPrepared(false);
+      setContractConfirmed(false);
     } catch {
       setError("계약서 인쇄창을 열지 못했습니다. 인쇄 가능한 브라우저 또는 PC에서 다시 시도해주세요.");
     }
@@ -75,7 +76,7 @@ export function DealerApplicationForm() {
     if (loading) return;
     setError("");
     if (!contractReady) {
-      setError("계약서를 인쇄한 뒤 출력 완료와 후속 제출 절차를 확인해주세요.");
+      setError("계약서를 인쇄 또는 저장한 뒤 완료 확인란에 체크해주세요.");
       return;
     }
     setLoading(true);
@@ -114,8 +115,8 @@ export function DealerApplicationForm() {
       setSubmitted(true);
       form.reset();
       setWantedSlug("");
-      setContractPrintRequested(false);
-      setContractPrintConfirmed(false);
+      setContractPrepared(false);
+      setContractConfirmed(false);
       contractWindow.current = null;
       contractRequestId.current = "";
     } catch {
@@ -132,7 +133,8 @@ export function DealerApplicationForm() {
         <h1>딜러 신청이 접수되었습니다.</h1>
         <p>
           본사에서 신청 내용을 검토한 뒤 입력하신 연락처로 계약서 작성·날인과 제출 방법을 안내드립니다.
-          날인한 사본 사진으로 사전 승인을 진행한 후 원본을 우편으로 교환합니다.
+          계약서에 날인한 후 스캔하여 <a className="dealer-contract-email" href={`mailto:${DEALER_CONTRACT_SUBMISSION_EMAIL}`}>{DEALER_CONTRACT_SUBMISSION_EMAIL}</a>으로 이메일을 보내주세요.
+          스캔본 확인을 통한 사전 승인 후 원본을 우편으로 교환합니다.
         </p>
         <p>계약서 원본은 2부를 작성해 본사와 딜러가 각 1부씩 보관합니다. 딜러몰 개설 일정은 담당자가 별도로 안내드립니다.</p>
         {submittedApplicationId ? (
@@ -152,13 +154,13 @@ export function DealerApplicationForm() {
     <div className="dealer-application-card">
       <div className="dealer-application-head">
         <h1>건강창고 딜러 신청</h1>
-        <p>계약서를 먼저 확인·출력한 뒤 딜러몰 운영을 신청해주세요. 본사 검토 후 날인본 확인과 원본 교환 절차를 안내드립니다.</p>
+        <p>계약서를 먼저 인쇄 또는 저장한 뒤 딜러몰 운영을 신청해주세요. 본사 검토 후 날인한 계약서의 스캔본 제출과 원본 교환 절차를 안내드립니다.</p>
         <div className="dealer-application-process" aria-label="딜러 신청 절차">
           <span><b>1</b> 신청서 접수</span>
           <i aria-hidden="true" />
           <span><b>2</b> 본사 검토</span>
           <i aria-hidden="true" />
-          <span><b>3</b> 날인본 확인·사전 승인</span>
+          <span><b>3</b> 스캔본 확인·사전 승인</span>
           <i aria-hidden="true" />
           <span><b>4</b> 원본 우편 교환</span>
         </div>
@@ -272,34 +274,34 @@ export function DealerApplicationForm() {
         </fieldset>
 
         <fieldset className="dealer-application-section dealer-contract-section">
-          <legend><span>04</span> 딜러 계약서 확인·출력</legend>
+          <legend><span>04</span> 딜러 계약서 확인</legend>
           <div className="dealer-contract-file">
             <div>
               <strong>{DEALER_CONTRACT_TITLE}</strong>
             </div>
-            <button className="button-primary" disabled={loading} onClick={openContract} type="button">계약서 확인·인쇄</button>
+            <button className="button-primary" disabled={loading} onClick={openContract} type="button">계약서 확인</button>
           </div>
           <ol className="dealer-contract-steps">
-            <li><span>1</span><div><strong>본사 검토 및 제출 안내</strong><p>신청 내용을 검토한 뒤 담당자가 계약서 작성 방법과 사진 제출처, 우편 수령처를 안내합니다.</p></div></li>
-            <li><span>2</span><div><strong>날인한 사본 사진 제출·사전 승인</strong><p>안내에 따라 계약서를 작성·날인하고, 글자와 날인이 선명하게 보이도록 촬영한 사진을 보내주세요.</p></div></li>
+            <li><span>1</span><div><strong>본사 검토 및 제출 안내</strong><p>신청 내용을 검토한 뒤 담당자가 계약서 작성 방법과 제출 절차, 우편 수령처를 안내합니다.</p></div></li>
+            <li><span>2</span><div><strong>날인 후 스캔본 이메일 제출·사전 승인</strong><p>계약서에 날인한 후 스캔하여 <a className="dealer-contract-email" href={`mailto:${DEALER_CONTRACT_SUBMISSION_EMAIL}`}>{DEALER_CONTRACT_SUBMISSION_EMAIL}</a>으로 이메일을 보내주세요. 스캔본 확인 후 사전 승인을 진행합니다.</p></div></li>
             <li><span>3</span><div><strong>원본 우편 교환</strong><p>사전 승인 후 계약서 원본 2부를 작성·날인하여 우편으로 교환하고, 본사와 딜러가 각 1부씩 보관합니다.</p></div></li>
           </ol>
           <div className="dealer-contract-confirmation">
             <label>
               <input
-                aria-describedby="dealer-contract-print-note"
-                checked={contractPrintConfirmed}
-                disabled={!contractPrintRequested || loading}
-                onChange={(event) => setContractPrintConfirmed(event.target.checked)}
+                aria-describedby="dealer-contract-confirmation-note"
+                checked={contractConfirmed}
+                disabled={!contractPrepared || loading}
+                onChange={(event) => setContractConfirmed(event.target.checked)}
                 required
                 type="checkbox"
               />
-              <span><b>필수</b> 계약서 출력을 완료했으며, 본사 검토 후 날인본 사진 제출과 원본 우편 교환 절차를 확인했습니다.</span>
+              <span><b>필수</b> 계약서를 인쇄 또는 저장했으며, 본사 검토 후 날인한 계약서의 스캔본 이메일 제출과 원본 우편 교환 절차를 확인했습니다.</span>
             </label>
-            <p id="dealer-contract-print-note" role="status">
-              {contractPrintRequested
-                ? "실제 출력 여부는 자동 확인할 수 없습니다. 인쇄를 취소했다면 다시 출력한 후 체크해주세요."
-                : "계약서 인쇄 화면에서 인쇄를 진행하면 출력 완료 확인란이 활성화됩니다."}
+            <p id="dealer-contract-confirmation-note" role="status">
+              {contractPrepared
+                ? "인쇄물 또는 저장된 파일을 확인한 뒤 체크해주세요."
+                : "계약서 화면에서 인쇄 또는 저장을 진행하면 확인란이 활성화됩니다."}
             </p>
           </div>
         </fieldset>
@@ -331,7 +333,7 @@ export function DealerApplicationForm() {
         <button className="button-primary dealer-application-submit" disabled={loading || !contractReady} type="submit">
           {loading ? "신청 접수 중..." : "딜러 신청하기"}
         </button>
-        <p className="dealer-application-submit-note">계약서 출력 완료를 확인해야 신청할 수 있습니다. 날인본 사진과 원본은 본사 안내에 따라 별도로 제출해주세요.</p>
+        <p className="dealer-application-submit-note">계약서 인쇄 또는 저장을 확인해야 신청할 수 있습니다. 날인한 계약서의 스캔본은 이메일로, 원본은 우편으로 제출해주세요.</p>
       </form>
     </div>
   );
