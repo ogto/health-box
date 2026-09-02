@@ -1,5 +1,9 @@
 "use client";
 
+import { useState } from "react";
+
+import { dispatchAdminToast } from "./admin-toast";
+
 export type AdminOrderExportRow = {
   amount: string;
   baseAddress: string;
@@ -123,8 +127,7 @@ function todayKey() {
   ].join("");
 }
 
-function downloadCsv(csv: string, fileName: string) {
-  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -135,6 +138,10 @@ function downloadCsv(csv: string, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
+function downloadCsv(csv: string, fileName: string) {
+  downloadBlob(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }), fileName);
+}
+
 export function AdminOrderExcelDownloadButton({
   rows,
   shippingRows,
@@ -142,6 +149,24 @@ export function AdminOrderExcelDownloadButton({
   rows: AdminOrderExportRow[];
   shippingRows: AdminOrderExportRow[];
 }) {
+  const [downloadingXlsx, setDownloadingXlsx] = useState(false);
+
+  async function downloadShippingXlsx() {
+    setDownloadingXlsx(true);
+    try {
+      const { createShippingWorkbook } = await import("../../_lib/admin-shipment-spreadsheet");
+      const workbook = await createShippingWorkbook(shippingRows);
+      downloadBlob(
+        new Blob([workbook], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+        `health-box-shipping-${todayKey()}.xlsx`,
+      );
+    } catch {
+      dispatchAdminToast("배송용 엑셀 파일을 만들지 못했습니다. 다시 시도해주세요.", "error");
+    } finally {
+      setDownloadingXlsx(false);
+    }
+  }
+
   return (
     <div className="admin-order-excel-actions">
       <button
@@ -150,7 +175,16 @@ export function AdminOrderExcelDownloadButton({
         onClick={() => downloadCsv(buildOrderCsv(rows), `health-box-orders-${todayKey()}.csv`)}
         type="button"
       >
-        주문 엑셀
+        주문 CSV
+      </button>
+      <button
+        className="admin-button secondary small"
+        disabled={!shippingRows.length || downloadingXlsx}
+        onClick={() => void downloadShippingXlsx()}
+        title="현재 조회 결과 중 발송 전 주문을 XLSX 형식으로 내려받습니다."
+        type="button"
+      >
+        {downloadingXlsx ? "엑셀 생성 중..." : "배송용 엑셀"}
       </button>
       <button
         className="admin-button secondary small"
@@ -159,7 +193,7 @@ export function AdminOrderExcelDownloadButton({
         title="현재 조회 결과 중 발송 전 주문만 내려받습니다."
         type="button"
       >
-        배송용 엑셀
+        배송용 CSV
       </button>
     </div>
   );

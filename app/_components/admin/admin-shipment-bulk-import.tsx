@@ -17,7 +17,7 @@ type ParsedShipmentFile = {
   sourceCount: number;
 };
 
-const MAX_FILE_BYTES = 2 * 1024 * 1024;
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_ROWS = 500;
 
 function parseCsv(text: string) {
@@ -86,8 +86,7 @@ function decodeCsv(buffer: ArrayBuffer) {
   }
 }
 
-function buildImportData(text: string): ParsedShipmentFile {
-  const csvRows = parseCsv(text);
+function buildImportData(csvRows: string[][]): ParsedShipmentFile {
   if (csvRows.length < 2) {
     throw new Error("처리할 주문 행이 없습니다.");
   }
@@ -151,6 +150,16 @@ function buildImportData(text: string): ParsedShipmentFile {
   return { ignoredCount, rows, sourceCount: csvRows.length - 1 };
 }
 
+async function readSpreadsheetRows(file: File) {
+  const buffer = await file.arrayBuffer();
+  if (/\.xlsx$/i.test(file.name)) {
+    const { readShippingWorkbook } = await import("../../_lib/admin-shipment-spreadsheet");
+    return readShippingWorkbook(buffer);
+  }
+
+  return parseCsv(decodeCsv(buffer));
+}
+
 function ShipmentImportSubmitButton({ count }: { count: number }) {
   const { pending } = useFormStatus();
 
@@ -191,17 +200,17 @@ export function AdminShipmentBulkImport({ redirectTo }: { redirectTo: string }) 
     if (!file) return;
     setFileName(file.name);
 
-    if (!/\.csv$/i.test(file.name)) {
-      setError("CSV 파일만 등록할 수 있습니다. 엑셀에서 CSV UTF-8 형식으로 저장해주세요.");
+    if (!/\.(csv|xlsx)$/i.test(file.name)) {
+      setError("XLSX 또는 CSV 파일만 등록할 수 있습니다.");
       return;
     }
     if (file.size > MAX_FILE_BYTES) {
-      setError("파일 크기는 2MB 이하여야 합니다.");
+      setError("파일 크기는 5MB 이하여야 합니다.");
       return;
     }
 
     try {
-      setParsed(buildImportData(decodeCsv(await file.arrayBuffer())));
+      setParsed(buildImportData(await readSpreadsheetRows(file)));
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "CSV 파일을 읽지 못했습니다.");
     }
@@ -221,7 +230,7 @@ export function AdminShipmentBulkImport({ redirectTo }: { redirectTo: string }) 
                 <div className="admin-info-dialog-head">
                   <div className="admin-info-dialog-copy">
                     <strong>송장 일괄 등록</strong>
-                    <p>배송용 엑셀의 택배사와 송장번호를 채운 뒤 CSV 파일을 등록하세요.</p>
+                    <p>배송용 엑셀의 택배사와 송장번호를 채운 뒤 XLSX 또는 CSV 파일을 등록하세요.</p>
                   </div>
                   <button aria-label="송장 일괄 등록 닫기" className="admin-info-dialog-close" onClick={closeDialog} type="button">×</button>
                 </div>
@@ -233,13 +242,17 @@ export function AdminShipmentBulkImport({ redirectTo }: { redirectTo: string }) 
                   <ol className="admin-shipment-import-guide">
                     <li>현재 조건의 <strong>배송용 엑셀</strong>을 내려받습니다.</li>
                     <li>마지막의 <strong>택배사</strong>, <strong>송장번호</strong> 열을 채웁니다.</li>
-                    <li>CSV UTF-8 형식으로 저장한 파일을 아래에 등록합니다.</li>
+                    <li>작성한 XLSX 파일을 그대로 등록합니다. 택배사 CSV도 사용할 수 있습니다.</li>
                   </ol>
 
                   <label className="admin-shipment-import-dropzone">
-                    <strong>{fileName || "송장 CSV 파일 선택"}</strong>
-                    <span>최대 500건 · 2MB · 비어 있는 송장 행은 제외</span>
-                    <input accept=".csv,text/csv" onChange={(event) => void handleFile(event.target.files?.[0])} type="file" />
+                    <strong>{fileName || "송장 XLSX · CSV 파일 선택"}</strong>
+                    <span>최대 500건 · 5MB · 비어 있는 송장 행은 제외</span>
+                    <input
+                      accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                      onChange={(event) => void handleFile(event.target.files?.[0])}
+                      type="file"
+                    />
                   </label>
 
                   {error ? <div className="admin-shipment-import-error" role="alert">{error}</div> : null}
