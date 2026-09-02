@@ -1342,6 +1342,7 @@ public class HealthBoxService {
         response.setSkuCode(sku.getSkuCode());
         response.setSkuName(sku.getSkuName());
         response.setOptionSummary(buildOrderItemOptionSummary(sku.getId()));
+        response.setConsumerPrice(resolveConsumerPrice(product, sku));
         response.setUnitPrice(unitPrice);
         response.setLineAmount(unitPrice * quantity);
         response.setThumbnailUrl(resolveThumbnailUrl(mediaItems));
@@ -4023,6 +4024,16 @@ public class HealthBoxService {
             return product.getConsumerPrice();
         }
         return 0;
+    }
+
+    private int resolveConsumerPrice(HealthBoxProductVo product, HealthBoxProductSkuVo sku) {
+        if (sku.getConsumerPrice() != null && sku.getConsumerPrice() > 0) {
+            return sku.getConsumerPrice();
+        }
+        if (product.getConsumerPrice() != null && product.getConsumerPrice() > 0) {
+            return product.getConsumerPrice();
+        }
+        return resolveOrderPrice(product, sku);
     }
 
     private String buildOrderItemOptionSummary(Long skuId) {

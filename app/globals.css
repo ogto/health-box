@@ -5261,6 +5261,38 @@ select option:disabled {
   font-size: 18px;
 }
 
+.cart-item-price {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+}
+
+.cart-item-original-price {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.cart-item-original-price del {
+  color: #91a0ae;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.cart-item-original-price em {
+  color: #df3d35;
+  font-size: 15px;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.cart-item-price small {
+  color: #2f7a3d;
+  font-size: 12px;
+  font-weight: 850;
+}
+
 .cart-remove-button {
   color: #102235;
   font-size: 15px;
@@ -5405,6 +5437,34 @@ select option:disabled {
 
 .summary-row strong {
   color: var(--foreground);
+}
+
+.summary-row del {
+  color: #91a0ae;
+  font-weight: 750;
+}
+
+.summary-row.is-discount strong {
+  color: #df3d35;
+  font-size: 16px;
+}
+
+.cart-savings-highlight {
+  margin: 16px 0 0;
+  padding: 13px 14px;
+  border-radius: 8px;
+  background: #edf8ef;
+  color: #2f6f3b;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.cart-savings-highlight strong {
+  color: #21622f;
+  font-size: 15px;
+  font-weight: 950;
 }
 
 .summary-row.total {
@@ -6551,6 +6611,14 @@ select option:disabled {
   .cart-item-meta {
     justify-items: start;
     text-align: left;
+  }
+
+  .cart-item-price {
+    justify-items: start;
+  }
+
+  .cart-item-original-price {
+    justify-content: flex-start;
   }
 
   .lightbox-backdrop {

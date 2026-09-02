@@ -17,6 +17,7 @@ public class HealthBoxCartItemResponse {
     private String skuCode;
     private String skuName;
     private String optionSummary;
+    private Integer consumerPrice;
     private Integer unitPrice;
     private Integer lineAmount;
     private String thumbnailUrl;

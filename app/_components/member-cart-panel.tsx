@@ -59,6 +59,22 @@ function displayOptionLabel(value: string) {
   return !label || label === "기본 상품" || label === "상품" ? "없음" : label;
 }
 
+function positivePrice(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function originalUnitPrice(item: MemberCartItem) {
+  const consumerPrice = positivePrice(item.consumerPrice);
+  return consumerPrice > item.unitPrice ? consumerPrice : item.unitPrice;
+}
+
+function itemDiscountRate(item: MemberCartItem) {
+  const originalPrice = originalUnitPrice(item);
+  return originalPrice > item.unitPrice && item.unitPrice > 0
+    ? Math.round(((originalPrice - item.unitPrice) / originalPrice) * 100)
+    : 0;
+}
+
 type OrderQuote = {
   checkoutIntent: string;
   discountAmount: number;
@@ -156,9 +172,13 @@ export function MemberCartPanel({
     const matchedProduct =
       productCatalog.find((product) => product.skus?.some((sku) => Number(sku.id || 0) === item.skuId)) ||
       productCatalog.find((product) => product.title === item.productTitle);
+    const matchedSku = matchedProduct?.skus?.find((sku) => Number(sku.id || 0) === item.skuId);
+    const catalogConsumerPrice = positivePrice(matchedSku?.consumerPrice) || positivePrice(matchedProduct?.consumerPrice);
+    const consumerPrice = catalogConsumerPrice || positivePrice(item.consumerPrice);
 
     return {
       ...item,
+      consumerPrice: consumerPrice > item.unitPrice ? consumerPrice : undefined,
       optionLabel: displayOptionLabel(item.optionLabel),
       productSlug: matchedProduct?.slug || item.productSlug,
       productTitle: matchedProduct?.title || item.productTitle,
@@ -245,6 +265,11 @@ export function MemberCartPanel({
     () => selectedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
     [selectedItems],
   );
+  const originalProductAmount = useMemo(
+    () => selectedItems.reduce((sum, item) => sum + originalUnitPrice(item) * item.quantity, 0),
+    [selectedItems],
+  );
+  const productDiscountAmount = Math.max(0, originalProductAmount - productAmount);
   const shippingPolicy = useMemo(
     () => ({
       baseShippingFee,
@@ -669,7 +694,18 @@ export function MemberCartPanel({
                   ) : (
                     <span className="cart-checkout-quantity">수량 {item.quantity}개</span>
                   )}
-                  <strong>{formatWon(item.unitPrice * item.quantity)}</strong>
+                  <div className="cart-item-price">
+                    {itemDiscountRate(item) > 0 ? (
+                      <div className="cart-item-original-price">
+                        <del>{formatWon(originalUnitPrice(item) * item.quantity)}</del>
+                        <em>{itemDiscountRate(item)}%</em>
+                      </div>
+                    ) : null}
+                    <strong>{formatWon(item.unitPrice * item.quantity)}</strong>
+                    {itemDiscountRate(item) > 0 ? (
+                      <small>{formatWon((originalUnitPrice(item) - item.unitPrice) * item.quantity)} 할인</small>
+                    ) : null}
+                  </div>
                 </div>
               </article>
             ))}
@@ -690,10 +726,27 @@ export function MemberCartPanel({
           <h3 className="section-panel-title">주문 예상 금액</h3>
 
           <div className="summary-rows">
-            <div className="summary-row">
-              <span>총 상품 가격</span>
-              <strong>{formatWon(productAmount)}</strong>
-            </div>
+            {productDiscountAmount > 0 ? (
+              <>
+                <div className="summary-row">
+                  <span>정상가 합계</span>
+                  <del>{formatWon(originalProductAmount)}</del>
+                </div>
+                <div className="summary-row is-discount">
+                  <span>상품 할인</span>
+                  <strong>-{formatWon(productDiscountAmount)}</strong>
+                </div>
+                <div className="summary-row">
+                  <span>할인 적용 상품금액</span>
+                  <strong>{formatWon(productAmount)}</strong>
+                </div>
+              </>
+            ) : (
+              <div className="summary-row">
+                <span>총 상품 가격</span>
+                <strong>{formatWon(productAmount)}</strong>
+              </div>
+            )}
             <div className="summary-row">
               <span>배송비</span>
               <strong>
@@ -711,6 +764,12 @@ export function MemberCartPanel({
               <strong>{formatWon(totalPaymentAmount)}</strong>
             </div>
           </div>
+
+          {productDiscountAmount > 0 ? (
+            <p className="cart-savings-highlight">
+              상품 할인으로 총 <strong>{formatWon(productDiscountAmount)}</strong> 절약했어요
+            </p>
+          ) : null}
 
           {items.length && freeShippingRemaining > 0 ? (
             <p className="cart-shipping-notice">

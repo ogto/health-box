@@ -1,6 +1,7 @@
 export const MEMBER_CART_STORAGE_KEY = "health-box-member-cart";
 
 export type MemberCartItem = {
+  consumerPrice?: number;
   image?: string;
   optionLabel: string;
   productId?: number;
@@ -32,6 +33,7 @@ function normalizeCartItems(items: MemberCartItem[]) {
     if (existing) {
       merged.set(item.skuId, {
         ...existing,
+        consumerPrice: item.consumerPrice || existing.consumerPrice,
         quantity: existing.quantity + item.quantity,
         unitPrice: item.unitPrice || existing.unitPrice,
       });
@@ -40,6 +42,7 @@ function normalizeCartItems(items: MemberCartItem[]) {
 
     merged.set(item.skuId, {
       ...item,
+      consumerPrice: Math.max(0, item.consumerPrice || 0) || undefined,
       optionLabel: normalizeOptionLabel(item.optionLabel || ""),
       quantity: Math.max(1, item.quantity),
       unitPrice: Math.max(0, item.unitPrice),

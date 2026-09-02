@@ -6,6 +6,7 @@ import { toCartErrorMessage } from "../../../_lib/cart-error";
 
 function toCartItem(item: HealthBoxRecord) {
   return {
+    consumerPrice: Math.max(0, numberValue(item, "consumerPrice") || 0) || undefined,
     image: stringValue(item, "thumbnailUrl", "imageUrl"),
     optionLabel: stringValue(item, "optionSummary", "skuName", "optionSummarySnapshot") || "없음",
     productId: numberValue(item, "productId") || undefined,
