@@ -1,12 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import {
   DEALER_APPLICATION_CONSENT_VERSION,
   DEALER_APPLICATION_PRIVACY_SUMMARY,
 } from "@/lib/dealer-application-consent";
+import {
+  DEALER_CONTRACT_PAGE_COUNT,
+  DEALER_CONTRACT_PRINT_MESSAGE,
+  DEALER_CONTRACT_PRINT_URL,
+  DEALER_CONTRACT_TITLE,
+  DEALER_CONTRACT_VERSION,
+} from "@/lib/dealer-contract";
 
 type DealerApplicationResponse = {
   applicationId?: number;
@@ -25,10 +32,53 @@ export function DealerApplicationForm() {
   const [error, setError] = useState("");
   const [submittedApplicationId, setSubmittedApplicationId] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [contractPrintRequested, setContractPrintRequested] = useState(false);
+  const [contractPrintConfirmed, setContractPrintConfirmed] = useState(false);
+  const contractWindow = useRef<Window | null>(null);
+  const contractRequestId = useRef("");
+  const contractReady = contractPrintRequested && contractPrintConfirmed;
+
+  useEffect(() => {
+    function handleContractPrint(event: MessageEvent) {
+      if (event.origin !== window.location.origin || event.source !== contractWindow.current) return;
+      if (!event.data || typeof event.data !== "object") return;
+      if (event.data.type !== DEALER_CONTRACT_PRINT_MESSAGE
+        || event.data.version !== DEALER_CONTRACT_VERSION
+        || !contractRequestId.current
+        || event.data.requestId !== contractRequestId.current) return;
+      setContractPrintRequested(true);
+    }
+    window.addEventListener("message", handleContractPrint);
+    return () => window.removeEventListener("message", handleContractPrint);
+  }, []);
+
+  function openContract() {
+    setError("");
+    try {
+      const requestId = window.crypto.randomUUID();
+      // Keep an opener only for this same-origin print page; messages are source/token checked.
+      const printWindow = window.open(`${DEALER_CONTRACT_PRINT_URL}#${requestId}`, "_blank");
+      if (!printWindow) {
+        setError("계약서 인쇄창이 차단되었습니다. 브라우저의 팝업을 허용한 뒤 다시 눌러주세요.");
+        return;
+      }
+      contractWindow.current = printWindow;
+      contractRequestId.current = requestId;
+      setContractPrintRequested(false);
+      setContractPrintConfirmed(false);
+    } catch {
+      setError("계약서 인쇄창을 열지 못했습니다. 인쇄 가능한 브라우저 또는 PC에서 다시 시도해주세요.");
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (loading) return;
     setError("");
+    if (!contractReady) {
+      setError("계약서를 인쇄한 뒤 출력 완료와 후속 제출 절차를 확인해주세요.");
+      return;
+    }
     setLoading(true);
 
     const form = event.currentTarget;
@@ -65,6 +115,10 @@ export function DealerApplicationForm() {
       setSubmitted(true);
       form.reset();
       setWantedSlug("");
+      setContractPrintRequested(false);
+      setContractPrintConfirmed(false);
+      contractWindow.current = null;
+      contractRequestId.current = "";
     } catch {
       setError("딜러 신청 요청 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
@@ -78,9 +132,10 @@ export function DealerApplicationForm() {
         <span className="dealer-application-success-icon" aria-hidden="true">✓</span>
         <h1>딜러 신청이 접수되었습니다.</h1>
         <p>
-          담당자가 사업자 정보와 운영 계획을 확인한 뒤 입력하신 연락처로 결과를 안내드립니다.
-          승인되면 희망하신 주소로 딜러몰이 생성됩니다.
+          본사에서 신청 내용을 검토한 뒤 입력하신 연락처로 계약서 작성·날인과 제출 방법을 안내드립니다.
+          날인한 사본 사진으로 사전 승인을 진행한 후 원본을 우편으로 교환합니다.
         </p>
+        <p>계약서 원본은 2부를 작성해 본사와 딜러가 각 1부씩 보관합니다. 딜러몰 개설 일정은 담당자가 별도로 안내드립니다.</p>
         {submittedApplicationId ? (
           <strong className="dealer-application-receipt">접수번호 #{submittedApplicationId}</strong>
         ) : null}
@@ -98,13 +153,15 @@ export function DealerApplicationForm() {
     <div className="dealer-application-card">
       <div className="dealer-application-head">
         <h1>건강창고 딜러 신청</h1>
-        <p>건강창고 상품을 판매할 전용 딜러몰 운영을 신청해주세요. 본사 검토와 승인 후 딜러몰이 개설됩니다.</p>
+        <p>계약서를 먼저 확인·출력한 뒤 딜러몰 운영을 신청해주세요. 본사 검토 후 날인본 확인과 원본 교환 절차를 안내드립니다.</p>
         <div className="dealer-application-process" aria-label="딜러 신청 절차">
           <span><b>1</b> 신청서 접수</span>
           <i aria-hidden="true" />
           <span><b>2</b> 본사 검토</span>
           <i aria-hidden="true" />
-          <span><b>3</b> 승인 및 개설</span>
+          <span><b>3</b> 날인본 확인·사전 승인</span>
+          <i aria-hidden="true" />
+          <span><b>4</b> 원본 우편 교환</span>
         </div>
       </div>
 
@@ -215,6 +272,42 @@ export function DealerApplicationForm() {
           </div>
         </fieldset>
 
+        <fieldset className="dealer-application-section dealer-contract-section">
+          <legend><span>04</span> 딜러 계약서 확인·출력</legend>
+          <p className="dealer-contract-intro">신청 전 계약서 전체를 확인하고 출력해주세요. 신청 접수만으로 딜러 승인이나 계약 체결이 완료되는 것은 아닙니다.</p>
+          <div className="dealer-contract-file">
+            <div>
+              <span className="dealer-contract-file-tag">PDF · {DEALER_CONTRACT_VERSION} · A4 {DEALER_CONTRACT_PAGE_COUNT}쪽</span>
+              <strong>{DEALER_CONTRACT_TITLE}</strong>
+              <p>새 창에서 계약서 원문을 확인한 뒤 ‘계약서 {DEALER_CONTRACT_PAGE_COUNT}쪽 인쇄’를 눌러주세요.</p>
+            </div>
+            <button className="button-primary" disabled={loading} onClick={openContract} type="button">계약서 확인·인쇄</button>
+          </div>
+          <ol className="dealer-contract-steps">
+            <li><span>1</span><div><strong>본사 검토 및 제출 안내</strong><p>신청 내용을 검토한 뒤 담당자가 계약서 작성 방법과 사진 제출처, 우편 수령처를 안내합니다.</p></div></li>
+            <li><span>2</span><div><strong>날인한 사본 사진 제출·사전 승인</strong><p>안내에 따라 계약서를 작성·날인하고, 글자와 날인이 선명하게 보이도록 촬영한 사진을 보내주세요.</p></div></li>
+            <li><span>3</span><div><strong>원본 우편 교환</strong><p>사전 승인 후 계약서 원본 2부를 작성·날인하여 우편으로 교환하고, 본사와 딜러가 각 1부씩 보관합니다.</p></div></li>
+          </ol>
+          <div className="dealer-contract-confirmation">
+            <label>
+              <input
+                aria-describedby="dealer-contract-print-note"
+                checked={contractPrintConfirmed}
+                disabled={!contractPrintRequested || loading}
+                onChange={(event) => setContractPrintConfirmed(event.target.checked)}
+                required
+                type="checkbox"
+              />
+              <span><b>필수</b> 계약서 출력을 완료했으며, 본사 검토 후 날인본 사진 제출과 원본 우편 교환 절차를 확인했습니다.</span>
+            </label>
+            <p id="dealer-contract-print-note" role="status">
+              {contractPrintRequested
+                ? "실제 출력 여부는 자동 확인할 수 없습니다. 인쇄를 취소했다면 다시 출력한 후 체크해주세요."
+                : "계약서 인쇄 화면에서 인쇄를 진행하면 출력 완료 확인란이 활성화됩니다."}
+            </p>
+          </div>
+        </fieldset>
+
         <div className="dealer-application-consent">
           <label>
             <input name="privacyAgreed" required type="checkbox" />
@@ -239,10 +332,10 @@ export function DealerApplicationForm() {
 
         {error ? <div className="member-auth-alert is-error" role="alert">{error}</div> : null}
 
-        <button className="button-primary dealer-application-submit" disabled={loading} type="submit">
+        <button className="button-primary dealer-application-submit" disabled={loading || !contractReady} type="submit">
           {loading ? "신청 접수 중..." : "딜러 신청하기"}
         </button>
-        <p className="dealer-application-submit-note">접수 후 본사 검토 과정에서 추가 서류를 요청할 수 있습니다.</p>
+        <p className="dealer-application-submit-note">계약서 출력 완료를 확인해야 신청할 수 있습니다. 날인본 사진과 원본은 본사 안내에 따라 별도로 제출해주세요.</p>
       </form>
     </div>
   );
